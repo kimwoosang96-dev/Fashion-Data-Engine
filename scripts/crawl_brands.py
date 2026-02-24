@@ -36,10 +36,19 @@ async def run(limit: int):
     async with AsyncSessionLocal() as db:
         channels = await get_all_channels(db)
 
+    # brand-store / department-store / secondhand-marketplace / non-fashion 은 크롤 불필요
+    SKIP_TYPES = {"brand-store", "department-store", "secondhand-marketplace", "non-fashion"}
+    skipped = [c for c in channels if c.channel_type in SKIP_TYPES]
+    channels = [c for c in channels if c.channel_type not in SKIP_TYPES]
+
+    if skipped:
+        console.print(f"[dim]스킵 ({len(skipped)}개): " + ", ".join(c.name for c in skipped[:8])
+                      + ("..." if len(skipped) > 8 else "") + "[/dim]\n")
+
     if limit:
         channels = channels[:limit]
 
-    console.print(f"대상 채널: {len(channels)}개\n")
+    console.print(f"대상 채널 (edit-shop): {len(channels)}개\n")
 
     results_table = Table(title="크롤링 결과", show_lines=True)
     results_table.add_column("채널", style="cyan")

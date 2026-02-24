@@ -1,0 +1,26 @@
+# Docker Desktop 설치 후 PostgreSQL로 전환할 때 사용
+# 사용법: docker-compose up -d
+# 이후 .env의 DATABASE_URL을 postgresql+asyncpg://... 로 변경
+
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: fashion_db
+    environment:
+      POSTGRES_DB: fashion_db
+      POSTGRES_USER: fashion
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fashion -d fashion_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:

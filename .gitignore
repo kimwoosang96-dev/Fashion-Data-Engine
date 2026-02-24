@@ -1,0 +1,30 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# 환경 설정 (시크릿 포함)
+.env
+
+# SQLite DB (로컬 상태)
+data/fashion.db
+data/*.db
+
+# Playwright 브라우저 캐시
+.playwright/
+
+# 운영체제
+.DS_Store
+*.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp

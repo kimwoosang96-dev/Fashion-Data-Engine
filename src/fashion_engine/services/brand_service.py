@@ -51,10 +51,23 @@ async def get_channels_by_brand(db: AsyncSession, brand_id: int) -> list[Channel
 
 
 async def upsert_brand(db: AsyncSession, name: str, name_ko: str | None = None) -> Brand:
-    """브랜드 생성 또는 조회 (slug 기준)"""
+    """브랜드 생성 또는 조회 (slug 기준 + 숫자 토큰 기반 보정)"""
     slug = slugify(name)
     result = await db.execute(select(Brand).where(Brand.slug == slug))
     brand = result.scalar_one_or_none()
+
+    # 한글/영문 표기가 다른 동일 브랜드 보정:
+    # 예) 1017-alyx-9sm vs 1017-alrigseu-9sm
+    # 숫자가 포함된 토큰이 2개 이상이면 해당 토큰이 모두 일치하는 기존 slug를 재사용.
+    if not brand:
+        digit_tokens = [token for token in slug.split("-") if any(ch.isdigit() for ch in token)]
+        if len(digit_tokens) >= 2:
+            query = select(Brand)
+            for token in digit_tokens:
+                query = query.where(Brand.slug.ilike(f"%{token}%"))
+            candidates = list((await db.execute(query)).scalars().all())
+            if len(candidates) == 1:
+                brand = candidates[0]
 
     if not brand:
         brand = Brand(name=name, slug=slug, name_ko=name_ko)

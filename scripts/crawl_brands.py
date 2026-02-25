@@ -14,8 +14,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 import typer
 from rich.console import Console
 from rich.table import Table
+from sqlalchemy import delete
 
 from fashion_engine.database import init_db, AsyncSessionLocal
+from fashion_engine.models.channel_brand import ChannelBrand
 from fashion_engine.services.channel_service import get_all_channels
 from fashion_engine.services.brand_service import upsert_brand, link_brand_to_channel
 from fashion_engine.crawler.brand_crawler import BrandCrawler
@@ -61,11 +63,18 @@ async def run(limit: int):
             console.print(f"[dim]크롤링:[/dim] {channel.url}")
             result = await crawler.crawl_channel(channel.url)
 
-            # DB 저장
-            async with AsyncSessionLocal() as db:
-                for brand_info in result.brands:
-                    brand = await upsert_brand(db, brand_info.name)
-                    await link_brand_to_channel(db, brand.id, channel.id)
+            # DB 저장 (브랜드가 1개 이상 추출된 경우에만 기존 링크 교체)
+            if result.brands and not result.error:
+                async with AsyncSessionLocal() as db:
+                    # 재크롤 성공 시 stale 링크 교체
+                    await db.execute(
+                        delete(ChannelBrand).where(ChannelBrand.channel_id == channel.id)
+                    )
+                    await db.commit()
+
+                    for brand_info in result.brands:
+                        brand = await upsert_brand(db, brand_info.name)
+                        await link_brand_to_channel(db, brand.id, channel.id)
 
             results_table.add_row(
                 channel.name,

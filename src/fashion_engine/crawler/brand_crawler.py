@@ -39,6 +39,13 @@ class ChannelCrawlResult:
 # ── 채널별 커스텀 전략 ──────────────────────────────────────────────────
 
 CHANNEL_STRATEGIES: dict[str, dict] = {
+    "8division.com": {
+        "brand_list_url": "https://www.8division.com/product/maker.html",
+        "brand_selector": "ul.sub-menu.sub-menu-brands > li > a[href*='cate_no=']",
+        "name_selector": None,
+        "href_must_contain": ["cate_no="],
+        "href_must_not_contain": ["product_no="],
+    },
     "musinsa.com": {
         "brand_list_url": "https://www.musinsa.com/brand",
         "brand_selector": "a.brand-item, .brand-list a, [class*='brand'] a",
@@ -82,6 +89,55 @@ CHANNEL_STRATEGIES: dict[str, dict] = {
     },
     "parlour.kr": {
         "brand_list_url": "https://www.parlour.kr/product/maker.html",
+        "brand_selector": "a[href*='cate_no='], a[href*='/product/list.html']",
+        "name_selector": None,
+        "href_must_contain": ["cate_no="],
+        "href_must_not_contain": ["product_no="],
+    },
+    "obscura-store.com": {
+        "brand_list_url": "https://www.obscura-store.com/product/maker.html",
+        "brand_selector": "a[href*='cate_no='], a[href*='/product/list.html']",
+        "name_selector": None,
+        "href_must_contain": ["cate_no="],
+        "href_must_not_contain": ["product_no="],
+    },
+    "bizzare.co.kr": {
+        "brand_list_url": "https://www.bizzare.co.kr/product/maker.html",
+        "brand_selector": "a[href*='cate_no='], a[href*='/product/list.html']",
+        "name_selector": None,
+        "href_must_contain": ["cate_no="],
+        "href_must_not_contain": ["product_no="],
+    },
+    "ecru.co.kr": {
+        "brand_list_url": "https://www.ecru.co.kr/product/maker.html",
+        "brand_selector": "a[href*='cate_no='], a[href*='/product/list.html']",
+        "name_selector": None,
+        "href_must_contain": ["cate_no="],
+        "href_must_not_contain": ["product_no="],
+    },
+    "rinostore.co.kr": {
+        "brand_list_url": "https://www.rinostore.co.kr/product/maker.html",
+        "brand_selector": "a[href*='cate_no='], a[href*='/product/list.html']",
+        "name_selector": None,
+        "href_must_contain": ["cate_no="],
+        "href_must_not_contain": ["product_no="],
+    },
+    "coevo.com": {
+        "brand_list_url": "https://www.coevo.com/product/maker.html",
+        "brand_selector": "a[href*='cate_no='], a[href*='/product/list.html']",
+        "name_selector": None,
+        "href_must_contain": ["cate_no="],
+        "href_must_not_contain": ["product_no="],
+    },
+    "gooutstore.cafe24.com": {
+        "brand_list_url": "https://gooutstore.cafe24.com/product/maker.html",
+        "brand_selector": "a[href*='cate_no='], a[href*='/product/list.html']",
+        "name_selector": None,
+        "href_must_contain": ["cate_no="],
+        "href_must_not_contain": ["product_no="],
+    },
+    "effortless-store.com": {
+        "brand_list_url": "https://www.effortless-store.com/product/maker.html",
         "brand_selector": "a[href*='cate_no='], a[href*='/product/list.html']",
         "name_selector": None,
         "href_must_contain": ["cate_no="],
@@ -140,7 +196,7 @@ def _is_valid_brand_name(name: str) -> bool:
 
     # 콜라보 서브카테고리 차단: " by ", " x ", " X " 포함 + 길이 > 25자
     # 예: "Adidas Originals by Wales Bonner", "Fred Perry X Raf Simons"
-    if len(name) > 25 and _COLLAB_RE.search(name):
+    if len(name) > 40 and _COLLAB_RE.search(name):
         return False
 
     # 한글 포함 여부
@@ -291,6 +347,7 @@ class BrandCrawler(BaseCrawler):
                 nav_roots = soup.select(
                     "ul.xans-layout-navigation > li, "
                     "ul.depth1 > li, "
+                    "ul.menuCategory > li, "
                     "nav > ul > li"
                 )
                 if nav_roots:
@@ -301,7 +358,10 @@ class BrandCrawler(BaseCrawler):
                         if li.find("a", href=True, recursive=False)
                     ]
                 else:
-                    candidate_links = soup.find_all("a", href=True)
+                    # 브랜드 페이지 내 카테고리 링크만 제한적으로 탐색
+                    candidate_links = soup.select(
+                        "a[href*='cate_no=']:not([href*='product_no='])"
+                    )
 
                 seen_cate_nos: set[str] = set()
                 for link in candidate_links:

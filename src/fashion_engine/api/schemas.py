@@ -67,3 +67,17 @@ class BrandLandscape(BaseModel):
     nodes: list[LandscapeNode]
     edges: list[LandscapeEdge]
     stats: dict
+
+
+class ChannelLandscapeItem(BaseModel):
+    id: int
+    name: str
+    country: str | None
+    channel_type: str | None
+    brand_count: int
+    top_tiers: list[str]
+
+
+class ChannelLandscape(BaseModel):
+    channels: list[ChannelLandscapeItem]
+    stats: dict

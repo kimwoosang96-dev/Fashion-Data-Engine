@@ -5,5 +5,10 @@ from fashion_engine.models.channel_brand import ChannelBrand
 from fashion_engine.models.category import Category
 from fashion_engine.models.price_history import PriceHistory
 from fashion_engine.models.product import Product
+from fashion_engine.models.brand_collaboration import BrandCollaboration
+from fashion_engine.models.fashion_news import FashionNews
 
-__all__ = ["Channel", "Brand", "ChannelBrand", "Category", "PriceHistory", "Product"]
+__all__ = [
+    "Channel", "Brand", "ChannelBrand", "Category", "PriceHistory", "Product",
+    "BrandCollaboration", "FashionNews",
+]

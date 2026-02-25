@@ -197,24 +197,29 @@ uv run pytest
 
 ---
 
-## Current Status (2026-02-25)
+## Current Status (2026-02-26)
 
 ### Done ✅
 - Project scaffolding (uv, pyproject.toml, docker-compose)
 - Channel preprocessing pipeline (URL normalization, dedup, flag filtering)
-- SQLAlchemy models: Channel, Brand, ChannelBrand, Category, Product, PriceHistory
+- SQLAlchemy models: Channel, Brand, ChannelBrand, Category, Product, PriceHistory, **BrandCollaboration**, **FashionNews**
+- Brand model extended: `tier` (high-end/premium/street/sports/spa), `description_ko`
+- Alembic migrations configured (`alembic.ini`, `alembic/env.py`, `alembic/versions/`)
 - FastAPI REST API with channel/brand query endpoints
-- Playwright-based brand crawler (generic + per-channel strategies)
+  - `GET /brands/?tier=` — tier 필터 지원
+  - `GET /brands/landscape` — 시각화용 노드/엣지 데이터
+  - `GET /collabs/` — 협업 목록 (hype_score 정렬)
+  - `GET /collabs/hype-by-category` — 카테고리별 하입 집계
+- Playwright-based brand crawler (Shopify API + Cafe24 + generic)
 - CLI tool (Typer + Rich)
-- 154 channels loaded into DB
+- 154 channels loaded into DB (75 brand-store, 75 edit-shop, 4 others)
+- Channel data curated: names, country codes, channel_type for all 154 channels
 
-### Todo 🔜
-- [ ] **Phase 1 completion**: Run brand crawler on all 154 channels; store brand-channel mappings
-- [ ] **Channel name cleanup**: Many channel names extracted from page titles need manual curation
-  - Edit `data/channels_cleaned.csv`, then re-run `seed_channels.py`
-- [ ] **Channel type classification**: Most channels are `unknown` type; add more domain mappings
-  in `crawler/url_normalizer.py::classify_channel_type()`
-- [ ] **Country detection**: Improve `preprocess_channels.py::guess_country()` for .com domains
+### Pending (Codex Issues)
+- **CODEX_ISSUE_01**: Cafe24 strategy refinement + full 75 edit-shop crawl
+- **CODEX_ISSUE_02**: Brand tier seed CSV + `scripts/classify_brands.py`
+- **CODEX_ISSUE_03**: BrandCollaboration seed data + hype_score auto-calculation
+- **CODEX_ISSUE_04**: Full crawl completion + 0-result channel custom strategies
 
 ### Phase 2 (Price tracking)
 - [ ] Product crawler (price, image, SKU per product page)

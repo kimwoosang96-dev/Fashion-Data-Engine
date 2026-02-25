@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fashion_engine.database import init_db
 from fashion_engine.api.channels import router as channels_router
 from fashion_engine.api.brands import router as brands_router
+from fashion_engine.api.collabs import router as collabs_router
 
 
 @asynccontextmanager
@@ -23,6 +24,7 @@ app = FastAPI(
 
 app.include_router(channels_router)
 app.include_router(brands_router)
+app.include_router(collabs_router)
 
 
 @app.get("/")

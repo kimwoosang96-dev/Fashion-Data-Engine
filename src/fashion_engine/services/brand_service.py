@@ -14,6 +14,14 @@ async def get_all_brands(db: AsyncSession) -> list[Brand]:
     return list(result.scalars().all())
 
 
+async def get_brands_by_tier(db: AsyncSession, tier: str) -> list[Brand]:
+    """티어별 브랜드 목록"""
+    result = await db.execute(
+        select(Brand).where(Brand.tier == tier).order_by(Brand.name)
+    )
+    return list(result.scalars().all())
+
+
 async def get_brand_by_slug(db: AsyncSession, slug: str) -> Brand | None:
     result = await db.execute(select(Brand).where(Brand.slug == slug))
     return result.scalar_one_or_none()

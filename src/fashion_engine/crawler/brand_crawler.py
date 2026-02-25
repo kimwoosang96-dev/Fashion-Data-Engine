@@ -59,6 +59,34 @@ CHANNEL_STRATEGIES: dict[str, dict] = {
         "brand_selector": ".brand-list a, .brandList a",
         "name_selector": None,
     },
+    "kasina.co.kr": {
+        "brand_list_url": "https://www.kasina.co.kr/product/maker.html",
+        "brand_selector": "a[href*='cate_no='], a[href*='/product/list.html']",
+        "name_selector": None,
+        "href_must_contain": ["cate_no="],
+        "href_must_not_contain": ["product_no="],
+    },
+    "thexshop.co.kr": {
+        "brand_list_url": "https://www.thexshop.co.kr/product/maker.html",
+        "brand_selector": "a[href*='cate_no='], a[href*='/product/list.html']",
+        "name_selector": None,
+        "href_must_contain": ["cate_no="],
+        "href_must_not_contain": ["product_no="],
+    },
+    "unipair.com": {
+        "brand_list_url": "https://www.unipair.com/product/maker.html",
+        "brand_selector": "a[href*='cate_no='], a[href*='/product/list.html']",
+        "name_selector": None,
+        "href_must_contain": ["cate_no="],
+        "href_must_not_contain": ["product_no="],
+    },
+    "parlour.kr": {
+        "brand_list_url": "https://www.parlour.kr/product/maker.html",
+        "brand_selector": "a[href*='cate_no='], a[href*='/product/list.html']",
+        "name_selector": None,
+        "href_must_contain": ["cate_no="],
+        "href_must_not_contain": ["product_no="],
+    },
 }
 
 
@@ -82,11 +110,19 @@ _UI_WORDS: frozenset[str] = frozenset(
         # Cafe24 가격/정렬 옵션 (브랜드 아님)
         "낮은가격", "높은가격", "낮은가격순", "높은가격순",
         "추천순", "신상품순", "판매량순", "낮은순", "높은순",
+        # Cafe24 카테고리 헤더 (의류·액세서리 분류 → 브랜드 아님)
+        "신상품", "온라인샵", "라이프스타일", "슈케어", "개인결제창",
+        "상의", "아우터", "하의", "벨트", "주얼리", "악세사리",
+        "모자", "신발", "가방", "세일", "sale items",
     }
 )
 
 # 브랜드명 끝에 올 수 없는 한국어 접미사
-_KO_NOT_BRAND_SUFFIX = ("바로가기", "더보기", "전체보기", "상품보기")
+_KO_NOT_BRAND_SUFFIX = ("바로가기", "더보기", "전체보기", "상품보기", "세일")
+
+# 콜라보 서브카테고리 패턴: " by ", " x ", " X ", " × " 가 단어 경계로 포함된 긴 이름
+# 예: "Adidas Originals by Wales Bonner", "Fred Perry X Raf Simons"
+_COLLAB_RE = re.compile(r"(?i)\s+(?:by|x|×)\s+")
 
 
 def _is_valid_brand_name(name: str) -> bool:
@@ -100,6 +136,11 @@ def _is_valid_brand_name(name: str) -> bool:
 
     # 내비게이션 접미사 차단 ("~ 바로가기" 등)
     if any(name.endswith(s) for s in _KO_NOT_BRAND_SUFFIX):
+        return False
+
+    # 콜라보 서브카테고리 차단: " by ", " x ", " X " 포함 + 길이 > 25자
+    # 예: "Adidas Originals by Wales Bonner", "Fred Perry X Raf Simons"
+    if len(name) > 25 and _COLLAB_RE.search(name):
         return False
 
     # 한글 포함 여부
@@ -153,6 +194,8 @@ class BrandCrawler(BaseCrawler):
     ) -> list[BrandInfo]:
         """커스텀 전략으로 브랜드 추출"""
         target_url = strategy.get("brand_list_url", channel_url)
+        href_must_contain: list[str] = strategy.get("href_must_contain", [])
+        href_must_not_contain: list[str] = strategy.get("href_must_not_contain", [])
         page = await self.fetch_page(target_url)
         try:
             html = await page.content()
@@ -162,6 +205,10 @@ class BrandCrawler(BaseCrawler):
             for el in elements:
                 name = el.get_text(strip=True)
                 href = el.get("href", "")
+                if href_must_contain and not any(token in href for token in href_must_contain):
+                    continue
+                if href_must_not_contain and any(token in href for token in href_must_not_contain):
+                    continue
                 if _is_valid_brand_name(name):
                     brands.append(
                         BrandInfo(
@@ -234,12 +281,30 @@ class BrandCrawler(BaseCrawler):
 
                 # Cafe24 스토어 여부 확인 (JavaScript 변수 또는 도메인 참조)
                 if "cafe24" not in html.lower() and "ec_front" not in html.lower():
-                    return []
+                    continue
 
                 soup = BeautifulSoup(html, "html.parser")
                 brands: list[BrandInfo] = []
 
-                for link in soup.find_all("a", href=True):
+                # depth1 nav만 탐색: Cafe24 표준 네비게이션 최상위 레벨
+                # 없으면 전체 <a> 탐색으로 fallback
+                nav_roots = soup.select(
+                    "ul.xans-layout-navigation > li, "
+                    "ul.depth1 > li, "
+                    "nav > ul > li"
+                )
+                if nav_roots:
+                    # 각 li의 직계 자식 <a>만 추출 (하위 ul 제외)
+                    candidate_links = [
+                        li.find("a", href=True, recursive=False)
+                        for li in nav_roots
+                        if li.find("a", href=True, recursive=False)
+                    ]
+                else:
+                    candidate_links = soup.find_all("a", href=True)
+
+                seen_cate_nos: set[str] = set()
+                for link in candidate_links:
                     href: str = link.get("href", "")
                     text = link.get_text(strip=True)
 
@@ -249,16 +314,37 @@ class BrandCrawler(BaseCrawler):
                     is_category_link = (
                         "cate_no=" in href and "product_no=" not in href
                     )
-                    if is_category_link and _is_valid_brand_name(text):
-                        brands.append(
-                            BrandInfo(
-                                name=self._clean_brand_name(text),
-                                url=href,
-                                source_channel_url=channel_url,
-                            )
+                    if not is_category_link or not _is_valid_brand_name(text):
+                        continue
+
+                    # cate_no 기준 URL 중복 제거
+                    # 동일 브랜드의 영문/한글 표기 + 세일 섹션 중복 방지
+                    cate_match = re.search(r"cate_no=(\d+)", href)
+                    if cate_match:
+                        cate_no = cate_match.group(1)
+                        if cate_no in seen_cate_nos:
+                            continue
+                        seen_cate_nos.add(cate_no)
+
+                    brands.append(
+                        BrandInfo(
+                            name=self._clean_brand_name(text),
+                            url=href,
+                            source_channel_url=channel_url,
                         )
+                    )
 
                 brands = self._deduplicate_brands(brands)
+
+                # 500개 초과 시 잡음 혼입으로 판단 → 스킵 (8DIVISION 등 대형 편집샵 400+ 허용)
+                CAFE24_MAX = 500
+                if len(brands) > CAFE24_MAX:
+                    logger.warning(
+                        f"Cafe24 결과 과다 ({len(brands)}개 > {CAFE24_MAX}), "
+                        f"서브카테고리 혼입 의심 → fallback"
+                    )
+                    continue
+
                 if brands:
                     logger.info(
                         f"Cafe24 브랜드 페이지 발견: {channel_url}{path} "

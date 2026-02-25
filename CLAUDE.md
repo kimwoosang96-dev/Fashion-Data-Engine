@@ -29,38 +29,51 @@ cd /Users/kim-usang/fashion-data-engine
 
 ## Current Session Notes (2026-02-26)
 
-### DB 상태
-- 154개 채널 로드 완료 (75 brand-store, 75 edit-shop, 4 others)
-- 채널 이름·국가·타입 수동 큐레이션 완료 (`data/channels_cleaned.csv`)
-- 브랜드 크롤 **부분 실행** — `channel_brands` 테이블에 일부 데이터 있음
-  - `--limit 3` 테스트로 +81(60개), 8DIVISION(453개), ADDICTED(77개) 저장됨
-  - **전체 75개 edit-shop 크롤은 아직 실행 안 됨** → CODEX_ISSUE_01 과업
+### DB 상태 (Phase 2 완료 기준)
+- 154개 채널 로드 완료 (75 edit-shop, 75 brand-store, 4 others)
+- 브랜드 크롤 **완료** — edit-shop 75개 중 43개 성공
+  - 총 브랜드: **2,508개** / 총 channel_brand 링크: **2,557개**
+  - 0결과 채널 32개 (일본 플랫폼·SSL 오류 등, 미해결)
+- 브랜드 티어: **120개** 분류 완료 (high-end 3, premium 94, sports 14, street 9)
+- 협업 데이터: **34개** seed 완료, hype_score 재계산 완료
 
-### 크롤러 현황 (brand_crawler.py)
-- **Shopify** `/products.json` API: 안정적 (vendor 필드 정확)
-- **Cafe24** `cate_no=` 필터: 개선됨
-  - `cate_no` URL 기반 중복 제거 (영문/한글 동일 브랜드 dedup)
-  - 한국어 카테고리 헤더 필터 (신상품, 상의, 아우터 등)
-  - 콜라보 패턴 필터 (` by `, ` x `, ` X ` 포함 + 길이 > 25자)
-  - CAFE24_MAX = 500 (대형 편집샵 허용)
-- **8DIVISION** (kasina.co.kr에 커스텀 전략 있음): 453개 via cafe24 — 여전히 정제 필요
-  - 일부 콜라보 서브카테고리 혼입 의심 → CODEX_ISSUE_01에서 추가 개선 예정
-
-### 완료된 스키마 변경 (Alembic 마이그레이션 적용 완료)
-- `Brand`: `tier`, `description_ko` 컬럼 추가
-- 신규 모델: `BrandCollaboration`, `FashionNews`
+### Phase 2 스키마 (모두 적용 완료)
+- `Brand`: `tier`, `description_ko` 컬럼
+- `BrandCollaboration`: 협업 추적 (hype_score 포함)
+- `FashionNews`: 뉴스/이벤트 (미사용 예정)
 - `alembic upgrade head` 실행됨 → `data/fashion.db` 최신 상태
 
-### Codex 이슈 파일
-- `CODEX_ISSUE_01.md` — Cafe24 개선 + 전체 크롤 실행
-- `CODEX_ISSUE_02.md` — 브랜드 티어 seed CSV + classify_brands.py
-- `CODEX_ISSUE_03.md` — 협업 데이터 seed + hype_score 계산
-- `CODEX_ISSUE_04.md` — 시각화 API 검증 + channels/landscape
+### API 엔드포인트 (검증 완료)
+- `GET /brands/?tier=<tier>` — 티어별 브랜드 목록 ✅
+- `GET /brands/landscape` — 2508 nodes, 2557 edges ✅
+- `GET /brands/{slug}/collabs` — 브랜드별 협업 목록 ✅
+- `GET /collabs/` — hype_score 정렬, footwear 24건·apparel 10건 ✅
+- `GET /collabs/hype-by-category` — avg/max 집계 ✅
+- `GET /channels/landscape` — 154채널, KR 36·JP 61·US 15 ✅
+
+### Top 채널 (브랜드 수 기준)
+1. NUBIAN (JP): 251개 브랜드
+2. ARKnets (JP): 226개 브랜드
+3. COVERCHORD (JP): 191개 브랜드
+4. NOCLAIM (KR): 181개 브랜드
+5. H. Lorenzo (US): 167개 브랜드
+
+### 크롤러 현황 (brand_crawler.py)
+- **Shopify** `/products.json` API: 안정적
+- **Cafe24**: cate_no dedup + 한국어 UI워드 필터 + 콜라보 패턴 필터 (> 40자)
+- **커스텀 전략**: 11개 채널 (8division, kasina, thexshop, obscura 등)
+- **0결과 32개 채널**: Cafe24 DOM 불일치·일본 플랫폼(BASE/Ocnk/laidback)·SSL 오류
+
+### 완료된 Codex 이슈
+- `CODEX_ISSUE_01.md` ✅ — Cafe24 개선 + 전체 크롤 실행 + stale 삭제 버그 수정
+- `CODEX_ISSUE_02.md` ✅ — 브랜드 티어 분류 (classify_brands.py)
+- `CODEX_ISSUE_03.md` ✅ — 협업 seed + hype_score 재계산
+- `CODEX_ISSUE_04.md` ✅ — landscape API 검증
 
 ### 플래그된 URL (참고)
 - `https://www.corteiz.com/password` — 비밀번호 잠금 (크롤 불가)
-- `https://tune.kr` — DB에 있음
-- `https://www.joefreshgoods.com` — DB에 있음
+- `https://www.tune.kr` — SSL 오류
+- `https://www.kerouac.okinawa` — SSL 오류
 
 ---
 

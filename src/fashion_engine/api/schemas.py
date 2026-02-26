@@ -135,3 +135,86 @@ class PriceComparisonOut(BaseModel):
     cheapest_channel: str | None
     cheapest_price_krw: int | None
     total_listings: int
+
+
+# ── 구매 이력 스키마 ───────────────────────────────────────────────────────────
+
+class PurchaseIn(BaseModel):
+    product_key: str
+    product_name: str
+    brand_slug: str | None = None
+    channel_name: str
+    channel_url: str | None = None
+    paid_price_krw: int
+    original_price_krw: int | None = None
+    purchased_at: datetime | None = None
+    notes: str | None = None
+
+
+class PurchaseOut(BaseModel):
+    id: int
+    product_key: str
+    product_name: str
+    brand_slug: str | None
+    channel_name: str
+    channel_url: str | None
+    paid_price_krw: int
+    original_price_krw: int | None
+    purchased_at: datetime
+    notes: str | None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ScoreOut(BaseModel):
+    purchase_id: int
+    product_key: str
+    product_name: str
+    paid_price_krw: int
+    grade: str
+    percentile: float | None
+    badge: str
+    min_ever_krw: int | None
+    max_ever_krw: int | None
+    avg_krw: int | None
+    data_points: int
+    savings_vs_full: int | None
+    savings_vs_avg: int | None
+    verdict: str
+
+
+class PurchaseStatsOut(BaseModel):
+    total_purchases: int
+    total_paid_krw: int
+    total_savings_vs_full_krw: int
+    best_deal: dict | None
+
+
+# ── 드롭 스키마 ───────────────────────────────────────────────────────────────
+
+class DropIn(BaseModel):
+    product_name: str
+    source_url: str
+    product_key: str | None = None
+    brand_id: int | None = None
+    image_url: str | None = None
+    price_krw: int | None = None
+    release_date: datetime | None = None
+    status: str = "upcoming"
+
+
+class DropOut(BaseModel):
+    id: int
+    brand_id: int | None
+    product_name: str
+    product_key: str | None
+    source_url: str
+    image_url: str | None
+    price_krw: int | None
+    release_date: datetime | None
+    status: str
+    detected_at: datetime
+    notified_at: datetime | None
+
+    model_config = {"from_attributes": True}

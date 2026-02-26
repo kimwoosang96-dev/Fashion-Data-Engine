@@ -48,28 +48,28 @@ async def upsert_product(
     channel_id: int,
     info: ProductInfo,
     brand_id: int | None = None,
-) -> Product:
+) -> tuple["Product", bool, bool]:
     """
     url 기준으로 제품 upsert.
-    - 신규: 생성 후 반환
-    - 기존: is_sale, image_url 등 최신 상태로 업데이트
+    반환: (product, is_new, sale_just_started)
+      - is_new: product_key가 이 크롤에서 처음 등장한 경우
+      - sale_just_started: 이전 is_sale=False → 이번 True 전환
     """
     is_sale = info.compare_at_price is not None and info.compare_at_price > info.price
-    discount_rate: int | None = None
-    if is_sale and info.compare_at_price:
-        discount_rate = round((1 - info.price / info.compare_at_price) * 100)
 
     existing = (
         await db.execute(select(Product).where(Product.url == info.product_url))
     ).scalar_one_or_none()
 
     if existing:
+        prev_sale = existing.is_sale
+        sale_just_started = (not prev_sale) and is_sale
         existing.name = info.title
         existing.product_key = info.product_key
         existing.is_sale = is_sale
         existing.image_url = info.image_url
         existing.updated_at = datetime.utcnow()
-        product = existing
+        return existing, False, sale_just_started
     else:
         product = Product(
             channel_id=channel_id,
@@ -83,8 +83,7 @@ async def upsert_product(
         )
         db.add(product)
         await db.flush()  # id 확보
-
-    return product
+        return product, True, False
 
 
 async def record_price(

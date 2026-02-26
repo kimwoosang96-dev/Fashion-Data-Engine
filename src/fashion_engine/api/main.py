@@ -7,6 +7,8 @@ from fashion_engine.api.channels import router as channels_router
 from fashion_engine.api.brands import router as brands_router
 from fashion_engine.api.collabs import router as collabs_router
 from fashion_engine.api.products import router as products_router
+from fashion_engine.api.purchases import router as purchases_router
+from fashion_engine.api.drops import router as drops_router
 
 
 @asynccontextmanager
@@ -27,6 +29,8 @@ app.include_router(channels_router)
 app.include_router(brands_router)
 app.include_router(collabs_router)
 app.include_router(products_router)
+app.include_router(purchases_router)
+app.include_router(drops_router)
 
 
 @app.get("/")

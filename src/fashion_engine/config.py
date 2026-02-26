@@ -15,5 +15,8 @@ class Settings(BaseSettings):
     api_port: int = 8000
     api_debug: bool = True
 
+    discord_webhook_url: str | None = None
+    alert_price_drop_threshold: float = 0.10  # 10% 이상 하락 시 알림
+
 
 settings = Settings()

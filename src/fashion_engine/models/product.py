@@ -24,6 +24,7 @@ class Product(Base):
     category_id: Mapped[int | None] = mapped_column(ForeignKey("categories.id"))
 
     name: Mapped[str] = mapped_column(String(500), nullable=False)
+    product_key: Mapped[str | None] = mapped_column(String(300), index=True)  # "brand-slug:handle" 교차 채널 매칭용
     sku: Mapped[str | None] = mapped_column(String(255))
     url: Mapped[str] = mapped_column(String(1000), unique=True, nullable=False)
     image_url: Mapped[str | None] = mapped_column(String(1000))

@@ -81,3 +81,57 @@ class ChannelLandscapeItem(BaseModel):
 class ChannelLandscape(BaseModel):
     channels: list[ChannelLandscapeItem]
     stats: dict
+
+
+# ── 제품 / 가격 스키마 ─────────────────────────────────────────────────────
+
+class PriceHistoryOut(BaseModel):
+    id: int
+    price: float
+    original_price: float | None
+    currency: str
+    is_sale: bool
+    discount_rate: int | None
+    crawled_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ProductOut(BaseModel):
+    id: int
+    channel_id: int
+    brand_id: int | None
+    name: str
+    product_key: str | None
+    url: str
+    image_url: str | None
+    is_sale: bool
+    is_active: bool
+
+    model_config = {"from_attributes": True}
+
+
+class ProductDetailOut(ProductOut):
+    channel: ChannelOut
+    brand: BrandOut | None
+
+
+class PriceComparisonItem(BaseModel):
+    channel_name: str
+    channel_country: str | None
+    channel_url: str
+    price_krw: int
+    original_price_krw: int | None
+    is_sale: bool
+    discount_rate: int | None
+    product_url: str
+    image_url: str | None
+
+
+class PriceComparisonOut(BaseModel):
+    product_key: str
+    product_name: str
+    listings: list[PriceComparisonItem]
+    cheapest_channel: str | None
+    cheapest_price_krw: int | None
+    total_listings: int

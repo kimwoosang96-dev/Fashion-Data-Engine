@@ -8,8 +8,8 @@ from fashion_engine.database import get_db
 from fashion_engine.models.brand import Brand
 from fashion_engine.models.channel import Channel
 from fashion_engine.models.channel_brand import ChannelBrand
-from fashion_engine.services import brand_service
-from fashion_engine.api.schemas import BrandOut, BrandLandscape, LandscapeNode, LandscapeEdge, ChannelOut
+from fashion_engine.services import brand_service, product_service
+from fashion_engine.api.schemas import BrandOut, BrandLandscape, LandscapeNode, LandscapeEdge, ChannelOut, ProductOut
 
 router = APIRouter(prefix="/brands", tags=["brands"])
 
@@ -100,3 +100,17 @@ async def get_brand_channels(slug: str, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="브랜드를 찾을 수 없습니다.")
     channels = await brand_service.get_channels_by_brand(db, brand.id)
     return channels
+
+
+@router.get("/{slug}/products", response_model=list[ProductOut])
+async def get_brand_products(
+    slug: str,
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    db: AsyncSession = Depends(get_db),
+):
+    """브랜드별 제품 목록 (가격 비교용)"""
+    brand = await brand_service.get_brand_by_slug(db, slug)
+    if not brand:
+        raise HTTPException(status_code=404, detail="브랜드를 찾을 수 없습니다.")
+    return await product_service.get_brand_products(db, brand_slug=slug, limit=limit, offset=offset)

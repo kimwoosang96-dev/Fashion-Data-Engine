@@ -7,8 +7,9 @@ from fashion_engine.models.price_history import PriceHistory
 from fashion_engine.models.product import Product
 from fashion_engine.models.brand_collaboration import BrandCollaboration
 from fashion_engine.models.fashion_news import FashionNews
+from fashion_engine.models.exchange_rate import ExchangeRate
 
 __all__ = [
     "Channel", "Brand", "ChannelBrand", "Category", "PriceHistory", "Product",
-    "BrandCollaboration", "FashionNews",
+    "BrandCollaboration", "FashionNews", "ExchangeRate",
 ]

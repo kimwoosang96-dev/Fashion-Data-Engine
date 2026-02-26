@@ -29,51 +29,56 @@ cd /Users/kim-usang/fashion-data-engine
 
 ## Current Session Notes (2026-02-26)
 
-### DB 상태 (Phase 2 완료 기준)
-- 154개 채널 로드 완료 (75 edit-shop, 75 brand-store, 4 others)
-- 브랜드 크롤 **완료** — edit-shop 75개 중 43개 성공
-  - 총 브랜드: **2,508개** / 총 channel_brand 링크: **2,557개**
-  - 0결과 채널 32개 (일본 플랫폼·SSL 오류 등, 미해결)
-- 브랜드 티어: **120개** 분류 완료 (high-end 3, premium 94, sports 14, street 9)
-- 협업 데이터: **34개** seed 완료, hype_score 재계산 완료
+### DB 상태 (Phase 3 구축 중)
+- **채널**: 159개 (154 기존 + DSM, HBX, Slam Jam, Goodhood, Bodega 5개 추가)
+- **브랜드**: 2,508개 / channel_brand 링크: 2,557개 (Phase 2 기준)
+- **브랜드 티어**: 120개 분류 (high-end 3, premium 94, sports 14, street 9)
+- **협업**: 34개 seed, hype_score 계산 완료
+- **제품**: 898개 초기 크롤 완료 (ALIVEFORM·Patta·BoTT, brand-store 5채널 테스트)
+  - Patta KR: 642개 (세일 179개)
+  - BoTT: 188개
+  - ALIVEFORM: 68개
+- **환율**: USD 1,426 / EUR 1,686 / GBP 1,934 / JPY 9.1 / HKD 182 (2026-02-26 기준)
 
-### Phase 2 스키마 (모두 적용 완료)
-- `Brand`: `tier`, `description_ko` 컬럼
-- `BrandCollaboration`: 협업 추적 (hype_score 포함)
-- `FashionNews`: 뉴스/이벤트 (미사용 예정)
-- `alembic upgrade head` 실행됨 → `data/fashion.db` 최신 상태
+### Phase 3 스키마 (완료)
+- `Product.product_key`: "brand-slug:handle" 교차 채널 매칭 인덱스
+- `ExchangeRate`: 통화 → KRW 환율 저장
+- 마이그레이션: `c3ad818a067f_add_product_key_and_exchange_rates`
 
-### API 엔드포인트 (검증 완료)
-- `GET /brands/?tier=<tier>` — 티어별 브랜드 목록 ✅
-- `GET /brands/landscape` — 2508 nodes, 2557 edges ✅
-- `GET /brands/{slug}/collabs` — 브랜드별 협업 목록 ✅
-- `GET /collabs/` — hype_score 정렬, footwear 24건·apparel 10건 ✅
-- `GET /collabs/hype-by-category` — avg/max 집계 ✅
-- `GET /channels/landscape` — 154채널, KR 36·JP 61·US 15 ✅
+### API 엔드포인트 (전체)
+**Phase 2 (검증 완료):**
+- `GET /brands/?tier=<tier>`, `/brands/landscape`, `/brands/{slug}/channels`
+- `GET /collabs/`, `/collabs/hype-by-category`
+- `GET /channels/landscape`
 
-### Top 채널 (브랜드 수 기준)
-1. NUBIAN (JP): 251개 브랜드
-2. ARKnets (JP): 226개 브랜드
-3. COVERCHORD (JP): 191개 브랜드
-4. NOCLAIM (KR): 181개 브랜드
-5. H. Lorenzo (US): 167개 브랜드
+**Phase 3 (신규, 검증 완료):**
+- `GET /products/sales?brand=&tier=` — 세일 제품 (할인율 정렬)
+- `GET /products/search?q=` — 제품명 검색
+- `GET /products/compare/{product_key}` — 전 채널 가격 비교 ← 핵심
+- `GET /brands/{slug}/products` — 브랜드별 제품 + 가격
 
-### 크롤러 현황 (brand_crawler.py)
-- **Shopify** `/products.json` API: 안정적
-- **Cafe24**: cate_no dedup + 한국어 UI워드 필터 + 콜라보 패턴 필터 (> 40자)
-- **커스텀 전략**: 11개 채널 (8division, kasina, thexshop, obscura 등)
-- **0결과 32개 채널**: Cafe24 DOM 불일치·일본 플랫폼(BASE/Ocnk/laidback)·SSL 오류
+### 크롤러 현황
+- **brand_crawler.py**: 브랜드명 수집 (Shopify vendor + Cafe24 cate_no)
+- **product_crawler.py**: 제품·가격 수집 (Shopify REST API, httpx 기반)
+  - URL 서브도메인 기반 통화 자동 감지 (kr.→KRW, jp.→JPY 등)
+  - 전체 크롤: `uv run python scripts/crawl_products.py` (미실행)
 
-### 완료된 Codex 이슈
-- `CODEX_ISSUE_01.md` ✅ — Cafe24 개선 + 전체 크롤 실행 + stale 삭제 버그 수정
-- `CODEX_ISSUE_02.md` ✅ — 브랜드 티어 분류 (classify_brands.py)
-- `CODEX_ISSUE_03.md` ✅ — 협업 seed + hype_score 재계산
-- `CODEX_ISSUE_04.md` ✅ — landscape API 검증
+### 실행 명령
+```bash
+# 환율 업데이트 (일 1회 권장)
+uv run python scripts/update_exchange_rates.py
 
-### 플래그된 URL (참고)
-- `https://www.corteiz.com/password` — 비밀번호 잠금 (크롤 불가)
-- `https://www.tune.kr` — SSL 오류
-- `https://www.kerouac.okinawa` — SSL 오류
+# 제품 크롤 (전체 또는 테스트)
+uv run python scripts/crawl_products.py --limit 3
+uv run python scripts/crawl_products.py --channel-type brand-store
+
+# 가격 비교 조회 예시
+# GET /products/compare/new-balance:new-balance-2002r
+```
+
+### 완료된 이슈
+- Phase 2 Codex Issues 01~04 ✅
+- Phase 3 제품 가격 비교 인프라 ✅ (전체 채널 크롤은 미실행)
 
 ---
 

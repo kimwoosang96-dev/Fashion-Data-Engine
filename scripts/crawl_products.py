@@ -40,6 +40,7 @@ from fashion_engine.services.alert_service import (
     sale_alert,
     price_drop_alert,
 )
+from fashion_engine.services.watchlist_service import should_alert
 
 console = Console()
 app = typer.Typer()
@@ -139,8 +140,11 @@ async def run(limit: int, channel_type: str | None, no_alerts: bool) -> None:
                         if is_new:
                             new_count += 1
 
-                        # ── 알림 트리거 ─────────────────────────────────
-                        if not no_alerts and settings.discord_webhook_url:
+                        # ── 알림 트리거 (watchlist 매칭 시만) ────────────
+                        brand_slug = brand.slug if brand else None
+                        if not no_alerts and settings.discord_webhook_url and await should_alert(
+                            db, brand_slug=brand_slug, channel_url=channel.url, product_key=info.product_key
+                        ):
                             current_krw = int(info.price * rate)
                             discount_rate: int | None = None
                             if is_sale and info.compare_at_price:

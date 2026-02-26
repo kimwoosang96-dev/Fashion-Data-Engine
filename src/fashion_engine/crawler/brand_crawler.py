@@ -242,7 +242,12 @@ class BrandCrawler(BaseCrawler):
             try:
                 if strategy:
                     brands = await self._crawl_with_strategy(candidate_url, strategy)
-                    crawl_strategy = "custom"
+                    if brands:
+                        crawl_strategy = "custom"
+                    else:
+                        # 커스텀 전략이 0건이면 generic fallback을 이어서 시도
+                        brands, generic_strategy = await self._crawl_generic(candidate_url)
+                        crawl_strategy = f"custom->{generic_strategy}"
                 else:
                     brands, crawl_strategy = await self._crawl_generic(candidate_url)
 

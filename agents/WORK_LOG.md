@@ -54,3 +54,9 @@ Format:
 - 2026-02-27 01:57:17 | agent:codex-dev | task:T-20260227-001 | action:log | message:Completed DB_01 report update: zero-result channels 100% labeled and index recommendations documented.
 
 - 2026-02-27 01:57:17 | agent:codex-dev | task:T-20260228-001 | action:log | message:Completed CRAWLER_01: added APScheduler-based daily scheduler script and dry-run verification.
+
+- 2026-02-27 02:35:40 | agent:codex-dev | task:T-20260227-002 | action:complete | message:DB_02 done: applied 6 query indexes via Alembic revision 7b6619f9d1ad and upgraded DB to head.
+
+- 2026-02-27 02:35:40 | agent:codex-dev | task:T-20260228-005 | action:complete | message:CRAWLER_02 done: custom strategy now falls back to generic when empty. Recrawl improved selector_mismatch set (BIZZARE 35, ECRU 103, Kasina 199, EFFORTLESS 1, THEXSHOP 1).
+
+- 2026-02-27 02:35:59 | agent:codex-dev | task:T-20260227-002 | action:complete | message:DB_02 done: applied 6 query indexes via Alembic revision 7b6619f9d1ad and upgraded DB to head.

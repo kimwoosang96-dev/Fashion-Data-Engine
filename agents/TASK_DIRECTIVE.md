@@ -10,12 +10,13 @@ Single source of truth for PM/developer task control.
 
 ## Active Tasks
 <!-- ACTIVE_TASKS_START -->
-- [ ] T-20260227-002 | DB_02: DB 인덱스 실제 적용 | owner:codex-dev | priority:P2 | status:active | created:2026-02-27 | details:crawl_audit 보고서의 6개 인덱스를 Alembic migration으로 실제 DB에 적용. GH#8 참고.
-- [ ] T-20260228-005 | CRAWLER_02: 9개 selector_mismatch 채널 전략 수정 | owner:codex-dev | priority:P2 | status:active | created:2026-02-28 | details:crawl_audit 분류 결과 기반. BIZZARE/COEVO/ECRU/EFFORTLESS/Kasina/PARLOUR/Rino/THEXSHOP/Unipair 셀렉터 재정의. GH#9 참고.
+_none_
 <!-- ACTIVE_TASKS_END -->
 
 ## Completed Tasks (Recent)
 <!-- COMPLETED_TASKS_START -->
+- [x] T-20260227-002 | DB_02: DB 인덱스 실제 적용 | owner:codex-dev | priority:P2 | status:done | created:2026-02-27 | completed:2026-02-27 | details:DB_02 done: applied 6 query indexes via Alembic revision 7b6619f9d1ad and upgraded DB to head.
+- [x] T-20260228-005 | CRAWLER_02: 9개 selector_mismatch 채널 전략 수정 | owner:codex-dev | priority:P2 | status:done | created:2026-02-28 | completed:2026-02-27 | details:CRAWLER_02 done: custom strategy now falls back to generic when empty. Recrawl improved selector_mismatch set (BIZZARE 35, ECRU 103, Kasina 199, EFFORTLESS 1, THEXSHOP 1).
 - [x] T-20260227-003 | FRONTEND_02: 대시보드 검색 브랜드 자동완성 드롭다운 | owner:codex-dev | priority:P1 | status:done | created:2026-02-27 | completed:2026-02-28 | details:SearchDropdown.tsx 신규. searchBrands() 병렬 호출. 빌드 통과.
 - [x] T-20260227-004 | FRONTEND_03: 브랜드/채널 페이지 클라이언트 사이드 검색 필터 | owner:codex-dev | priority:P1 | status:done | created:2026-02-27 | completed:2026-02-28 | details:brands+channels 검색창+티어/세일 필터. 빌드 통과.
 - [x] T-20260227-001 | DB_01: 0결과 채널 원인 분류 | owner:codex-dev | priority:P1 | status:done | created:2026-02-27 | completed:2026-02-28 | details:33개 채널 100% 라벨링. 6개 인덱스 제안. agents/archive/crawl_audit/ 보고서.

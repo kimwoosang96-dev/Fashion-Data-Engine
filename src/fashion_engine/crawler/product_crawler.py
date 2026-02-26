@@ -51,6 +51,7 @@ class ProductInfo:
     image_url: str | None
     product_url: str     # 채널 내 제품 URL
     product_key: str     # "brand-slug:handle" 교차 채널 매칭용
+    is_available: bool   # 재고/판매 가능 여부 (품절 표시용)
 
 
 @dataclass
@@ -216,6 +217,7 @@ class ProductCrawler:
                 pass
 
         sku: str | None = (v0.get("sku") or "").strip() or None
+        is_available = any(bool(v.get("available", False)) for v in variants)
 
         # 첫 번째 이미지
         images = p.get("images") or []
@@ -237,4 +239,5 @@ class ProductCrawler:
             image_url=image_url,
             product_url=product_url,
             product_key=product_key,
+            is_available=is_available,
         )

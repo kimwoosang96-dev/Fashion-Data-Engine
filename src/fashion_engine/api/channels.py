@@ -7,7 +7,14 @@ from fashion_engine.models.brand import Brand
 from fashion_engine.models.channel import Channel
 from fashion_engine.models.channel_brand import ChannelBrand
 from fashion_engine.services import channel_service, brand_service
-from fashion_engine.api.schemas import ChannelOut, ChannelWithBrands, BrandOut, ChannelLandscape, ChannelLandscapeItem
+from fashion_engine.api.schemas import (
+    ChannelOut,
+    ChannelWithBrands,
+    BrandOut,
+    ChannelLandscape,
+    ChannelLandscapeItem,
+    ChannelHighlightOut,
+)
 
 router = APIRouter(prefix="/channels", tags=["channels"])
 
@@ -16,6 +23,16 @@ router = APIRouter(prefix="/channels", tags=["channels"])
 async def list_channels(db: AsyncSession = Depends(get_db)):
     """전체 판매채널 목록"""
     return await channel_service.get_all_channels(db)
+
+
+@router.get("/highlights", response_model=list[ChannelHighlightOut])
+async def list_channel_highlights(
+    limit: int = 200,
+    offset: int = 0,
+    db: AsyncSession = Depends(get_db),
+):
+    """판매채널 하이라이트 (세일/신상품 판매 여부 포함)."""
+    return await channel_service.get_channel_highlights(db, limit=limit, offset=offset)
 
 
 @router.get("/landscape", response_model=ChannelLandscape)

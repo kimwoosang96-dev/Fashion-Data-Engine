@@ -111,6 +111,44 @@ class ProductOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class SaleHighlightOut(BaseModel):
+    product_id: int
+    product_name: str
+    product_key: str | None
+    product_url: str
+    image_url: str | None
+    channel_name: str
+    channel_country: str | None
+    is_new: bool
+    is_active: bool
+    price_krw: int
+    original_price_krw: int | None
+    discount_rate: int | None
+
+
+class ChannelHighlightOut(BaseModel):
+    channel_id: int
+    channel_name: str
+    channel_url: str
+    channel_type: str | None
+    country: str | None
+    total_product_count: int
+    sale_product_count: int
+    new_product_count: int
+    is_running_sales: bool
+    is_selling_new_products: bool
+
+
+class BrandHighlightOut(BaseModel):
+    brand_id: int
+    brand_name: str
+    brand_slug: str
+    tier: str | None
+    total_product_count: int
+    new_product_count: int
+    is_selling_new_products: bool
+
+
 class ProductDetailOut(ProductOut):
     channel: ChannelOut
     brand: BrandOut | None

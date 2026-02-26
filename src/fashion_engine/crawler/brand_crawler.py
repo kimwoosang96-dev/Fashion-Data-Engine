@@ -145,6 +145,23 @@ CHANNEL_STRATEGIES: dict[str, dict] = {
     },
 }
 
+# DNS/SSL 이슈 채널 대체 URL 후보.
+# 첫 URL이 실패하면 순차 시도한다.
+CHANNEL_URL_FALLBACKS: dict[str, list[str]] = {
+    "store.doverstreetmarket.com": [
+        "https://shop-us.doverstreetmarket.com",
+        "https://shop.doverstreetmarket.com",
+    ],
+    "kerouac.okinawa": [
+        "http://www.kerouac.okinawa",
+        "http://kerouac.okinawa",
+    ],
+    "tune.kr": [
+        "http://www.tune.kr",
+        "http://tune.kr",
+    ],
+}
+
 
 # ── 브랜드명 유효성 검사 ────────────────────────────────────────────────
 
@@ -218,24 +235,38 @@ class BrandCrawler(BaseCrawler):
     async def crawl_channel(self, channel_url: str) -> ChannelCrawlResult:
         """채널 URL에서 브랜드 목록 추출"""
         result = ChannelCrawlResult(channel_url=channel_url)
-        strategy = self._find_strategy(channel_url)
+        last_error: str | None = None
 
-        try:
-            if strategy:
-                brands = await self._crawl_with_strategy(channel_url, strategy)
-                result.crawl_strategy = "custom"
-            else:
-                brands, strat_name = await self._crawl_generic(channel_url)
-                result.crawl_strategy = strat_name
+        for candidate_url in self._resolve_candidate_urls(channel_url):
+            strategy = self._find_strategy(candidate_url)
+            try:
+                if strategy:
+                    brands = await self._crawl_with_strategy(candidate_url, strategy)
+                    crawl_strategy = "custom"
+                else:
+                    brands, crawl_strategy = await self._crawl_generic(candidate_url)
 
-            result.brands = brands
-            logger.info(
-                f"[{channel_url}] {len(brands)}개 브랜드 추출 ({result.crawl_strategy})"
-            )
+                # fallback URL에서 성공하면 즉시 확정
+                result.brands = brands
+                if candidate_url != channel_url:
+                    result.crawl_strategy = f"{crawl_strategy}+fallback"
+                    logger.info(
+                        f"[{channel_url}] fallback 성공: {candidate_url} ({len(brands)}개)"
+                    )
+                else:
+                    result.crawl_strategy = crawl_strategy
 
-        except Exception as e:
-            result.error = str(e)
-            logger.error(f"[{channel_url}] 크롤링 실패: {e}")
+                logger.info(
+                    f"[{channel_url}] {len(brands)}개 브랜드 추출 ({result.crawl_strategy})"
+                )
+                return result
+            except Exception as e:
+                last_error = str(e)
+                logger.warning(f"[{channel_url}] 후보 URL 실패: {candidate_url} ({e})")
+                continue
+
+        result.error = last_error
+        logger.error(f"[{channel_url}] 크롤링 실패: {last_error}")
 
         return result
 
@@ -244,6 +275,16 @@ class BrandCrawler(BaseCrawler):
             if domain in channel_url:
                 return strategy
         return None
+
+    def _resolve_candidate_urls(self, channel_url: str) -> list[str]:
+        candidates = [channel_url]
+        for domain, urls in CHANNEL_URL_FALLBACKS.items():
+            if domain in channel_url:
+                for alt in urls:
+                    if alt not in candidates:
+                        candidates.append(alt)
+                break
+        return candidates
 
     async def _crawl_with_strategy(
         self, channel_url: str, strategy: dict
@@ -434,7 +475,11 @@ class BrandCrawler(BaseCrawler):
                 f"{channel_url.rstrip('/')}/products.json"
                 f"?limit=250&page={page_num}"
             )
-            page = await self.fetch_page(api_url)
+            try:
+                page = await self.fetch_page(api_url)
+            except Exception:
+                # Shopify API 접근 실패 시 범용 fallback으로 진행
+                break
             try:
                 raw = await page.evaluate("document.body.innerText")
                 data = json.loads(raw)

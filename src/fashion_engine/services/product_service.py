@@ -67,6 +67,7 @@ async def upsert_product(
         existing.name = info.title
         existing.product_key = info.product_key
         existing.is_sale = is_sale
+        existing.is_active = info.is_available
         existing.image_url = info.image_url
         existing.updated_at = datetime.utcnow()
         return existing, False, sale_just_started
@@ -79,6 +80,7 @@ async def upsert_product(
             sku=info.sku,
             url=info.product_url,
             image_url=info.image_url,
+            is_active=info.is_available,
             is_sale=is_sale,
         )
         db.add(product)
@@ -185,6 +187,139 @@ async def search_products(
         .limit(limit)
     )
     return list(result.scalars().all())
+
+
+async def get_sale_highlights(
+    db: AsyncSession,
+    limit: int = 120,
+    offset: int = 0,
+) -> list[dict]:
+    """세일 제품 하이라이트 (세일율/가격/채널 포함)."""
+    latest_sub = (
+        select(
+            PriceHistory.product_id,
+            func.max(PriceHistory.crawled_at).label("latest"),
+        )
+        .group_by(PriceHistory.product_id)
+        .subquery()
+    )
+
+    rows = (
+        await db.execute(
+            select(Product, PriceHistory, Channel)
+            .join(latest_sub, Product.id == latest_sub.c.product_id)
+            .join(
+                PriceHistory,
+                (PriceHistory.product_id == Product.id)
+                & (PriceHistory.crawled_at == latest_sub.c.latest),
+            )
+            .join(Channel, Product.channel_id == Channel.id)
+            .where(Product.is_sale == True)
+            .order_by(desc(PriceHistory.discount_rate), Product.name)
+            .limit(limit)
+            .offset(offset)
+        )
+    ).all()
+
+    result: list[dict] = []
+    for product, ph, channel in rows:
+        result.append(
+            {
+                "product_id": product.id,
+                "product_name": product.name,
+                "product_key": product.product_key,
+                "product_url": product.url,
+                "image_url": product.image_url,
+                "channel_name": channel.name,
+                "channel_country": channel.country,
+                "is_new": bool(product.is_new),
+                "is_active": bool(product.is_active),
+                "price_krw": int(ph.price),
+                "original_price_krw": int(ph.original_price) if ph.original_price else None,
+                "discount_rate": ph.discount_rate,
+            }
+        )
+    return result
+
+
+async def get_related_searches(
+    db: AsyncSession, q: str, limit: int = 8
+) -> list[str]:
+    """
+    검색어 기준 연관검색어 생성.
+    - 매칭 제품의 브랜드명 상위
+    - 매칭 제품명에서 자주 등장한 키워드
+    """
+    query = q.strip().lower()
+    if not query:
+        return []
+
+    rows = (
+        await db.execute(
+            select(Product.name, Brand.name)
+            .join(Brand, Product.brand_id == Brand.id, isouter=True)
+            .where(Product.name.ilike(f"%{query}%"))
+            .limit(300)
+        )
+    ).all()
+
+    if not rows:
+        brand_rows = (
+            await db.execute(
+                select(Brand.name)
+                .where((Brand.name.ilike(f"%{query}%")) | (Brand.slug.ilike(f"%{query}%")))
+                .limit(limit)
+            )
+        ).all()
+        return [name for (name,) in brand_rows if name][:limit]
+
+    suggestions: list[str] = []
+    seen: set[str] = set()
+
+    # 1) 브랜드명 기반
+    brand_freq: dict[str, int] = {}
+    for _, brand_name in rows:
+        if not brand_name:
+            continue
+        key = brand_name.strip()
+        if not key:
+            continue
+        brand_freq[key] = brand_freq.get(key, 0) + 1
+
+    for brand_name, _ in sorted(brand_freq.items(), key=lambda x: x[1], reverse=True):
+        if brand_name.lower() == query:
+            continue
+        if brand_name.lower() in seen:
+            continue
+        suggestions.append(brand_name)
+        seen.add(brand_name.lower())
+        if len(suggestions) >= limit:
+            return suggestions
+
+    # 2) 제품명 키워드 기반
+    token_freq: dict[str, int] = {}
+    for product_name, _ in rows:
+        for token in product_name.replace("/", " ").replace("-", " ").split():
+            cleaned = token.strip("()[]{}.,:;!?'\"").lower()
+            if len(cleaned) < 2:
+                continue
+            if cleaned == query:
+                continue
+            if query in cleaned:
+                continue
+            token_freq[cleaned] = token_freq.get(cleaned, 0) + 1
+
+    for token, _ in sorted(token_freq.items(), key=lambda x: x[1], reverse=True):
+        keyword = f"{q} {token}"
+        key = keyword.lower()
+        if key in seen:
+            continue
+        suggestions.append(keyword)
+        seen.add(key)
+        if len(suggestions) >= limit:
+            break
+
+    return suggestions[:limit]
 
 
 async def get_price_comparison(

@@ -1,12 +1,13 @@
 from datetime import datetime
 
 from slugify import slugify
-from sqlalchemy import select, or_
+from sqlalchemy import case, func, select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fashion_engine.models.brand import Brand
 from fashion_engine.models.channel import Channel
 from fashion_engine.models.channel_brand import ChannelBrand
+from fashion_engine.models.product import Product
 
 
 async def get_all_brands(db: AsyncSession) -> list[Brand]:
@@ -48,6 +49,51 @@ async def get_channels_by_brand(db: AsyncSession, brand_id: int) -> list[Channel
         .order_by(Channel.name)
     )
     return list(result.scalars().all())
+
+
+async def get_brand_highlights(
+    db: AsyncSession,
+    limit: int = 300,
+    offset: int = 0,
+) -> list[dict]:
+    """브랜드별 하이라이트(신상품 판매 여부)."""
+    rows = (
+        await db.execute(
+            select(
+                Brand.id,
+                Brand.name,
+                Brand.slug,
+                Brand.tier,
+                func.count(Product.id).label("total_product_count"),
+                func.sum(case((Product.is_new == True, 1), else_=0)).label("new_product_count"),
+            )
+            .outerjoin(Product, Product.brand_id == Brand.id)
+            .group_by(Brand.id)
+            .order_by(
+                func.sum(case((Product.is_new == True, 1), else_=0)).desc(),
+                func.count(Product.id).desc(),
+                Brand.name.asc(),
+            )
+            .limit(limit)
+            .offset(offset)
+        )
+    ).all()
+
+    result: list[dict] = []
+    for row in rows:
+        new_count = int(row.new_product_count or 0)
+        result.append(
+            {
+                "brand_id": row.id,
+                "brand_name": row.name,
+                "brand_slug": row.slug,
+                "tier": row.tier,
+                "total_product_count": int(row.total_product_count or 0),
+                "new_product_count": new_count,
+                "is_selling_new_products": new_count > 0,
+            }
+        )
+    return result
 
 
 async def upsert_brand(db: AsyncSession, name: str, name_ko: str | None = None) -> Brand:

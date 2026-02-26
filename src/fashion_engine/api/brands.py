@@ -9,7 +9,15 @@ from fashion_engine.models.brand import Brand
 from fashion_engine.models.channel import Channel
 from fashion_engine.models.channel_brand import ChannelBrand
 from fashion_engine.services import brand_service, product_service
-from fashion_engine.api.schemas import BrandOut, BrandLandscape, LandscapeNode, LandscapeEdge, ChannelOut, ProductOut
+from fashion_engine.api.schemas import (
+    BrandOut,
+    BrandLandscape,
+    LandscapeNode,
+    LandscapeEdge,
+    ChannelOut,
+    ProductOut,
+    BrandHighlightOut,
+)
 
 router = APIRouter(prefix="/brands", tags=["brands"])
 
@@ -72,6 +80,16 @@ async def list_brands(
             raise HTTPException(status_code=400, detail=f"유효하지 않은 tier. 허용값: {', '.join(sorted(VALID_TIERS))}")
         return await brand_service.get_brands_by_tier(db, tier)
     return await brand_service.get_all_brands(db)
+
+
+@router.get("/highlights", response_model=list[BrandHighlightOut])
+async def list_brand_highlights(
+    limit: int = Query(300, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+    db: AsyncSession = Depends(get_db),
+):
+    """브랜드 하이라이트 (신상품 판매 여부 포함)."""
+    return await brand_service.get_brand_highlights(db, limit=limit, offset=offset)
 
 
 @router.get("/search", response_model=list[BrandOut])

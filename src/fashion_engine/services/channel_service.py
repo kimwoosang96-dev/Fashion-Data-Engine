@@ -1,10 +1,10 @@
-from sqlalchemy import select
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from fashion_engine.models.channel import Channel
 from fashion_engine.models.brand import Brand
 from fashion_engine.models.channel_brand import ChannelBrand
+from fashion_engine.models.product import Product
 
 
 async def get_all_channels(db: AsyncSession) -> list[Channel]:
@@ -25,6 +25,58 @@ async def get_brands_by_channel(db: AsyncSession, channel_id: int) -> list[Brand
         .order_by(Brand.name)
     )
     return list(result.scalars().all())
+
+
+async def get_channel_highlights(
+    db: AsyncSession,
+    limit: int = 200,
+    offset: int = 0,
+) -> list[dict]:
+    """채널별 하이라이트(세일/신상품 판매 여부)."""
+    rows = (
+        await db.execute(
+            select(
+                Channel.id,
+                Channel.name,
+                Channel.url,
+                Channel.channel_type,
+                Channel.country,
+                func.count(Product.id).label("total_product_count"),
+                func.sum(case((Product.is_sale == True, 1), else_=0)).label("sale_product_count"),
+                func.sum(case((Product.is_new == True, 1), else_=0)).label("new_product_count"),
+            )
+            .outerjoin(Product, Product.channel_id == Channel.id)
+            .where(Channel.is_active == True)
+            .group_by(Channel.id)
+            .order_by(
+                func.sum(case((Product.is_sale == True, 1), else_=0)).desc(),
+                func.sum(case((Product.is_new == True, 1), else_=0)).desc(),
+                Channel.name.asc(),
+            )
+            .limit(limit)
+            .offset(offset)
+        )
+    ).all()
+
+    result: list[dict] = []
+    for row in rows:
+        sale_count = int(row.sale_product_count or 0)
+        new_count = int(row.new_product_count or 0)
+        result.append(
+            {
+                "channel_id": row.id,
+                "channel_name": row.name,
+                "channel_url": row.url,
+                "channel_type": row.channel_type,
+                "country": row.country,
+                "total_product_count": int(row.total_product_count or 0),
+                "sale_product_count": sale_count,
+                "new_product_count": new_count,
+                "is_running_sales": sale_count > 0,
+                "is_selling_new_products": new_count > 0,
+            }
+        )
+    return result
 
 
 async def upsert_channel(db: AsyncSession, data: dict) -> Channel:

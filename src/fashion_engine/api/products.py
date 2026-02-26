@@ -7,6 +7,7 @@ from fashion_engine.api.schemas import (
     ProductOut,
     PriceComparisonOut,
     PriceComparisonItem,
+    SaleHighlightOut,
 )
 
 router = APIRouter(prefix="/products", tags=["products"])
@@ -35,6 +36,26 @@ async def search_products(
 ):
     """제품명 검색."""
     return await product_service.search_products(db, q=q, limit=limit)
+
+
+@router.get("/sales-highlights", response_model=list[SaleHighlightOut])
+async def get_sale_highlights(
+    limit: int = Query(120, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    db: AsyncSession = Depends(get_db),
+):
+    """세일 제품 하이라이트 (세일율 강조용)."""
+    return await product_service.get_sale_highlights(db, limit=limit, offset=offset)
+
+
+@router.get("/related-searches", response_model=list[str])
+async def related_searches(
+    q: str = Query(..., min_length=1, description="검색어"),
+    limit: int = Query(8, ge=1, le=20),
+    db: AsyncSession = Depends(get_db),
+):
+    """검색어 연관검색어 제안."""
+    return await product_service.get_related_searches(db, q=q, limit=limit)
 
 
 @router.get("/compare/{product_key:path}", response_model=PriceComparisonOut)

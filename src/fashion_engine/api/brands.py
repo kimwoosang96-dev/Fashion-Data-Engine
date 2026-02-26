@@ -123,6 +123,7 @@ async def get_brand_channels(slug: str, db: AsyncSession = Depends(get_db)):
 @router.get("/{slug}/products", response_model=list[ProductOut])
 async def get_brand_products(
     slug: str,
+    is_sale: bool | None = Query(None, description="세일 제품만 보기"),
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
@@ -131,4 +132,10 @@ async def get_brand_products(
     brand = await brand_service.get_brand_by_slug(db, slug)
     if not brand:
         raise HTTPException(status_code=404, detail="브랜드를 찾을 수 없습니다.")
-    return await product_service.get_brand_products(db, brand_slug=slug, limit=limit, offset=offset)
+    return await product_service.get_brand_products(
+        db,
+        brand_slug=slug,
+        is_sale=is_sale,
+        limit=limit,
+        offset=offset,
+    )

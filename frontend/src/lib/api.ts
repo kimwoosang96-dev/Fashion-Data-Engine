@@ -1,7 +1,7 @@
 import type {
   Product, PriceComparison, Brand, Purchase, PurchaseInput,
   Score, PurchaseStats, WatchListItem, Drop, Channel,
-  SaleHighlight, ChannelHighlight, BrandHighlight,
+  SaleHighlight, ChannelHighlight, BrandHighlight, ChannelPriceHistory,
 } from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -31,6 +31,12 @@ export const getPriceComparison = (productKey: string) =>
   apiFetch<PriceComparison>(`/products/compare/${encodeURIComponent(productKey)}`);
 export const getSaleHighlights = (limit = 120, offset = 0) =>
   apiFetch<SaleHighlight[]>(`/products/sales-highlights?limit=${limit}&offset=${offset}`);
+export const getSaleCount = () =>
+  apiFetch<{ total: number }>("/products/sales-count");
+export const getPriceHistory = (productKey: string, days = 30) =>
+  apiFetch<ChannelPriceHistory[]>(
+    `/products/price-history/${encodeURIComponent(productKey)}?days=${days}`
+  );
 
 // ── Brands ────────────────────────────────────────────────────────────────
 export const getBrands = () => apiFetch<Brand[]>("/brands/");
@@ -38,6 +44,14 @@ export const searchBrands = (q: string) =>
   apiFetch<Brand[]>(`/brands/search?q=${encodeURIComponent(q)}`);
 export const getBrandHighlights = (limit = 300, offset = 0) =>
   apiFetch<BrandHighlight[]>(`/brands/highlights?limit=${limit}&offset=${offset}`);
+export const getBrand = (slug: string) =>
+  apiFetch<Brand>(`/brands/${encodeURIComponent(slug)}`);
+export const getBrandChannels = (slug: string) =>
+  apiFetch<Channel[]>(`/brands/${encodeURIComponent(slug)}/channels`);
+export const getBrandProducts = (slug: string, isSale?: boolean, limit = 500) =>
+  apiFetch<Product[]>(
+    `/brands/${encodeURIComponent(slug)}/products?limit=${limit}${isSale ? "&is_sale=true" : ""}`
+  );
 
 // ── Channels ──────────────────────────────────────────────────────────────
 export const getChannels = () => apiFetch<Channel[]>("/channels/");

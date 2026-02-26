@@ -40,3 +40,17 @@ Format:
 - 2026-02-27 00:47:58 | agent:codex-dev | task:T-20260227-001 | action:log | message:Ran full edit-shop brand recrawl (80 channels). Completed with DNS/SSL failures only; refreshed channel_brand links and rechecked mixed cleanup candidates.
 
 - 2026-02-27 01:15:50 | agent:codex-dev | task:T-20260227-001 | action:log | message:Added per-channel fallback URLs for Dover/Kerouac/Tune and hardened Shopify API failure handling; full recrawl confirms fallback strategies with no errors.
+
+- 2026-02-27 01:57:17 | agent:codex-dev | task:T-20260227-003 | action:log | message:Completed FRONTEND_02: dashboard unified search dropdown with parallel brand/product calls and outside-click close.
+
+- 2026-02-27 01:57:17 | agent:codex-dev | task:T-20260227-004 | action:log | message:Completed FRONTEND_03: client-side filters for brands/channels pages (query+tier, query+sale-only).
+
+- 2026-02-27 01:57:17 | agent:codex-dev | task:T-20260228-003 | action:log | message:Completed FRONTEND_05: price history API and compare page trend chart with 7/30/all range.
+
+- 2026-02-27 01:57:17 | agent:codex-dev | task:T-20260228-002 | action:log | message:Completed FRONTEND_04: brand detail page /brands/[slug] with stats, sale-only toggle, and product grid.
+
+- 2026-02-27 01:57:17 | agent:codex-dev | task:T-20260228-004 | action:log | message:Completed FRONTEND_06: /sales infinite scroll + total sale count header.
+
+- 2026-02-27 01:57:17 | agent:codex-dev | task:T-20260227-001 | action:log | message:Completed DB_01 report update: zero-result channels 100% labeled and index recommendations documented.
+
+- 2026-02-27 01:57:17 | agent:codex-dev | task:T-20260228-001 | action:log | message:Completed CRAWLER_01: added APScheduler-based daily scheduler script and dry-run verification.

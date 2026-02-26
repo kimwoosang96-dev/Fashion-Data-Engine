@@ -2,22 +2,31 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { getPriceComparison } from "@/lib/api";
-import type { PriceComparison, PriceComparisonItem } from "@/lib/types";
+import { getPriceComparison, getPriceHistory } from "@/lib/api";
+import type { PriceComparison, PriceComparisonItem, ChannelPriceHistory } from "@/lib/types";
 import Image from "next/image";
 
 export default function ComparePage() {
   const { key } = useParams<{ key: string }>();
   const [data, setData] = useState<PriceComparison | null>(null);
+  const [history, setHistory] = useState<ChannelPriceHistory[]>([]);
+  const [days, setDays] = useState<7 | 30 | 0>(30);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    getPriceComparison(decodeURIComponent(key))
-      .then(setData)
+    const decoded = decodeURIComponent(key);
+    Promise.all([
+      getPriceComparison(decoded),
+      getPriceHistory(decoded, days),
+    ])
+      .then(([comparison, historyRes]) => {
+        setData(comparison);
+        setHistory(historyRes);
+      })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [key]);
+  }, [key, days]);
 
   const fmt = (n: number) => n.toLocaleString("ko-KR") + "원";
 
@@ -81,6 +90,38 @@ export default function ComparePage() {
           </tbody>
         </table>
       </div>
+
+      {history.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-gray-700">가격 추이</h2>
+            <div className="flex gap-1">
+              <button
+                type="button"
+                className={`px-2 py-1 text-xs rounded ${days === 7 ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-600"}`}
+                onClick={() => setDays(7)}
+              >
+                7일
+              </button>
+              <button
+                type="button"
+                className={`px-2 py-1 text-xs rounded ${days === 30 ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-600"}`}
+                onClick={() => setDays(30)}
+              >
+                30일
+              </button>
+              <button
+                type="button"
+                className={`px-2 py-1 text-xs rounded ${days === 0 ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-600"}`}
+                onClick={() => setDays(0)}
+              >
+                전체
+              </button>
+            </div>
+          </div>
+          <PriceHistoryChart data={history} />
+        </div>
+      )}
     </div>
   );
 }
@@ -129,5 +170,74 @@ function ListingRow({
         </a>
       </td>
     </tr>
+  );
+}
+
+function PriceHistoryChart({ data }: { data: ChannelPriceHistory[] }) {
+  const chartWidth = 900;
+  const chartHeight = 260;
+  const pad = 30;
+  const palette = ["#2563eb", "#10b981", "#ef4444", "#f59e0b", "#8b5cf6", "#06b6d4"];
+
+  const points = data.flatMap((channel) => channel.history.map((h) => h.price_krw));
+  if (points.length === 0) return null;
+
+  const min = Math.min(...points);
+  const max = Math.max(...points);
+  const range = Math.max(1, max - min);
+  const maxLen = Math.max(...data.map((channel) => channel.history.length));
+
+  return (
+    <div className="space-y-3">
+      <div className="w-full overflow-x-auto">
+        <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="min-w-[640px] w-full h-64">
+          <line x1={pad} y1={pad} x2={pad} y2={chartHeight - pad} stroke="#e5e7eb" />
+          <line x1={pad} y1={chartHeight - pad} x2={chartWidth - pad} y2={chartHeight - pad} stroke="#e5e7eb" />
+          <text x={4} y={pad + 4} fontSize={11} fill="#6b7280">
+            ₩{max.toLocaleString("ko-KR")}
+          </text>
+          <text x={4} y={chartHeight - pad} fontSize={11} fill="#6b7280">
+            ₩{min.toLocaleString("ko-KR")}
+          </text>
+          {data.map((channel, idx) => {
+            const color = palette[idx % palette.length];
+            const path = channel.history
+              .map((point, i) => {
+                const x = pad + (i / Math.max(1, maxLen - 1)) * (chartWidth - pad * 2);
+                const y = chartHeight - pad - ((point.price_krw - min) / range) * (chartHeight - pad * 2);
+                return `${i === 0 ? "M" : "L"} ${x} ${y}`;
+              })
+              .join(" ");
+            return (
+              <g key={channel.channel_name}>
+                <path d={path} fill="none" stroke={color} strokeWidth={2} />
+                {channel.history.map((point, i) => {
+                  const x = pad + (i / Math.max(1, maxLen - 1)) * (chartWidth - pad * 2);
+                  const y = chartHeight - pad - ((point.price_krw - min) / range) * (chartHeight - pad * 2);
+                  return (
+                    <circle
+                      key={`${channel.channel_name}-${point.date}-${i}`}
+                      cx={x}
+                      cy={y}
+                      r={2.5}
+                      fill={point.is_sale ? "#ef4444" : color}
+                    />
+                  );
+                })}
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+      <div className="flex flex-wrap gap-3">
+        {data.map((channel, idx) => (
+          <div key={channel.channel_name} className="flex items-center gap-1.5 text-xs text-gray-600">
+            <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ backgroundColor: palette[idx % palette.length] }} />
+            {channel.channel_name}
+          </div>
+        ))}
+      </div>
+      <p className="text-xs text-gray-500">가격 범위: ₩{min.toLocaleString("ko-KR")} ~ ₩{max.toLocaleString("ko-KR")}</p>
+    </div>
   );
 }

@@ -8,6 +8,7 @@ from fashion_engine.api.schemas import (
     PriceComparisonOut,
     PriceComparisonItem,
     SaleHighlightOut,
+    ChannelPriceHistory,
 )
 
 router = APIRouter(prefix="/products", tags=["products"])
@@ -46,6 +47,13 @@ async def get_sale_highlights(
 ):
     """세일 제품 하이라이트 (세일율 강조용)."""
     return await product_service.get_sale_highlights(db, limit=limit, offset=offset)
+
+
+@router.get("/sales-count")
+async def get_sales_count(db: AsyncSession = Depends(get_db)):
+    """세일 제품 총 개수."""
+    total = await product_service.get_sale_products_count(db)
+    return {"total": total}
 
 
 @router.get("/related-searches", response_model=list[str])
@@ -90,6 +98,16 @@ async def compare_prices(
         cheapest_price_krw=cheapest.price_krw if cheapest else None,
         total_listings=len(listings),
     )
+
+
+@router.get("/price-history/{product_key:path}", response_model=list[ChannelPriceHistory])
+async def get_product_price_history(
+    product_key: str,
+    days: int = Query(30, ge=0, le=3650),
+    db: AsyncSession = Depends(get_db),
+):
+    """제품 가격 히스토리 (채널별 시계열)."""
+    return await product_service.get_price_history(db, product_key=product_key, days=days)
 
 
 @router.get("/", response_model=list[ProductOut])

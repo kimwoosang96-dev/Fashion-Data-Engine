@@ -165,3 +165,14 @@ export interface BrandHighlight {
   new_product_count: number;
   is_selling_new_products: boolean;
 }
+
+export interface PriceHistoryPoint {
+  date: string;
+  price_krw: number;
+  is_sale: boolean;
+}
+
+export interface ChannelPriceHistory {
+  channel_name: string;
+  history: PriceHistoryPoint[];
+}

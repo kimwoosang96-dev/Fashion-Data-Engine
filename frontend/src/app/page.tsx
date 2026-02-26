@@ -1,43 +1,88 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
-import { getSaleProducts, getChannels, getBrands, searchProducts, getRelatedSearches } from "@/lib/api";
+import { useEffect, useState, useCallback, useRef } from "react";
+import {
+  getSaleProducts,
+  getChannels,
+  getBrands,
+  searchProducts,
+  getRelatedSearches,
+  searchBrands,
+} from "@/lib/api";
 import type { Product, Channel, Brand } from "@/lib/types";
 import { ProductCard } from "@/components/ProductCard";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
+import { SearchDropdown } from "@/components/SearchDropdown";
 
 export default function DashboardPage() {
   const [saleProducts, setSaleProducts] = useState<Product[]>([]);
+  const [baseSaleProducts, setBaseSaleProducts] = useState<Product[]>([]);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [searchResults, setSearchResults] = useState<Product[] | null>(null);
+  const [brandSuggestions, setBrandSuggestions] = useState<Brand[]>([]);
   const [relatedSearches, setRelatedSearches] = useState<string[]>([]);
   const [query, setQuery] = useState("");
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const searchBoxRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     Promise.all([getSaleProducts(60), getChannels(), getBrands()])
       .then(([products, ch, br]) => {
         setSaleProducts(products);
+        setBaseSaleProducts(products);
         setChannels(ch);
         setBrands(br);
       })
       .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    const onClickOutside = (event: MouseEvent) => {
+      if (!searchBoxRef.current?.contains(event.target as Node)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, []);
+
   const handleSearch = useCallback(async (q: string) => {
     setQuery(q);
     if (!q.trim()) {
       setSearchResults(null);
+      setBrandSuggestions([]);
       setRelatedSearches([]);
+      setSaleProducts(baseSaleProducts);
+      setDropdownOpen(false);
       return;
     }
-    const [results, related] = await Promise.all([
+    const [products, brandsFound, related] = await Promise.all([
       searchProducts(q),
+      searchBrands(q),
       getRelatedSearches(q, 8),
     ]);
-    setSearchResults(results);
+    setSearchResults(products);
+    setBrandSuggestions(brandsFound);
     setRelatedSearches(related);
+    setDropdownOpen(true);
+  }, [baseSaleProducts]);
+
+  const handleBrandClick = useCallback(async (brand: Brand) => {
+    const filtered = await getSaleProducts(60, brand.slug);
+    setSaleProducts(filtered);
+    setSearchResults(null);
+    setBrandSuggestions([]);
+    setQuery(brand.name);
+    setDropdownOpen(false);
+  }, []);
+
+  const handleProductClick = useCallback((product: Product) => {
+    setSearchResults([product]);
+    setBrandSuggestions([]);
+    setDropdownOpen(false);
+    setQuery(product.name);
   }, []);
 
   const displayed = searchResults ?? saleProducts;
@@ -73,13 +118,21 @@ export default function DashboardPage() {
       </div>
 
       {/* Search */}
-      <div className="max-w-md">
+      <div className="max-w-md relative" ref={searchBoxRef}>
         <Input
           placeholder="제품 검색..."
           value={query}
           onChange={(e) => handleSearch(e.target.value)}
           className="bg-white"
         />
+        {dropdownOpen && query.trim() && (
+          <SearchDropdown
+            brandResults={brandSuggestions}
+            productResults={searchResults ?? []}
+            onBrandClick={handleBrandClick}
+            onProductClick={handleProductClick}
+          />
+        )}
         {query.trim() && relatedSearches.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-2">
             {relatedSearches.map((term) => (

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 
 from slugify import slugify
@@ -242,6 +242,14 @@ async def get_sale_highlights(
     return result
 
 
+async def get_sale_products_count(db: AsyncSession) -> int:
+    """현재 세일 제품 총 개수."""
+    result = await db.execute(
+        select(func.count(Product.id)).where(Product.is_sale == True)
+    )
+    return int(result.scalar_one() or 0)
+
+
 async def get_related_searches(
     db: AsyncSession, q: str, limit: int = 8
 ) -> list[str]:
@@ -375,20 +383,59 @@ async def get_price_comparison(
     return listings
 
 
+async def get_price_history(
+    db: AsyncSession, product_key: str, days: int = 30
+) -> list[dict]:
+    """동일 product_key의 채널별 가격 히스토리."""
+    query = (
+        select(Channel.name, PriceHistory.crawled_at, PriceHistory.price, PriceHistory.is_sale)
+        .join(Product, Product.id == PriceHistory.product_id)
+        .join(Channel, Channel.id == Product.channel_id)
+        .where(Product.product_key == product_key)
+        .order_by(Channel.name.asc(), PriceHistory.crawled_at.asc())
+    )
+
+    if days > 0:
+        threshold = datetime.utcnow() - timedelta(days=days)
+        query = query.where(PriceHistory.crawled_at >= threshold)
+
+    rows = (await db.execute(query)).all()
+    grouped: dict[str, list[dict]] = {}
+
+    for channel_name, crawled_at, price, is_sale in rows:
+        grouped.setdefault(channel_name, []).append(
+            {
+                "date": crawled_at.strftime("%Y-%m-%d"),
+                "price_krw": int(price),
+                "is_sale": bool(is_sale),
+            }
+        )
+
+    return [
+        {"channel_name": channel_name, "history": history}
+        for channel_name, history in grouped.items()
+        if history
+    ]
+
+
 async def get_brand_products(
     db: AsyncSession,
     brand_slug: str,
+    is_sale: bool | None = None,
     limit: int = 100,
     offset: int = 0,
 ) -> list[Product]:
     """브랜드별 제품 목록."""
-    result = await db.execute(
+    query = (
         select(Product)
         .join(Brand, Product.brand_id == Brand.id)
         .options(selectinload(Product.channel), selectinload(Product.brand))
         .where(Brand.slug == brand_slug)
-        .order_by(Product.name)
+        .order_by(desc(Product.is_sale), Product.name)
         .limit(limit)
         .offset(offset)
     )
+    if is_sale is not None:
+        query = query.where(Product.is_sale == is_sale)
+    result = await db.execute(query)
     return list(result.scalars().all())

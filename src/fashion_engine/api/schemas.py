@@ -175,6 +175,17 @@ class PriceComparisonOut(BaseModel):
     total_listings: int
 
 
+class PriceHistoryPoint(BaseModel):
+    date: str
+    price_krw: int
+    is_sale: bool
+
+
+class ChannelPriceHistory(BaseModel):
+    channel_name: str
+    history: list[PriceHistoryPoint]
+
+
 # ── 구매 이력 스키마 ───────────────────────────────────────────────────────────
 
 class PurchaseIn(BaseModel):

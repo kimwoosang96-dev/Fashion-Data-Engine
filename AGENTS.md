@@ -208,6 +208,8 @@ uv run python scripts/update_exchange_rates.py        # 환율 (일 1회)
 uv run python scripts/crawl_products.py --no-alerts   # 초기 시드
 uv run python scripts/crawl_products.py               # 알림 포함 크롤
 uv run python scripts/crawl_drops.py                  # 드롭 수집
+uv run python scripts/scheduler.py --dry-run          # 스케줄 등록 확인
+uv run python scripts/scheduler.py                    # 자동 스케줄 실행
 ```
 
 ### Agent Coordination

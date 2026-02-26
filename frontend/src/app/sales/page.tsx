@@ -1,27 +1,63 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { getSaleHighlights } from "@/lib/api";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { getSaleCount, getSaleHighlights } from "@/lib/api";
 import type { SaleHighlight } from "@/lib/types";
 
 const fmt = (n: number) => `₩${n.toLocaleString("ko-KR")}`;
+const LIMIT = 60;
 
 export default function SalesPage() {
   const [items, setItems] = useState<SaleHighlight[]>([]);
+  const [total, setTotal] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    const next = await getSaleHighlights(LIMIT, offset);
+    setItems((prev) => [...prev, ...next]);
+    setOffset((prev) => prev + LIMIT);
+    if (next.length < LIMIT) setHasMore(false);
+    setLoadingMore(false);
+  }, [hasMore, loadingMore, offset]);
 
   useEffect(() => {
-    getSaleHighlights(150)
-      .then(setItems)
+    Promise.all([getSaleHighlights(LIMIT, 0), getSaleCount()])
+      .then(([firstBatch, countRes]) => {
+        setItems(firstBatch);
+        setOffset(LIMIT);
+        setHasMore(firstBatch.length === LIMIT);
+        setTotal(countRes.total);
+      })
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    const target = sentinelRef.current;
+    if (!target) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) void loadMore();
+      },
+      { threshold: 0.1 }
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [loadMore]);
 
   return (
     <div className="p-6 space-y-5">
       <div>
         <h1 className="text-2xl font-bold">세일 제품</h1>
-        <p className="text-sm text-gray-500 mt-1">세일율이 높은 순으로 정렬</p>
+        <p className="text-sm text-gray-500 mt-1">
+          세일율이 높은 순으로 정렬{total != null ? ` · 세일 제품 ${total.toLocaleString("ko-KR")}개` : ""}
+        </p>
       </div>
 
       {loading ? (
@@ -74,6 +110,13 @@ export default function SalesPage() {
               </div>
             </article>
           ))}
+        </div>
+      )}
+      {!loading && (
+        <div className="pt-2">
+          <div ref={sentinelRef} className="h-6" />
+          {loadingMore && <p className="text-center text-sm text-gray-400">추가 로딩 중...</p>}
+          {!hasMore && <p className="text-center text-sm text-gray-400">모두 불러왔습니다.</p>}
         </div>
       )}
     </div>

@@ -1,13 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { getBrandHighlights } from "@/lib/api";
 import type { BrandHighlight } from "@/lib/types";
+import { Input } from "@/components/ui/input";
 
 export default function BrandsPage() {
+  const router = useRouter();
   const [items, setItems] = useState<BrandHighlight[]>([]);
   const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState("");
+  const [tierFilter, setTierFilter] = useState("all");
 
   useEffect(() => {
     getBrandHighlights(400)
@@ -15,12 +20,45 @@ export default function BrandsPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return items.filter((brand) => {
+      const matchQuery = !q ||
+        brand.brand_name.toLowerCase().includes(q) ||
+        brand.brand_slug.toLowerCase().includes(q);
+      const matchTier = tierFilter === "all" || brand.tier === tierFilter;
+      return matchQuery && matchTier;
+    });
+  }, [items, query, tierFilter]);
+
   return (
     <div className="p-6 space-y-5">
       <div>
         <h1 className="text-2xl font-bold">브랜드</h1>
         <p className="text-sm text-gray-500 mt-1">신상품 판매 여부 강조</p>
       </div>
+      <div className="flex flex-col md:flex-row gap-3">
+        <Input
+          placeholder="브랜드 검색..."
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          className="max-w-md bg-white"
+        />
+        <select
+          value={tierFilter}
+          onChange={(e) => setTierFilter(e.target.value)}
+          className="h-10 rounded-md border border-gray-200 bg-white px-3 text-sm"
+        >
+          <option value="all">전체</option>
+          <option value="high-end">high-end</option>
+          <option value="premium">premium</option>
+          <option value="street">street</option>
+          <option value="sports">sports</option>
+        </select>
+      </div>
+      {!loading && (
+        <p className="text-sm text-gray-500">{filtered.length}개 브랜드</p>
+      )}
 
       {loading ? (
         <p className="text-sm text-gray-400">로딩 중...</p>
@@ -37,10 +75,18 @@ export default function BrandsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {items.map((brand) => (
-                <tr key={brand.brand_id}>
+              {filtered.map((brand) => (
+                <tr
+                  key={brand.brand_id}
+                  className="hover:bg-gray-50 cursor-pointer"
+                  onClick={() => router.push(`/brands/${encodeURIComponent(brand.brand_slug)}`)}
+                >
                   <td className="px-4 py-3">
-                    <p className="font-medium">{brand.brand_name}</p>
+                    <p className="font-medium">
+                      <Link href={`/brands/${encodeURIComponent(brand.brand_slug)}`} className="hover:underline">
+                        {brand.brand_name}
+                      </Link>
+                    </p>
                     <p className="text-xs text-gray-400">{brand.brand_slug}</p>
                   </td>
                   <td className="px-4 py-3 text-gray-600">{brand.tier ?? "-"}</td>

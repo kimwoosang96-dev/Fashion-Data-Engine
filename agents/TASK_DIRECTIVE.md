@@ -11,14 +11,18 @@ PM/개발 작업 통제를 위한 단일 기준 문서입니다.
 
 ## 진행 중 작업
 <!-- ACTIVE_TASKS_START -->
-- [ ] T-20260228-015 | DIRECTOR_01: 크리에이티브 디렉터 DB 모델 + Admin 입력 폼 | owner:codex-dev | priority:P1 | status:todo | created:2026-02-28 | gh:#20 | details:BrandDirector 모델 + Alembic 마이그레이션 + GET/POST/DELETE API + /admin 디렉터 관리 섹션
-- [ ] T-20260228-016 | DIRECTOR_02: 크리에이티브 디렉터 프론트엔드 | owner:codex-dev | priority:P1 | status:todo | created:2026-02-28 | gh:#21 | depends:GH#20 | details:/brands/[slug] 디렉터 섹션 + /directors 전체 목록 페이지 + Nav 메뉴
-- [ ] T-20260228-017 | INSTAGRAM_01: 브랜드/채널 인스타그램 URL 컬럼 + Admin UI | owner:codex-dev | priority:P2 | status:todo | created:2026-02-28 | gh:#22 | details:brands+channels instagram_url 컬럼 추가 + PATCH Admin API + /admin 입력 UI + 프론트 링크 표시
-- [ ] T-20260228-018 | BRAND_DETAIL_01: 브랜드 상세 통합 뷰 완성 | owner:codex-dev | priority:P1 | status:todo | created:2026-02-28 | gh:#23 | depends:GH#20,#21,#22 | details:GET /brands/{slug}/collabs + 협업 섹션 + 인스타그램 링크 + 섹션 레이아웃 정리
+- [ ] T-20260228-019 | SALE_DEDUP_01: 세일 제품 product_key 기준 최저가 중복 제거 | owner:codex-dev | priority:P1 | status:todo | created:2026-02-28 | gh:#24 | details:get_sale_highlights() product_key dedup + min(price_krw) 최저가 채널 선택 + total_channels 필드 + 프론트 "N개 채널 최저가" 배지
+- [ ] T-20260228-020 | NAV_BACK_01: compare 페이지 뒤로가기 브라우저 히스토리 기반 개선 | owner:codex-dev | priority:P2 | status:todo | created:2026-02-28 | gh:#25 | details:compare/[key]/page.tsx에서 router.back() 사용, 하드코딩된 대시보드 링크 제거
+- [ ] T-20260228-021 | COLLAB_ADMIN_01: Admin 협업 관리 (추가/삭제) | owner:codex-dev | priority:P1 | status:todo | created:2026-02-28 | gh:#26 | details:GET/POST/DELETE /admin/collabs + /admin 페이지 협업 관리 섹션
+- [ ] T-20260228-022 | CHANNEL_BRAND_AUDIT_01: 채널-브랜드 혼재 감사 도구 | owner:codex-dev | priority:P2 | status:todo | created:2026-02-28 | gh:#27 | details:GET /admin/brand-channel-audit (혼재 의심 항목 탐지) + Admin 감사 UI
 <!-- ACTIVE_TASKS_END -->
 
 ## 최근 완료 작업
 <!-- COMPLETED_TASKS_START -->
+- [x] T-20260228-018 | BRAND_DETAIL_01: 브랜드 상세 통합 뷰 완성 | owner:codex-dev | priority:P1 | status:done | created:2026-02-28 | completed:2026-02-28 | details:GH#23 완료: `/brands/{slug}/collabs` API 추가, 브랜드 상세 페이지에 협업/디렉터/인스타그램/뉴스 통합 섹션 구성.
+- [x] T-20260228-017 | INSTAGRAM_01: 브랜드/채널 인스타그램 URL 컬럼 + Admin UI | owner:codex-dev | priority:P2 | status:done | created:2026-02-28 | completed:2026-02-28 | details:GH#22 완료: brands/channels `instagram_url` 컬럼+마이그레이션, Admin PATCH API, Admin 입력 UI, 브랜드/채널 화면 인스타그램 링크 표시.
+- [x] T-20260228-016 | DIRECTOR_02: 크리에이티브 디렉터 프론트엔드 | owner:codex-dev | priority:P1 | status:done | created:2026-02-28 | completed:2026-02-28 | details:GH#21 완료: `/directors` 목록 페이지 추가, Nav 메뉴 추가, `/brands/[slug]` 디렉터 섹션 연동.
+- [x] T-20260228-015 | DIRECTOR_01: 크리에이티브 디렉터 DB 모델 + Admin 입력 폼 | owner:codex-dev | priority:P1 | status:done | created:2026-02-28 | completed:2026-02-28 | details:GH#20 완료: `BrandDirector` 모델+Alembic, Admin GET/POST/DELETE API, `/admin` 디렉터 관리 섹션 추가.
 - [x] T-20260228-014 | COLLAB_01: 협업 페이지 /collabs 타임라인 | owner:codex-dev | priority:P1 | status:done | created:2026-02-28 | completed:2026-02-28 | details:GH#19 완료: `/collabs` 페이지 추가. 카테고리 필터, 카테고리별 하입 요약, 연도/하입 기반 타임라인 카드 구현.
 - [x] T-20260228-013 | NEWS_02: 브랜드 소식 피드 프론트엔드 | owner:codex-dev | priority:P1 | status:done | created:2026-02-28 | completed:2026-02-28 | details:GH#18 완료: 브랜드 상세(`/brands/[slug]`)에 브랜드 소식 피드 섹션 추가, `/news?brand_slug=` API 연동.
 - [x] T-20260228-012 | NEWS_01: 패션 뉴스 RSS 크롤러 + 백엔드 API | owner:codex-dev | priority:P1 | status:done | created:2026-02-28 | completed:2026-02-28 | details:GH#17 완료: `scripts/crawl_news.py` RSS 수집기 추가, `/news` API 라우터 추가, 브랜드/채널 매칭 기반 저장/조회 구현.

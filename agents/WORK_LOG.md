@@ -85,3 +85,12 @@
 - 2026-02-28 07:30:00 | agent:claude-pm | task:T-20260228-016 | action:add-task | message:태스크 생성: DIRECTOR_02 디렉터 프론트엔드 (GH#21)
 - 2026-02-28 07:30:00 | agent:claude-pm | task:T-20260228-017 | action:add-task | message:태스크 생성: INSTAGRAM_01 인스타그램 URL 컬럼 + Admin (GH#22)
 - 2026-02-28 07:30:00 | agent:claude-pm | task:T-20260228-018 | action:add-task | message:태스크 생성: BRAND_DETAIL_01 브랜드 상세 통합 뷰 (GH#23)
+
+- 2026-02-28 08:00:00 | agent:claude-pm | task:T-20260228-019 | action:add-task | message:태스크 생성: SALE_DEDUP_01 세일 최저가 중복 제거 (GH#24)
+- 2026-02-28 08:00:00 | agent:claude-pm | task:T-20260228-020 | action:add-task | message:태스크 생성: NAV_BACK_01 compare 뒤로가기 개선 (GH#25)
+- 2026-02-28 08:00:00 | agent:claude-pm | task:T-20260228-021 | action:add-task | message:태스크 생성: COLLAB_ADMIN_01 Admin 협업 관리 (GH#26)
+- 2026-02-28 08:00:00 | agent:claude-pm | task:T-20260228-022 | action:add-task | message:태스크 생성: CHANNEL_BRAND_AUDIT_01 채널-브랜드 혼재 감사 (GH#27)
+- 2026-02-28 07:48:05 | agent:codex-dev | task:T-20260228-015 | action:complete | message:GH#20 완료: BrandDirector 모델/마이그레이션, Admin 디렉터 CRUD API, /admin 디렉터 관리 UI 구현.
+- 2026-02-28 07:48:05 | agent:codex-dev | task:T-20260228-016 | action:complete | message:GH#21 완료: /directors 페이지 및 Nav 메뉴 추가, 브랜드 상세 디렉터 섹션 연동.
+- 2026-02-28 07:48:05 | agent:codex-dev | task:T-20260228-017 | action:complete | message:GH#22 완료: brands/channels instagram_url 컬럼 + Admin PATCH API + Admin 입력 UI + 프론트 인스타 링크 표시.
+- 2026-02-28 07:48:05 | agent:codex-dev | task:T-20260228-018 | action:complete | message:GH#23 완료: /brands/{slug}/collabs API 및 브랜드 상세 통합 뷰(협업/디렉터/인스타/뉴스) 완성.

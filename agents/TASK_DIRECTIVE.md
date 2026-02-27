@@ -11,14 +11,17 @@ PM/개발 작업 통제를 위한 단일 기준 문서입니다.
 
 ## 진행 중 작업
 <!-- ACTIVE_TASKS_START -->
-- [ ] T-20260228-019 | SALE_DEDUP_01: 세일 제품 product_key 기준 최저가 중복 제거 | owner:codex-dev | priority:P1 | status:todo | created:2026-02-28 | gh:#24 | details:get_sale_highlights() product_key dedup + min(price_krw) 최저가 채널 선택 + total_channels 필드 + 프론트 "N개 채널 최저가" 배지
-- [ ] T-20260228-020 | NAV_BACK_01: compare 페이지 뒤로가기 브라우저 히스토리 기반 개선 | owner:codex-dev | priority:P2 | status:todo | created:2026-02-28 | gh:#25 | details:compare/[key]/page.tsx에서 router.back() 사용, 하드코딩된 대시보드 링크 제거
-- [ ] T-20260228-021 | COLLAB_ADMIN_01: Admin 협업 관리 (추가/삭제) | owner:codex-dev | priority:P1 | status:todo | created:2026-02-28 | gh:#26 | details:GET/POST/DELETE /admin/collabs + /admin 페이지 협업 관리 섹션
-- [ ] T-20260228-022 | CHANNEL_BRAND_AUDIT_01: 채널-브랜드 혼재 감사 도구 | owner:codex-dev | priority:P2 | status:todo | created:2026-02-28 | gh:#27 | details:GET /admin/brand-channel-audit (혼재 의심 항목 탐지) + Admin 감사 UI
+- [ ] T-20260228-025 | RECLASSIFY_01: 기존 제품 카테고리/성별 일괄 재분류 스크립트 | owner:codex-dev | priority:P1 | status:todo | created:2026-02-28 | details:GH#28 — `scripts/reclassify_products.py` 신규 구현. `product_classifier.py`의 `classify_gender_and_subcategory()` 재사용. `--dry-run` 지원. `make reclassify` 추가.
+- [ ] T-20260228-026 | DASHBOARD_DEDUP_01: 대시보드 세일 제품 최저가 dedup 적용 | owner:codex-dev | priority:P1 | status:todo | created:2026-02-28 | details:GH#29 — `frontend/src/app/page.tsx`에서 `getSaleProducts` → `getSaleHighlights` 교체. SaleHighlight 타입 재사용.
+- [ ] T-20260228-027 | BRAND_MECE_FIX_01: 브랜드 데이터 MECE 정제 스크립트 | owner:codex-dev | priority:P2 | status:todo | created:2026-02-28 | details:GH#30 — `scripts/fix_brand_mece.py` 신규 구현. `--dry-run` 기본, `--apply`로 실제 정제. suspicion=high 항목 출력.
 <!-- ACTIVE_TASKS_END -->
 
 ## 최근 완료 작업
 <!-- COMPLETED_TASKS_START -->
+- [x] T-20260228-022 | CHANNEL_BRAND_AUDIT_01: 채널-브랜드 혼재 감사 도구 | owner:codex-dev | priority:P2 | status:done | created:2026-02-28 | completed:2026-02-28 | details:GH#27 완료: `GET /admin/brand-channel-audit` 추가(유형 불일치/이상치 탐지), `/admin`에 혼재 감사 결과 UI 섹션 반영.
+- [x] T-20260228-021 | COLLAB_ADMIN_01: Admin 협업 관리 (추가/삭제) | owner:codex-dev | priority:P1 | status:done | created:2026-02-28 | completed:2026-02-28 | details:GH#26 완료: `GET/POST/DELETE /admin/collabs` 추가, `/admin`에 협업 등록/삭제 UI 섹션 반영.
+- [x] T-20260228-020 | NAV_BACK_01: compare 페이지 뒤로가기 브라우저 히스토리 기반 개선 | owner:codex-dev | priority:P2 | status:done | created:2026-02-28 | completed:2026-02-28 | details:GH#25 완료: `compare/[key]/page.tsx` 상단 이동을 `router.back()` 기반 버튼으로 교체.
+- [x] T-20260228-019 | SALE_DEDUP_01: 세일 제품 product_key 기준 최저가 중복 제거 | owner:codex-dev | priority:P1 | status:done | created:2026-02-28 | completed:2026-02-28 | details:GH#24 완료: `get_sale_highlights()`를 product_key 기준 최저가 dedup으로 변경, `total_channels` 응답 필드와 `/sales`의 "N개 채널 최저가" 배지 반영.
 - [x] T-20260228-018 | BRAND_DETAIL_01: 브랜드 상세 통합 뷰 완성 | owner:codex-dev | priority:P1 | status:done | created:2026-02-28 | completed:2026-02-28 | details:GH#23 완료: `/brands/{slug}/collabs` API 추가, 브랜드 상세 페이지에 협업/디렉터/인스타그램/뉴스 통합 섹션 구성.
 - [x] T-20260228-017 | INSTAGRAM_01: 브랜드/채널 인스타그램 URL 컬럼 + Admin UI | owner:codex-dev | priority:P2 | status:done | created:2026-02-28 | completed:2026-02-28 | details:GH#22 완료: brands/channels `instagram_url` 컬럼+마이그레이션, Admin PATCH API, Admin 입력 UI, 브랜드/채널 화면 인스타그램 링크 표시.
 - [x] T-20260228-016 | DIRECTOR_02: 크리에이티브 디렉터 프론트엔드 | owner:codex-dev | priority:P1 | status:done | created:2026-02-28 | completed:2026-02-28 | details:GH#21 완료: `/directors` 목록 페이지 추가, Nav 메뉴 추가, `/brands/[slug]` 디렉터 섹션 연동.

@@ -10,6 +10,10 @@ Single source of truth for PM/developer task control.
 
 ## Active Tasks
 <!-- ACTIVE_TASKS_START -->
+- [ ] T-20260228-011 | DEVEX_01: 원클릭 실행 환경 (Makefile + launch.sh) | owner:codex-dev | priority:P2 | status:todo | created:2026-02-28 | gh:#16 | details:Makefile(dev/start/crawl/stop targets) + launch.sh(백엔드+프론트 동시실행+브라우저 자동열기) + launch.command(macOS 더블클릭 실행)
+- [ ] T-20260228-012 | NEWS_01: 패션 뉴스 RSS 크롤러 + 백엔드 API | owner:codex-dev | priority:P1 | status:todo | created:2026-02-28 | gh:#17 | details:scripts/crawl_news.py(feedparser, Hypebeast/Highsnobiety/SneakerNews RSS, 브랜드 자동태깅) + GET /news/ API + scheduler.py 등록(6시간)
+- [ ] T-20260228-013 | NEWS_02: 브랜드 소식 피드 프론트엔드 | owner:codex-dev | priority:P1 | status:todo | created:2026-02-28 | gh:#18 | details:/news 페이지(뉴스카드+브랜드필터) + /brands/[slug] 뉴스섹션 + 대시보드 "최신소식" 위젯
+- [ ] T-20260228-014 | COLLAB_01: 협업 페이지 (/collabs 타임라인) | owner:codex-dev | priority:P2 | status:todo | created:2026-02-28 | gh:#19 | details:/collabs 신규 페이지(연도별 타임라인, 카테고리 필터, hype_score 정렬) + /brands/[slug] 협업 섹션
 <!-- ACTIVE_TASKS_END -->
 
 ## Completed Tasks (Recent)

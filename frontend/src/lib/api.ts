@@ -4,6 +4,7 @@ import type {
   SaleHighlight, ChannelHighlight, BrandHighlight, ChannelPriceHistory,
   SaleFilters,
   AdminStats, AdminChannelHealth,
+  FashionNews, CollabItem,
 } from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -132,4 +133,23 @@ export const triggerAdminCrawl = (token: string, job: "brands" | "products" | "d
     `/admin/crawl-trigger?job=${job}&dry_run=${dryRun ? "true" : "false"}`,
     token,
     { method: "POST" }
+  );
+
+// ── News / Collabs ───────────────────────────────────────────────────────
+export const getBrandNews = (brandSlug: string, limit = 20) =>
+  apiFetch<FashionNews[]>(
+    `/news?brand_slug=${encodeURIComponent(brandSlug)}&limit=${limit}`
+  );
+
+export const getNews = (limit = 50, offset = 0) =>
+  apiFetch<FashionNews[]>(`/news?limit=${limit}&offset=${offset}`);
+
+export const getCollabs = (category?: string) =>
+  apiFetch<CollabItem[]>(
+    `/collabs/${category ? `?category=${encodeURIComponent(category)}` : ""}`
+  );
+
+export const getCollabHypeByCategory = () =>
+  apiFetch<Array<{ category: string; count: number; avg_hype: number; max_hype: number }>>(
+    "/collabs/hype-by-category"
   );

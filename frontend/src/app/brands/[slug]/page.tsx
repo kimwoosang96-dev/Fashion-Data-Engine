@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { getBrand, getBrandChannels, getBrandProducts } from "@/lib/api";
-import type { Brand, Channel, Product } from "@/lib/types";
+import { getBrand, getBrandChannels, getBrandNews, getBrandProducts } from "@/lib/api";
+import type { Brand, Channel, FashionNews, Product } from "@/lib/types";
 import { ProductCard } from "@/components/ProductCard";
 
 export default function BrandDetailPage() {
@@ -12,6 +12,7 @@ export default function BrandDetailPage() {
   const [brand, setBrand] = useState<Brand | null>(null);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [news, setNews] = useState<FashionNews[]>([]);
   const [saleOnly, setSaleOnly] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -28,6 +29,8 @@ export default function BrandDetailPage() {
         setBrand(brandRes);
         setChannels(channelsRes);
         setProducts(productsRes);
+        const newsRes = await getBrandNews(decoded, 20);
+        setNews(newsRes);
       } catch (e) {
         setError(e instanceof Error ? e.message : "브랜드 데이터를 불러오지 못했습니다.");
       } finally {
@@ -83,6 +86,36 @@ export default function BrandDetailPage() {
           세일 제품만 보기
         </label>
       </div>
+
+      <section className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">브랜드 소식</h2>
+          <Link href="/collabs" className="text-xs text-gray-500 hover:underline">
+            협업 타임라인 보기
+          </Link>
+        </div>
+        {news.length === 0 ? (
+          <p className="text-sm text-gray-400">등록된 브랜드 소식이 없습니다.</p>
+        ) : (
+          <div className="space-y-2">
+            {news.slice(0, 8).map((item) => (
+              <a
+                key={item.id}
+                href={item.url}
+                target="_blank"
+                rel="noreferrer"
+                className="block rounded-lg border border-gray-200 bg-white p-3 hover:bg-gray-50"
+              >
+                <p className="text-sm font-medium">{item.title}</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {item.source}
+                  {item.published_at ? ` · ${item.published_at.slice(0, 10)}` : ""}
+                </p>
+              </a>
+            ))}
+          </div>
+        )}
+      </section>
 
       {products.length === 0 ? (
         <p className="text-sm text-gray-400">표시할 제품이 없습니다.</p>

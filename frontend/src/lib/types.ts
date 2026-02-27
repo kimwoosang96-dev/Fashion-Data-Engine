@@ -186,6 +186,32 @@ export interface ChannelPriceHistory {
   history: PriceHistoryPoint[];
 }
 
+export interface FashionNews {
+  id: number;
+  entity_type: "brand" | "channel";
+  entity_id: number;
+  entity_name: string | null;
+  title: string;
+  url: string;
+  summary: string | null;
+  published_at: string | null;
+  source: string;
+  crawled_at: string;
+}
+
+export interface CollabItem {
+  id: number;
+  brand_a_id: number;
+  brand_b_id: number;
+  collab_name: string;
+  collab_category: string | null;
+  release_year: number | null;
+  hype_score: number;
+  source_url: string | null;
+  notes: string | null;
+  created_at: string;
+}
+
 export interface AdminStats {
   counts: {
     channels: number;

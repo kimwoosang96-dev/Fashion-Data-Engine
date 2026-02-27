@@ -7,6 +7,8 @@ const links = [
   { href: "/sales", label: "세일 제품", icon: "🔥" },
   { href: "/channels", label: "판매채널", icon: "🏪" },
   { href: "/brands", label: "브랜드", icon: "🏷️" },
+  { href: "/news", label: "뉴스", icon: "📰" },
+  { href: "/collabs", label: "협업", icon: "🤝" },
   { href: "/watchlist", label: "관심목록", icon: "❤️" },
   { href: "/purchases", label: "구매이력", icon: "🛍️" },
   { href: "/drops", label: "드롭", icon: "🚀" },

@@ -23,6 +23,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 import crawl_products  # noqa: E402
 import crawl_drops  # noqa: E402
+import crawl_news  # noqa: E402
 import update_exchange_rates  # noqa: E402
 
 
@@ -70,6 +71,15 @@ async def run_drop_crawl_job() -> None:
         LOGGER.exception("[JOB] drops failed")
 
 
+async def run_news_crawl_job() -> None:
+    try:
+        LOGGER.info("[JOB] news started")
+        await crawl_news.run(per_feed=30)
+        LOGGER.info("[JOB] news completed")
+    except Exception:
+        LOGGER.exception("[JOB] news failed")
+
+
 async def run_product_crawl_job() -> None:
     try:
         LOGGER.info("[JOB] products started")
@@ -96,6 +106,12 @@ def register_jobs(scheduler: AsyncIOScheduler) -> None:
         run_drop_crawl_job,
         CronTrigger(hour=7, minute=10),
         id="drops_daily_0710",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        run_news_crawl_job,
+        CronTrigger(hour=8, minute=0),
+        id="news_daily_0800",
         replace_existing=True,
     )
 

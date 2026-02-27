@@ -49,6 +49,21 @@ class CollabOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class FashionNewsOut(BaseModel):
+    id: int
+    entity_type: str
+    entity_id: int
+    entity_name: str | None = None
+    title: str
+    url: str
+    summary: str | None
+    published_at: datetime | None
+    source: str
+    crawled_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class LandscapeNode(BaseModel):
     id: int
     name: str

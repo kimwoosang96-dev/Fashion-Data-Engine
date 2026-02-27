@@ -75,3 +75,7 @@
 - 2026-02-28 07:10:00 | agent:claude-pm | task:T-20260228-012 | action:add-task | message:태스크 생성: NEWS_01 패션 뉴스 RSS 크롤러 + 백엔드 API (GH#17)
 - 2026-02-28 07:10:00 | agent:claude-pm | task:T-20260228-013 | action:add-task | message:태스크 생성: NEWS_02 브랜드 소식 피드 프론트엔드 (GH#18)
 - 2026-02-28 07:10:00 | agent:claude-pm | task:T-20260228-014 | action:add-task | message:태스크 생성: COLLAB_01 협업 페이지 /collabs 타임라인 (GH#19)
+- 2026-02-28 07:23:43 | agent:codex-dev | task:T-20260228-011 | action:complete | message:GH#16 완료: 원클릭 실행 스크립트(`scripts/dev_oneclick.sh`)와 `Makefile` 추가, README 실행 가이드 반영.
+- 2026-02-28 07:23:43 | agent:codex-dev | task:T-20260228-012 | action:complete | message:GH#17 완료: RSS 뉴스 수집 스크립트(`scripts/crawl_news.py`)와 `/news` 백엔드 API 추가.
+- 2026-02-28 07:23:43 | agent:codex-dev | task:T-20260228-013 | action:complete | message:GH#18 완료: 브랜드 상세 페이지에 브랜드 소식 피드 섹션 추가 및 뉴스 API 연동.
+- 2026-02-28 07:23:43 | agent:codex-dev | task:T-20260228-014 | action:complete | message:GH#19 완료: `/collabs` 타임라인 페이지 구현(카테고리 필터/하입 요약/타임라인 카드).

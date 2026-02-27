@@ -34,6 +34,19 @@ uv run uvicorn fashion_engine.api.main:app --reload
 # http://localhost:8000/docs
 ```
 
+## 원클릭 실행 (GH#16)
+
+```bash
+# 개발 환경 준비 + 백엔드/프론트 동시 실행 (npm 존재 시)
+./scripts/dev_oneclick.sh
+```
+
+또는
+
+```bash
+make dev
+```
+
 ## CLI
 
 ```bash

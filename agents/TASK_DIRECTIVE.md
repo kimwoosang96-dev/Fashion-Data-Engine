@@ -10,6 +10,11 @@ Single source of truth for PM/developer task control.
 
 ## Active Tasks
 <!-- ACTIVE_TASKS_START -->
+- [ ] T-20260228-006 | CATEGORY_01: 카테고리·성별 DB 스키마 + 크롤러 자동분류 | owner:codex-dev | priority:P1 | status:active | created:2026-02-28 | details:gender/subcategory 컬럼 추가(Alembic). Shopify product_type 키워드 매핑으로 자동 분류. API 필터(gender/category/min_price/max_price) 추가. GH#11 참고.
+- [ ] T-20260228-007 | CATEGORY_02: 프론트엔드 성별/카테고리/가격대 필터 UI | owner:codex-dev | priority:P1 | status:active | created:2026-02-28 | details:sales/page.tsx 상단 필터 바(성별탭+카테고리드롭다운+가격대입력). #11 완료 후 진행. GH#12 참고.
+- [ ] T-20260228-008 | CRAWLER_04: UA 회전 + ProductCrawler retry + playwright-stealth | owner:codex-dev | priority:P1 | status:active | created:2026-02-28 | details:UA 회전 4종. ProductCrawler tenacity retry(3회). playwright-stealth 적용. Bodega/SEVENSTORE Shopify API 전략 추가. GH#13 참고.
+- [ ] T-20260228-009 | ADMIN_01: 운영관리 페이지 (백엔드 API + 프론트엔드) | owner:codex-dev | priority:P1 | status:active | created:2026-02-28 | details:admin.py 신규(stats/channels-health/crawl-trigger). Bearer token 인증. admin/page.tsx DB현황+채널헬스+크롤제어+환율. GH#14 참고.
+- [ ] T-20260228-010 | MAP_01: 세계지도 채널/브랜드 뷰 | owner:codex-dev | priority:P2 | status:active | created:2026-02-28 | details:react-simple-maps. 채널 country 기반 마커. 세일 채널 빨간 마커. 클릭 사이드패널. GH#15 참고.
 <!-- ACTIVE_TASKS_END -->
 
 ## Completed Tasks (Recent)

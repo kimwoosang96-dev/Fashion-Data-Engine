@@ -60,3 +60,4 @@ Format:
 - 2026-02-27 02:35:40 | agent:codex-dev | task:T-20260228-005 | action:complete | message:CRAWLER_02 done: custom strategy now falls back to generic when empty. Recrawl improved selector_mismatch set (BIZZARE 35, ECRU 103, Kasina 199, EFFORTLESS 1, THEXSHOP 1).
 
 - 2026-02-27 02:35:59 | agent:codex-dev | task:T-20260227-002 | action:complete | message:DB_02 done: applied 6 query indexes via Alembic revision 7b6619f9d1ad and upgraded DB to head.
+- 2026-02-28 06:47:52 | agent:codex-dev | task:T-20260227-006 | action:complete | message:GH#10 done: updated EFFORTLESS/THEXSHOP brand selectors and validated full recrawl (EFFORTLESS 19, THEXSHOP 193).

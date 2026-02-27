@@ -10,11 +10,11 @@ Single source of truth for PM/developer task control.
 
 ## Active Tasks
 <!-- ACTIVE_TASKS_START -->
-_none_
 <!-- ACTIVE_TASKS_END -->
 
 ## Completed Tasks (Recent)
 <!-- COMPLETED_TASKS_START -->
+- [x] T-20260227-006 | CRAWLER_03: EFFORTLESS/THEXSHOP 브랜드 셀렉터 재조사 | owner:codex-dev | priority:P2 | status:done | created:2026-02-27 | completed:2026-02-28 | details:GH#10 done: strategy URLs/selectors updated to live pages. Full recrawl result EFFORTLESS 19, THEXSHOP 193 (both >=5).
 - [x] T-20260227-002 | DB_02: DB 인덱스 실제 적용 | owner:codex-dev | priority:P2 | status:done | created:2026-02-27 | completed:2026-02-27 | details:DB_02 done: applied 6 query indexes via Alembic revision 7b6619f9d1ad and upgraded DB to head.
 - [x] T-20260228-005 | CRAWLER_02: 9개 selector_mismatch 채널 전략 수정 | owner:codex-dev | priority:P2 | status:done | created:2026-02-28 | completed:2026-02-27 | details:CRAWLER_02 done: custom strategy now falls back to generic when empty. Recrawl improved selector_mismatch set (BIZZARE 35, ECRU 103, Kasina 199, EFFORTLESS 1, THEXSHOP 1).
 - [x] T-20260227-003 | FRONTEND_02: 대시보드 검색 브랜드 자동완성 드롭다운 | owner:codex-dev | priority:P1 | status:done | created:2026-02-27 | completed:2026-02-28 | details:SearchDropdown.tsx 신규. searchBrands() 병렬 호출. 빌드 통과.

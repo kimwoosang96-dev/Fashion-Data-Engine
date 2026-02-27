@@ -74,8 +74,17 @@ CHANNEL_STRATEGIES: dict[str, dict] = {
         "href_must_not_contain": ["product_no="],
     },
     "thexshop.co.kr": {
-        "brand_list_url": "https://www.thexshop.co.kr/product/maker.html",
-        "brand_selector": "a[href*='cate_no='], a[href*='/product/list.html']",
+        "brand_list_urls": [
+            "https://www.thexshop.co.kr/brands2.html",
+            "https://www.thexshop.co.kr/product/list-brand.html",
+            "https://www.thexshop.co.kr/",
+        ],
+        "brand_list_url": "https://www.thexshop.co.kr/brands2.html",
+        "brand_selector": (
+            "a[href*='/product/list-brand.html?cate_no='], "
+            "a[href*='/product/list.html?cate_no=']"
+        ),
+        "option_selector": "select option[value*='cate_no=']",
         "name_selector": None,
         "href_must_contain": ["cate_no="],
         "href_must_not_contain": ["product_no="],
@@ -137,8 +146,16 @@ CHANNEL_STRATEGIES: dict[str, dict] = {
         "href_must_not_contain": ["product_no="],
     },
     "effortless-store.com": {
-        "brand_list_url": "https://www.effortless-store.com/product/maker.html",
-        "brand_selector": "a[href*='cate_no='], a[href*='/product/list.html']",
+        "brand_list_urls": [
+            "https://www.effortless-store.com/category/brands/42/",
+            "https://www.effortless-store.com/",
+        ],
+        "brand_list_url": "https://www.effortless-store.com/category/brands/42/",
+        "brand_selector": (
+            ".xans-product-menupackage a[href*='/product/list.html?cate_no='], "
+            "a[href*='/product/list.html?cate_no=']"
+        ),
+        "option_selector": "select option[value*='cate_no=']",
         "name_selector": None,
         "href_must_contain": ["cate_no="],
         "href_must_not_contain": ["product_no="],
@@ -295,33 +312,61 @@ class BrandCrawler(BaseCrawler):
         self, channel_url: str, strategy: dict
     ) -> list[BrandInfo]:
         """커스텀 전략으로 브랜드 추출"""
-        target_url = strategy.get("brand_list_url", channel_url)
+        target_urls: list[str] = strategy.get("brand_list_urls") or [
+            strategy.get("brand_list_url", channel_url)
+        ]
         href_must_contain: list[str] = strategy.get("href_must_contain", [])
         href_must_not_contain: list[str] = strategy.get("href_must_not_contain", [])
-        page = await self.fetch_page(target_url)
-        try:
-            html = await page.content()
-            soup = BeautifulSoup(html, "html.parser")
-            elements = soup.select(strategy["brand_selector"])
-            brands = []
-            for el in elements:
-                name = el.get_text(strip=True)
-                href = el.get("href", "")
-                if href_must_contain and not any(token in href for token in href_must_contain):
-                    continue
-                if href_must_not_contain and any(token in href for token in href_must_not_contain):
-                    continue
-                if _is_valid_brand_name(name):
-                    brands.append(
-                        BrandInfo(
-                            name=self._clean_brand_name(name),
-                            url=href if href.startswith("http") else None,
-                            source_channel_url=channel_url,
+        option_selector: str | None = strategy.get("option_selector")
+        brands: list[BrandInfo] = []
+
+        for target_url in target_urls:
+            page = await self.fetch_page(target_url)
+            try:
+                html = await page.content()
+                soup = BeautifulSoup(html, "html.parser")
+                elements = soup.select(strategy["brand_selector"])
+                for el in elements:
+                    name = el.get_text(strip=True)
+                    href = el.get("href", "")
+                    if href_must_contain and not any(token in href for token in href_must_contain):
+                        continue
+                    if href_must_not_contain and any(token in href for token in href_must_not_contain):
+                        continue
+                    if _is_valid_brand_name(name):
+                        brands.append(
+                            BrandInfo(
+                                name=self._clean_brand_name(name),
+                                url=href if href.startswith("http") else None,
+                                source_channel_url=channel_url,
+                            )
                         )
-                    )
-            return self._deduplicate_brands(brands)
-        finally:
-            await page.close()
+
+                # Cafe24 일부 샵은 maker 페이지에 <option> 형태로 브랜드를 제공한다.
+                if option_selector and len(brands) <= 1:
+                    for opt in soup.select(option_selector):
+                        name = opt.get_text(strip=True)
+                        href = (opt.get("value", "") or "").strip()
+                        if href_must_contain and not any(token in href for token in href_must_contain):
+                            continue
+                        if href_must_not_contain and any(token in href for token in href_must_not_contain):
+                            continue
+                        if _is_valid_brand_name(name):
+                            brands.append(
+                                BrandInfo(
+                                    name=self._clean_brand_name(name),
+                                    url=href if href.startswith("http") else None,
+                                    source_channel_url=channel_url,
+                                )
+                            )
+            finally:
+                await page.close()
+
+            brands = self._deduplicate_brands(brands)
+            if len(brands) >= 5:
+                break
+
+        return self._deduplicate_brands(brands)
 
     async def _crawl_generic(
         self, channel_url: str

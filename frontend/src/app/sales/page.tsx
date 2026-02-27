@@ -3,10 +3,28 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getSaleCount, getSaleHighlights } from "@/lib/api";
-import type { SaleHighlight } from "@/lib/types";
+import type { SaleFilters, SaleHighlight } from "@/lib/types";
+import { Input } from "@/components/ui/input";
 
 const fmt = (n: number) => `₩${n.toLocaleString("ko-KR")}`;
 const LIMIT = 60;
+const GENDERS = [
+  { label: "전체", value: "" },
+  { label: "남성", value: "men" },
+  { label: "여성", value: "women" },
+  { label: "유니섹스", value: "unisex" },
+  { label: "키즈", value: "kids" },
+];
+const CATEGORIES = [
+  { label: "전체 카테고리", value: "" },
+  { label: "신발", value: "shoes" },
+  { label: "아우터", value: "outer" },
+  { label: "상의", value: "top" },
+  { label: "하의", value: "bottom" },
+  { label: "가방", value: "bag" },
+  { label: "모자", value: "cap" },
+  { label: "액세서리", value: "accessory" },
+];
 
 export default function SalesPage() {
   const [items, setItems] = useState<SaleHighlight[]>([]);
@@ -16,19 +34,24 @@ export default function SalesPage() {
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const [gender, setGender] = useState("");
+  const [category, setCategory] = useState("");
+  const [minPriceInput, setMinPriceInput] = useState("");
+  const [maxPriceInput, setMaxPriceInput] = useState("");
+  const [filters, setFilters] = useState<SaleFilters>({});
 
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return;
     setLoadingMore(true);
-    const next = await getSaleHighlights(LIMIT, offset);
+    const next = await getSaleHighlights(LIMIT, offset, filters);
     setItems((prev) => [...prev, ...next]);
     setOffset((prev) => prev + LIMIT);
     if (next.length < LIMIT) setHasMore(false);
     setLoadingMore(false);
-  }, [hasMore, loadingMore, offset]);
+  }, [filters, hasMore, loadingMore, offset]);
 
   useEffect(() => {
-    Promise.all([getSaleHighlights(LIMIT, 0), getSaleCount()])
+    Promise.all([getSaleHighlights(LIMIT, 0, filters), getSaleCount(filters)])
       .then(([firstBatch, countRes]) => {
         setItems(firstBatch);
         setOffset(LIMIT);
@@ -36,7 +59,34 @@ export default function SalesPage() {
         setTotal(countRes.total);
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [filters]);
+
+  const applyFilters = () => {
+    setLoading(true);
+    setItems([]);
+    setOffset(0);
+    setHasMore(true);
+    const min = minPriceInput.trim() ? Number(minPriceInput.replace(/,/g, "")) : undefined;
+    const max = maxPriceInput.trim() ? Number(maxPriceInput.replace(/,/g, "")) : undefined;
+    setFilters({
+      gender: gender || undefined,
+      category: category || undefined,
+      min_price: Number.isFinite(min) ? min : undefined,
+      max_price: Number.isFinite(max) ? max : undefined,
+    });
+  };
+
+  const resetFilters = () => {
+    setGender("");
+    setCategory("");
+    setMinPriceInput("");
+    setMaxPriceInput("");
+    setLoading(true);
+    setItems([]);
+    setOffset(0);
+    setHasMore(true);
+    setFilters({});
+  };
 
   useEffect(() => {
     const target = sentinelRef.current;
@@ -58,6 +108,63 @@ export default function SalesPage() {
         <p className="text-sm text-gray-500 mt-1">
           세일율이 높은 순으로 정렬{total != null ? ` · 세일 제품 ${total.toLocaleString("ko-KR")}개` : ""}
         </p>
+      </div>
+      <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
+        <div className="flex flex-wrap gap-2">
+          {GENDERS.map((g) => (
+            <button
+              key={g.value || "all"}
+              type="button"
+              onClick={() => setGender(g.value)}
+              className={`text-xs px-3 py-1.5 rounded-full border ${
+                gender === g.value
+                  ? "bg-gray-900 text-white border-gray-900"
+                  : "bg-white text-gray-600 border-gray-200"
+              }`}
+            >
+              {g.label}
+            </button>
+          ))}
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+          <select
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+            className="h-10 px-3 rounded-md border border-gray-200 bg-white text-sm"
+          >
+            {CATEGORIES.map((c) => (
+              <option key={c.value || "all"} value={c.value}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+          <Input
+            placeholder="최소가 (KRW)"
+            value={minPriceInput}
+            onChange={(e) => setMinPriceInput(e.target.value)}
+          />
+          <Input
+            placeholder="최대가 (KRW)"
+            value={maxPriceInput}
+            onChange={(e) => setMaxPriceInput(e.target.value)}
+          />
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={applyFilters}
+              className="h-10 px-4 rounded-md bg-gray-900 text-white text-sm font-medium"
+            >
+              필터 적용
+            </button>
+            <button
+              type="button"
+              onClick={resetFilters}
+              className="h-10 px-4 rounded-md border border-gray-200 bg-white text-sm text-gray-600"
+            >
+              초기화
+            </button>
+          </div>
+        </div>
       </div>
 
       {loading ? (

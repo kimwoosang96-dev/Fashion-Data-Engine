@@ -66,6 +66,8 @@ async def upsert_product(
         sale_just_started = (not prev_sale) and is_sale
         existing.name = info.title
         existing.product_key = info.product_key
+        existing.gender = info.gender
+        existing.subcategory = info.subcategory
         existing.is_sale = is_sale
         existing.is_active = info.is_available
         existing.image_url = info.image_url
@@ -77,6 +79,8 @@ async def upsert_product(
             brand_id=brand_id,
             name=info.title,
             product_key=info.product_key,
+            gender=info.gender,
+            subcategory=info.subcategory,
             sku=info.sku,
             url=info.product_url,
             image_url=info.image_url,
@@ -129,6 +133,10 @@ async def get_sale_products(
     db: AsyncSession,
     brand_slug: str | None = None,
     tier: str | None = None,
+    gender: str | None = None,
+    category: str | None = None,
+    min_price: int | None = None,
+    max_price: int | None = None,
     limit: int = 50,
     offset: int = 0,
 ) -> list[Product]:
@@ -170,6 +178,14 @@ async def get_sale_products(
         if not brand_slug:
             query = query.join(Brand, Product.brand_id == Brand.id)
         query = query.where(Brand.tier == tier)
+    if gender:
+        query = query.where(Product.gender == gender)
+    if category:
+        query = query.where(Product.subcategory == category)
+    if min_price is not None:
+        query = query.where(latest_price.c.price >= min_price)
+    if max_price is not None:
+        query = query.where(latest_price.c.price <= max_price)
 
     return list((await db.execute(query)).scalars().all())
 
@@ -191,6 +207,10 @@ async def search_products(
 
 async def get_sale_highlights(
     db: AsyncSession,
+    gender: str | None = None,
+    category: str | None = None,
+    min_price: int | None = None,
+    max_price: int | None = None,
     limit: int = 120,
     offset: int = 0,
 ) -> list[dict]:
@@ -204,22 +224,30 @@ async def get_sale_highlights(
         .subquery()
     )
 
-    rows = (
-        await db.execute(
-            select(Product, PriceHistory, Channel)
-            .join(latest_sub, Product.id == latest_sub.c.product_id)
-            .join(
-                PriceHistory,
-                (PriceHistory.product_id == Product.id)
-                & (PriceHistory.crawled_at == latest_sub.c.latest),
-            )
-            .join(Channel, Product.channel_id == Channel.id)
-            .where(Product.is_sale == True)
-            .order_by(desc(PriceHistory.discount_rate), Product.name)
-            .limit(limit)
-            .offset(offset)
+    query = (
+        select(Product, PriceHistory, Channel)
+        .join(latest_sub, Product.id == latest_sub.c.product_id)
+        .join(
+            PriceHistory,
+            (PriceHistory.product_id == Product.id)
+            & (PriceHistory.crawled_at == latest_sub.c.latest),
         )
-    ).all()
+        .join(Channel, Product.channel_id == Channel.id)
+        .where(Product.is_sale == True)
+        .order_by(desc(PriceHistory.discount_rate), Product.name)
+        .limit(limit)
+        .offset(offset)
+    )
+    if gender:
+        query = query.where(Product.gender == gender)
+    if category:
+        query = query.where(Product.subcategory == category)
+    if min_price is not None:
+        query = query.where(PriceHistory.price >= min_price)
+    if max_price is not None:
+        query = query.where(PriceHistory.price <= max_price)
+
+    rows = (await db.execute(query)).all()
 
     result: list[dict] = []
     for product, ph, channel in rows:
@@ -244,9 +272,45 @@ async def get_sale_highlights(
 
 async def get_sale_products_count(db: AsyncSession) -> int:
     """현재 세일 제품 총 개수."""
-    result = await db.execute(
-        select(func.count(Product.id)).where(Product.is_sale == True)
+    result = await db.execute(select(func.count(Product.id)).where(Product.is_sale == True))
+    return int(result.scalar_one() or 0)
+
+
+async def get_sale_products_count_filtered(
+    db: AsyncSession,
+    gender: str | None = None,
+    category: str | None = None,
+    min_price: int | None = None,
+    max_price: int | None = None,
+) -> int:
+    latest_sub = (
+        select(
+            PriceHistory.product_id,
+            func.max(PriceHistory.crawled_at).label("latest"),
+        )
+        .group_by(PriceHistory.product_id)
+        .subquery()
     )
+    query = (
+        select(func.count(Product.id))
+        .join(latest_sub, Product.id == latest_sub.c.product_id)
+        .join(
+            PriceHistory,
+            (PriceHistory.product_id == Product.id)
+            & (PriceHistory.crawled_at == latest_sub.c.latest),
+        )
+        .where(Product.is_sale == True)
+    )
+    if gender:
+        query = query.where(Product.gender == gender)
+    if category:
+        query = query.where(Product.subcategory == category)
+    if min_price is not None:
+        query = query.where(PriceHistory.price >= min_price)
+    if max_price is not None:
+        query = query.where(PriceHistory.price <= max_price)
+
+    result = await db.execute(query)
     return int(result.scalar_one() or 0)
 
 

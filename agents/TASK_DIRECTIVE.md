@@ -10,15 +10,15 @@ Single source of truth for PM/developer task control.
 
 ## Active Tasks
 <!-- ACTIVE_TASKS_START -->
-- [ ] T-20260228-006 | CATEGORY_01: 카테고리·성별 DB 스키마 + 크롤러 자동분류 | owner:codex-dev | priority:P1 | status:active | created:2026-02-28 | details:gender/subcategory 컬럼 추가(Alembic). Shopify product_type 키워드 매핑으로 자동 분류. API 필터(gender/category/min_price/max_price) 추가. GH#11 참고.
-- [ ] T-20260228-007 | CATEGORY_02: 프론트엔드 성별/카테고리/가격대 필터 UI | owner:codex-dev | priority:P1 | status:active | created:2026-02-28 | details:sales/page.tsx 상단 필터 바(성별탭+카테고리드롭다운+가격대입력). #11 완료 후 진행. GH#12 참고.
-- [ ] T-20260228-008 | CRAWLER_04: UA 회전 + ProductCrawler retry + playwright-stealth | owner:codex-dev | priority:P1 | status:active | created:2026-02-28 | details:UA 회전 4종. ProductCrawler tenacity retry(3회). playwright-stealth 적용. Bodega/SEVENSTORE Shopify API 전략 추가. GH#13 참고.
-- [ ] T-20260228-009 | ADMIN_01: 운영관리 페이지 (백엔드 API + 프론트엔드) | owner:codex-dev | priority:P1 | status:active | created:2026-02-28 | details:admin.py 신규(stats/channels-health/crawl-trigger). Bearer token 인증. admin/page.tsx DB현황+채널헬스+크롤제어+환율. GH#14 참고.
-- [ ] T-20260228-010 | MAP_01: 세계지도 채널/브랜드 뷰 | owner:codex-dev | priority:P2 | status:active | created:2026-02-28 | details:react-simple-maps. 채널 country 기반 마커. 세일 채널 빨간 마커. 클릭 사이드패널. GH#15 참고.
 <!-- ACTIVE_TASKS_END -->
 
 ## Completed Tasks (Recent)
 <!-- COMPLETED_TASKS_START -->
+- [x] T-20260228-010 | MAP_01: 세계지도 채널/브랜드 뷰 | owner:codex-dev | priority:P2 | status:done | created:2026-02-28 | completed:2026-02-28 | details:GH#15 done: /map page added with react-simple-maps markers by country, sale channels in red, click side panel.
+- [x] T-20260228-009 | ADMIN_01: 운영관리 페이지 (백엔드 API + 프론트엔드) | owner:codex-dev | priority:P1 | status:done | created:2026-02-28 | completed:2026-02-28 | details:GH#14 done: /admin API(stats/channels-health/crawl-trigger) + Bearer auth + frontend admin dashboard.
+- [x] T-20260228-008 | CRAWLER_04: UA 회전 + ProductCrawler retry + playwright-stealth | owner:codex-dev | priority:P1 | status:done | created:2026-02-28 | completed:2026-02-28 | details:GH#13 done: UA pool rotation, ProductCrawler tenacity retry(3), BaseCrawler stealth hook, Bodega/SEVENSTORE shopify-vendors strategies.
+- [x] T-20260228-007 | CATEGORY_02: 프론트엔드 성별/카테고리/가격대 필터 UI | owner:codex-dev | priority:P1 | status:done | created:2026-02-28 | completed:2026-02-28 | details:GH#12 done: /sales filter bar (gender tabs, category dropdown, min/max price) with filtered infinite scroll/count sync.
+- [x] T-20260228-006 | CATEGORY_01: 카테고리·성별 DB 스키마 + 크롤러 자동분류 | owner:codex-dev | priority:P1 | status:done | created:2026-02-28 | completed:2026-02-28 | details:GH#11 done: products.gender/subcategory migration + Shopify product_type keyword mapping + products sales APIs filtering.
 - [x] T-20260227-006 | CRAWLER_03: EFFORTLESS/THEXSHOP 브랜드 셀렉터 재조사 | owner:codex-dev | priority:P2 | status:done | created:2026-02-27 | completed:2026-02-28 | details:GH#10 done: strategy URLs/selectors updated to live pages. Full recrawl result EFFORTLESS 19, THEXSHOP 193 (both >=5).
 - [x] T-20260227-002 | DB_02: DB 인덱스 실제 적용 | owner:codex-dev | priority:P2 | status:done | created:2026-02-27 | completed:2026-02-27 | details:DB_02 done: applied 6 query indexes via Alembic revision 7b6619f9d1ad and upgraded DB to head.
 - [x] T-20260228-005 | CRAWLER_02: 9개 selector_mismatch 채널 전략 수정 | owner:codex-dev | priority:P2 | status:done | created:2026-02-28 | completed:2026-02-27 | details:CRAWLER_02 done: custom strategy now falls back to generic when empty. Recrawl improved selector_mismatch set (BIZZARE 35, ECRU 103, Kasina 199, EFFORTLESS 1, THEXSHOP 1).

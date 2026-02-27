@@ -18,13 +18,25 @@ router = APIRouter(prefix="/products", tags=["products"])
 async def get_sale_products(
     brand: str | None = Query(None, description="브랜드 slug 필터"),
     tier: str | None = Query(None, description="티어 필터 (high-end/premium/street/sports)"),
+    gender: str | None = Query(None, description="성별 필터: men/women/unisex/kids"),
+    category: str | None = Query(None, description="카테고리 필터: shoes/top/outer/bottom/..."),
+    min_price: int | None = Query(None, ge=0),
+    max_price: int | None = Query(None, ge=0),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
 ):
     """현재 세일 중인 제품 목록 (할인율 높은 순)."""
     products = await product_service.get_sale_products(
-        db, brand_slug=brand, tier=tier, limit=limit, offset=offset
+        db,
+        brand_slug=brand,
+        tier=tier,
+        gender=gender,
+        category=category,
+        min_price=min_price,
+        max_price=max_price,
+        limit=limit,
+        offset=offset,
     )
     return products
 
@@ -41,18 +53,42 @@ async def search_products(
 
 @router.get("/sales-highlights", response_model=list[SaleHighlightOut])
 async def get_sale_highlights(
+    gender: str | None = Query(None, description="성별 필터: men/women/unisex/kids"),
+    category: str | None = Query(None, description="카테고리 필터: shoes/top/outer/bottom/..."),
+    min_price: int | None = Query(None, ge=0),
+    max_price: int | None = Query(None, ge=0),
     limit: int = Query(120, ge=1, le=500),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
 ):
     """세일 제품 하이라이트 (세일율 강조용)."""
-    return await product_service.get_sale_highlights(db, limit=limit, offset=offset)
+    return await product_service.get_sale_highlights(
+        db,
+        gender=gender,
+        category=category,
+        min_price=min_price,
+        max_price=max_price,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.get("/sales-count")
-async def get_sales_count(db: AsyncSession = Depends(get_db)):
+async def get_sales_count(
+    gender: str | None = Query(None, description="성별 필터"),
+    category: str | None = Query(None, description="카테고리 필터"),
+    min_price: int | None = Query(None, ge=0),
+    max_price: int | None = Query(None, ge=0),
+    db: AsyncSession = Depends(get_db),
+):
     """세일 제품 총 개수."""
-    total = await product_service.get_sale_products_count(db)
+    total = await product_service.get_sale_products_count_filtered(
+        db,
+        gender=gender,
+        category=category,
+        min_price=min_price,
+        max_price=max_price,
+    )
     return {"total": total}
 
 

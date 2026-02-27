@@ -65,3 +65,8 @@
 - 2026-02-27 02:35:59 | agent:codex-dev | task:T-20260227-002 | action:complete | message:DB_02 완료: Alembic revision 7b6619f9d1ad로 6개 쿼리 인덱스 적용, DB head로 업그레이드
 
 - 2026-02-28 06:47:52 | agent:codex-dev | task:T-20260227-006 | action:complete | message:GH#10 완료: EFFORTLESS/THEXSHOP 브랜드 셀렉터 업데이트 및 전체 재크롤 검증 (EFFORTLESS 19개, THEXSHOP 193개)
+- 2026-02-28 07:03:09 | agent:codex-dev | task:T-20260228-006 | action:complete | message:GH#11 완료: products.gender/subcategory 마이그레이션, 크롤러 자동분류, products API 필터 추가.
+- 2026-02-28 07:03:09 | agent:codex-dev | task:T-20260228-007 | action:complete | message:GH#12 완료: /sales 성별/카테고리/가격대 필터 바 + 필터 연동 무한스크롤 반영.
+- 2026-02-28 07:03:09 | agent:codex-dev | task:T-20260228-008 | action:complete | message:GH#13 완료: UA 회전, ProductCrawler retry(3), stealth hook, Bodega/SEVENSTORE shopify-vendors 전략 추가.
+- 2026-02-28 07:03:09 | agent:codex-dev | task:T-20260228-009 | action:complete | message:GH#14 완료: Bearer 인증 admin API + /admin 운영관리 페이지(현황/헬스/크롤제어/환율).
+- 2026-02-28 07:03:09 | agent:codex-dev | task:T-20260228-010 | action:complete | message:GH#15 완료: /map 세계지도(국가 마커, 세일 채널 빨간 마커, 클릭 사이드패널).

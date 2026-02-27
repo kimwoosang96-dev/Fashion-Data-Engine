@@ -4,10 +4,19 @@ export interface Product {
   brand_id: number | null;
   name: string;
   product_key: string | null;
+  gender: string | null;
+  subcategory: string | null;
   url: string;
   image_url: string | null;
   is_sale: boolean;
   is_active: boolean;
+}
+
+export interface SaleFilters {
+  gender?: string;
+  category?: string;
+  min_price?: number;
+  max_price?: number;
 }
 
 export interface PriceComparisonItem {
@@ -175,4 +184,34 @@ export interface PriceHistoryPoint {
 export interface ChannelPriceHistory {
   channel_name: string;
   history: PriceHistoryPoint[];
+}
+
+export interface AdminStats {
+  counts: {
+    channels: number;
+    channel_brands: number;
+    products: number;
+    price_history: number;
+  };
+  latest_crawls: {
+    brands: string | null;
+    products: string | null;
+  };
+  exchange_rates: Array<{
+    from_currency: string;
+    rate: number;
+    fetched_at: string | null;
+  }>;
+}
+
+export interface AdminChannelHealth {
+  channel_id: number;
+  name: string;
+  url: string;
+  channel_type: string | null;
+  country: string | null;
+  brand_count: number;
+  product_count: number;
+  sale_count: number;
+  health: "ok" | "needs_review";
 }

@@ -46,6 +46,18 @@ CHANNEL_STRATEGIES: dict[str, dict] = {
         "href_must_contain": ["cate_no="],
         "href_must_not_contain": ["product_no="],
     },
+    "bdgastore.com": {
+        "brand_list_url": "https://bdgastore.com/collections/vendors?q=",
+        "strategy_mode": "shopify-vendors",
+        "brand_selector": "a[href*='/collections/'][href*='q=']",
+        "name_selector": None,
+    },
+    "sevenstore.com": {
+        "brand_list_url": "https://www.sevenstore.com/collections/vendors?q=",
+        "strategy_mode": "shopify-vendors",
+        "brand_selector": "a[href*='/collections/'][href*='q=']",
+        "name_selector": None,
+    },
     "musinsa.com": {
         "brand_list_url": "https://www.musinsa.com/brand",
         "brand_selector": "a.brand-item, .brand-list a, [class*='brand'] a",
@@ -312,6 +324,9 @@ class BrandCrawler(BaseCrawler):
         self, channel_url: str, strategy: dict
     ) -> list[BrandInfo]:
         """커스텀 전략으로 브랜드 추출"""
+        if strategy.get("strategy_mode") == "shopify-vendors":
+            return await self._crawl_shopify_vendors(strategy)
+
         target_urls: list[str] = strategy.get("brand_list_urls") or [
             strategy.get("brand_list_url", channel_url)
         ]
@@ -366,6 +381,30 @@ class BrandCrawler(BaseCrawler):
             if len(brands) >= 5:
                 break
 
+        return self._deduplicate_brands(brands)
+
+    async def _crawl_shopify_vendors(self, strategy: dict) -> list[BrandInfo]:
+        target_url = strategy.get("brand_list_url")
+        if not target_url:
+            return []
+        page = await self.fetch_page(target_url)
+        brands: list[BrandInfo] = []
+        try:
+            html = await page.content()
+            soup = BeautifulSoup(html, "html.parser")
+            for el in soup.select(strategy["brand_selector"]):
+                name = el.get_text(strip=True)
+                href = el.get("href", "")
+                if _is_valid_brand_name(name):
+                    brands.append(
+                        BrandInfo(
+                            name=self._clean_brand_name(name),
+                            url=href if href.startswith("http") else None,
+                            source_channel_url=target_url,
+                        )
+                    )
+        finally:
+            await page.close()
         return self._deduplicate_brands(brands)
 
     async def _crawl_generic(

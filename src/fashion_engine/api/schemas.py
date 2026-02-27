@@ -103,6 +103,8 @@ class ProductOut(BaseModel):
     brand_id: int | None
     name: str
     product_key: str | None
+    gender: str | None
+    subcategory: str | None
     url: str
     image_url: str | None
     is_sale: bool

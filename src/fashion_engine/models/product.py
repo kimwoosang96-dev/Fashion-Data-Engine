@@ -25,6 +25,8 @@ class Product(Base):
 
     name: Mapped[str] = mapped_column(String(500), nullable=False)
     product_key: Mapped[str | None] = mapped_column(String(300), index=True)  # "brand-slug:handle" 교차 채널 매칭용
+    gender: Mapped[str | None] = mapped_column(String(20), index=True)         # men / women / unisex / kids
+    subcategory: Mapped[str | None] = mapped_column(String(100), index=True)   # shoes / outer / top / ...
     sku: Mapped[str | None] = mapped_column(String(255))
     url: Mapped[str] = mapped_column(String(1000), unique=True, nullable=False)
     image_url: Mapped[str | None] = mapped_column(String(1000))

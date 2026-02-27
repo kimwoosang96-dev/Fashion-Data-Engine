@@ -10,6 +10,8 @@ const links = [
   { href: "/watchlist", label: "관심목록", icon: "❤️" },
   { href: "/purchases", label: "구매이력", icon: "🛍️" },
   { href: "/drops", label: "드롭", icon: "🚀" },
+  { href: "/map", label: "세계지도", icon: "🗺️" },
+  { href: "/admin", label: "운영관리", icon: "⚙️" },
 ];
 
 export function Nav() {

@@ -6,10 +6,14 @@ Playwright 불필요 — httpx 직접 사용.
 """
 import asyncio
 import logging
+import random
 from dataclasses import dataclass, field
 
 import httpx
 from slugify import slugify
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+
+from fashion_engine.crawler.product_classifier import classify_gender_and_subcategory
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +40,28 @@ COUNTRY_CURRENCY: dict[str, str] = {
 
 # Shopify 제품 크롤 시 최대 페이지 수 (250개/페이지 × 16 = 최대 4000개)
 SHOPIFY_MAX_PAGES = 16
+USER_AGENTS = [
+    (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/120.0.0.0 Safari/537.36"
+    ),
+    (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/121.0.0.0 Safari/537.36"
+    ),
+    (
+        "Mozilla/5.0 (X11; Linux x86_64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/120.0.6099.109 Safari/537.36"
+    ),
+    (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_2) "
+        "AppleWebKit/605.1.15 (KHTML, like Gecko) "
+        "Version/17.2 Safari/605.1.15"
+    ),
+]
 
 
 @dataclass
@@ -52,6 +78,8 @@ class ProductInfo:
     product_url: str     # 채널 내 제품 URL
     product_key: str     # "brand-slug:handle" 교차 채널 매칭용
     is_available: bool   # 재고/판매 가능 여부 (품절 표시용)
+    gender: str | None = None
+    subcategory: str | None = None
 
 
 @dataclass
@@ -73,11 +101,7 @@ class ProductCrawler:
     async def __aenter__(self) -> "ProductCrawler":
         self._client = httpx.AsyncClient(
             headers={
-                "User-Agent": (
-                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/120.0.0.0 Safari/537.36"
-                ),
+                "User-Agent": random.choice(USER_AGENTS),
                 "Accept": "application/json",
             },
             follow_redirects=True,
@@ -93,15 +117,27 @@ class ProductCrawler:
 
     async def _get_shopify_currency(self, base_url: str) -> str | None:
         """Shopify /shop.json에서 실제 통화 코드 조회."""
-        assert self._client is not None
         try:
-            resp = await self._client.get(f"{base_url.rstrip('/')}/shop.json", timeout=8)
+            resp = await self._fetch_with_retry(f"{base_url.rstrip('/')}/shop.json", timeout=8)
             if resp.status_code == 200:
                 data = resp.json()
                 return data.get("shop", {}).get("currency")
         except Exception:
             pass
         return None
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=5),
+        retry=retry_if_exception_type(httpx.HTTPError),
+        reraise=True,
+    )
+    async def _fetch_with_retry(self, url: str, timeout: float | None = None) -> httpx.Response:
+        assert self._client is not None
+        headers = {"User-Agent": random.choice(USER_AGENTS)}
+        response = await self._client.get(url, headers=headers, timeout=timeout)
+        response.raise_for_status()
+        return response
 
     @staticmethod
     def _infer_currency(channel_url: str, country: str | None) -> str:
@@ -157,9 +193,7 @@ class ProductCrawler:
         for page in range(1, SHOPIFY_MAX_PAGES + 1):
             url = f"{base}/products.json?limit=250&page={page}"
             try:
-                resp = await self._client.get(url)
-                if resp.status_code != 200:
-                    break
+                resp = await self._fetch_with_retry(url)
                 data = resp.json()
             except Exception:
                 break
@@ -226,6 +260,13 @@ class ProductCrawler:
         product_url = f"{base_url}/products/{handle}"
         brand_slug = slugify(vendor) if vendor else "unknown"
         product_key = f"{brand_slug}:{handle}"
+        tags = p.get("tags")
+        tags_text = ", ".join(tags) if isinstance(tags, list) else str(tags or "")
+        gender, subcategory = classify_gender_and_subcategory(
+            product_type=(p.get("product_type") or "").strip() or None,
+            title=title,
+            tags=tags_text,
+        )
 
         return ProductInfo(
             title=title,
@@ -240,4 +281,6 @@ class ProductCrawler:
             product_url=product_url,
             product_key=product_key,
             is_available=is_available,
+            gender=gender,
+            subcategory=subcategory,
         )

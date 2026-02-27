@@ -11,6 +11,7 @@ from fashion_engine.api.products import router as products_router
 from fashion_engine.api.purchases import router as purchases_router
 from fashion_engine.api.drops import router as drops_router
 from fashion_engine.api.watchlist import router as watchlist_router
+from fashion_engine.api.admin import router as admin_router
 
 
 @asynccontextmanager
@@ -41,6 +42,7 @@ app.include_router(products_router)
 app.include_router(purchases_router)
 app.include_router(drops_router)
 app.include_router(watchlist_router)
+app.include_router(admin_router)
 
 
 @app.get("/")

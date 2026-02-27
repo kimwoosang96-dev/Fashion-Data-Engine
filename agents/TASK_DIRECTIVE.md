@@ -11,6 +11,10 @@ PM/개발 작업 통제를 위한 단일 기준 문서입니다.
 
 ## 진행 중 작업
 <!-- ACTIVE_TASKS_START -->
+- [ ] T-20260228-015 | DIRECTOR_01: 크리에이티브 디렉터 DB 모델 + Admin 입력 폼 | owner:codex-dev | priority:P1 | status:todo | created:2026-02-28 | gh:#20 | details:BrandDirector 모델 + Alembic 마이그레이션 + GET/POST/DELETE API + /admin 디렉터 관리 섹션
+- [ ] T-20260228-016 | DIRECTOR_02: 크리에이티브 디렉터 프론트엔드 | owner:codex-dev | priority:P1 | status:todo | created:2026-02-28 | gh:#21 | depends:GH#20 | details:/brands/[slug] 디렉터 섹션 + /directors 전체 목록 페이지 + Nav 메뉴
+- [ ] T-20260228-017 | INSTAGRAM_01: 브랜드/채널 인스타그램 URL 컬럼 + Admin UI | owner:codex-dev | priority:P2 | status:todo | created:2026-02-28 | gh:#22 | details:brands+channels instagram_url 컬럼 추가 + PATCH Admin API + /admin 입력 UI + 프론트 링크 표시
+- [ ] T-20260228-018 | BRAND_DETAIL_01: 브랜드 상세 통합 뷰 완성 | owner:codex-dev | priority:P1 | status:todo | created:2026-02-28 | gh:#23 | depends:GH#20,#21,#22 | details:GET /brands/{slug}/collabs + 협업 섹션 + 인스타그램 링크 + 섹션 레이아웃 정리
 <!-- ACTIVE_TASKS_END -->
 
 ## 최근 완료 작업

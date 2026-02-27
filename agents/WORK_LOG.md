@@ -79,3 +79,9 @@
 - 2026-02-28 07:23:43 | agent:codex-dev | task:T-20260228-012 | action:complete | message:GH#17 완료: RSS 뉴스 수집 스크립트(`scripts/crawl_news.py`)와 `/news` 백엔드 API 추가.
 - 2026-02-28 07:23:43 | agent:codex-dev | task:T-20260228-013 | action:complete | message:GH#18 완료: 브랜드 상세 페이지에 브랜드 소식 피드 섹션 추가 및 뉴스 API 연동.
 - 2026-02-28 07:23:43 | agent:codex-dev | task:T-20260228-014 | action:complete | message:GH#19 완료: `/collabs` 타임라인 페이지 구현(카테고리 필터/하입 요약/타임라인 카드).
+
+- 2026-02-28 07:30:00 | agent:claude-pm | task:T-20260228-011 | action:log | message:Phase 6 리뷰 완료. 스케줄러 뉴스 등록(08:00) + /news 전체 페이지 + Nav 메뉴 PM 직접 보완
+- 2026-02-28 07:30:00 | agent:claude-pm | task:T-20260228-015 | action:add-task | message:태스크 생성: DIRECTOR_01 크리에이티브 디렉터 DB + Admin (GH#20)
+- 2026-02-28 07:30:00 | agent:claude-pm | task:T-20260228-016 | action:add-task | message:태스크 생성: DIRECTOR_02 디렉터 프론트엔드 (GH#21)
+- 2026-02-28 07:30:00 | agent:claude-pm | task:T-20260228-017 | action:add-task | message:태스크 생성: INSTAGRAM_01 인스타그램 URL 컬럼 + Admin (GH#22)
+- 2026-02-28 07:30:00 | agent:claude-pm | task:T-20260228-018 | action:add-task | message:태스크 생성: BRAND_DETAIL_01 브랜드 상세 통합 뷰 (GH#23)

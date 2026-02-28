@@ -11,6 +11,7 @@ PM/개발 작업 통제를 위한 단일 기준 문서입니다.
 
 ## 진행 중 작업
 <!-- ACTIVE_TASKS_START -->
+- [ ] T-20260301-041 | CHANNEL_STRATEGY_01: 편집샵 크롤 전략 + product_key→brand_id 재매핑 | owner:codex-dev | priority:P1 | status:active | created:2026-03-01 | details:GH#41 참조. ①`remap_product_brands.py` — edit-shop product_key prefix slug→brands.slug JOIN으로 brand_id 자동 매핑(Goodhood 2,155개 즉시 복구 가능). ②`Product.vendor` 컬럼 추가(Alembic revision `add_vendor_to_products`) + 크롤러/서비스 저장 반영 — FASCINATE류 채널(vendor=채널명) 향후 재매핑 기반. ③Bodega(bdgastore.com) Shopify 접근 가능 확인 → 다음 크롤에서 자동 수집. 47개 미크롤 채널 플랫폼 분류: Shopify차단(SEVENSTORE 403), 비Shopify(HBX 자체/Kasina Cafe24/ARKnets일본), 일본PaaS(Color Me/OCNK/BASE), Shopline(VINAVAST) — 장기 커스텀 크롤러 전략 별도 검토.
 <!-- ACTIVE_TASKS_END -->
 
 ## 최근 완료 작업

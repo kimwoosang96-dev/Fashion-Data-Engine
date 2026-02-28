@@ -18,22 +18,37 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import re
-import sqlite3
+import sys
 from collections import Counter
 from pathlib import Path
 
-DB_PATH = Path("data/fashion.db")
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "src"))
 
-KO_CATEGORY = {
+from sqlalchemy import bindparam, text  # noqa: E402
+
+from fashion_engine.database import AsyncSessionLocal, init_db  # noqa: E402
+
+KO_CATEGORY_KEYWORDS = [
+    "티셔츠", "셔츠", "자켓", "팬츠", "후디", "스니커즈", "양말",
+    "아이웨어", "크로스백", "숄더백", "토트백", "파우치백", "백팩",
+    "슬리브", "스웨트셔츠", "스웻셔츠",
+]
+KO_CATEGORY_EXACT = {
     "상의", "하의", "아우터", "신발", "가방", "모자", "주얼리", "벨트",
     "악세사리", "액세서리", "신상품", "온라인샵", "라이프스타일", "슈케어",
-    "개인결제창", "세일",
+    "개인결제창", "세일", "셔츠", "후디",
 }
-EN_CATEGORY = {
+EN_CATEGORY_EXACT = {
     "top", "tops", "bottom", "bottoms", "outer", "outerwear",
     "shoes", "shoe", "bag", "bags", "hat", "hats",
     "accessory", "accessories", "sale", "new", "archive",
+    "jackets", "jacket", "pants", "shirt", "shirts", "sneakers",
+    "t-shirt", "underwear", "hoodies & sweats", "cap & hats",
+    "shirts & blouse", "long pants", "short pants", "home fragrance",
+    "non-sale", "all sale",
 }
 NEW_IN_RE = re.compile(r"(新入荷|xin\s*ru\s*he|new\s*arrival)", re.I)
 DISCOUNT_RE = re.compile(r"(?i)(?:[-\s]?\d{1,3}%|season\s*off|sale)$")
@@ -45,68 +60,86 @@ def normalize(text: str) -> str:
 
 
 def classify_fake(brand_id: int, name: str, slug: str) -> str | None:
-    if brand_id == 1199:
-        return "english_category_archive"
-
     n_name = normalize(name)
     n_slug = normalize(slug)
+    name_lower = name.lower().strip()
     joined = f"{name} {slug}".lower()
 
-    if n_name in KO_CATEGORY or n_slug in KO_CATEGORY:
+    # 한국어 카테고리 키워드 포함
+    if any(kw in name for kw in KO_CATEGORY_KEYWORDS):
         return "korean_category"
-    if n_name in EN_CATEGORY or n_slug in EN_CATEGORY:
+    if n_name in KO_CATEGORY_EXACT or n_slug in KO_CATEGORY_EXACT:
+        return "korean_category"
+
+    # 영문 카테고리 exact
+    if name_lower in EN_CATEGORY_EXACT or n_slug in EN_CATEGORY_EXACT:
         return "english_category"
+
+    # 新入荷 접미사
     if NEW_IN_RE.search(name) or NEW_IN_RE.search(slug):
         return "new_arrival_duplicate"
+
+    # 할인율 접미사
     if DISCOUNT_RE.search(name) or DISCOUNT_RE.search(slug):
         return "discount_suffix"
+
+    # 특정 제품명 패턴
     if PRODUCT_RE.search(joined) and len(name) >= 16:
         return "product_like"
+
     return None
 
 
-def run(apply: bool) -> int:
-    if not DB_PATH.exists():
-        print(f"DB not found: {DB_PATH}")
-        return 1
+async def run(apply: bool) -> int:
+    await init_db()
 
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
+    async with AsyncSessionLocal() as db:
+        rows = (await db.execute(text("SELECT id, name, slug FROM brands"))).fetchall()
 
-    brands = cur.execute("SELECT id, name, slug FROM brands").fetchall()
     targets: list[tuple[int, str, str, str]] = []
-    for brand_id, name, slug in brands:
-        reason = classify_fake(brand_id, name, slug)
+    for brand_id, name, slug in rows:
+        reason = classify_fake(brand_id, name or "", slug or "")
         if reason:
             targets.append((brand_id, name, slug, reason))
 
     by_reason = Counter(reason for _, _, _, reason in targets)
-    print(f"mode={'apply' if apply else 'dry-run'} total_brands={len(brands)} fake_candidates={len(targets)}")
-    for key, count in sorted(by_reason.items(), key=lambda x: x[0]):
-        print(f"- {key}: {count}")
+    print(f"mode={'apply' if apply else 'dry-run'} total_brands={len(rows)} fake_candidates={len(targets)}")
+    for key, count in sorted(by_reason.items()):
+        print(f"  - {key}: {count}")
 
     for row in targets[:120]:
-        print(f"id={row[0]} name={row[1]} slug={row[2]} reason={row[3]}")
+        print(f"    id={row[0]} name={row[1]} reason={row[3]}")
 
     if not apply:
-        conn.close()
         return 0
 
     ids = [row[0] for row in targets]
     if not ids:
         print("no-op: 삭제 대상 없음")
-        conn.close()
         return 0
 
-    marks = ",".join("?" for _ in ids)
-    cur.execute(f"UPDATE products SET brand_id=NULL WHERE brand_id IN ({marks})", ids)
-    products_null = cur.rowcount
-    cur.execute(f"DELETE FROM channel_brands WHERE brand_id IN ({marks})", ids)
-    links_deleted = cur.rowcount
-    cur.execute(f"DELETE FROM brands WHERE id IN ({marks})", ids)
-    brands_deleted = cur.rowcount
-    conn.commit()
-    conn.close()
+    async with AsyncSessionLocal() as db:
+        bp = bindparam("ids", expanding=True)
+
+        result = await db.execute(
+            text("UPDATE products SET brand_id=NULL WHERE brand_id IN :ids").bindparams(bp),
+            {"ids": ids},
+        )
+        products_null = result.rowcount
+
+        result2 = await db.execute(
+            text("DELETE FROM channel_brands WHERE brand_id IN :ids").bindparams(bp),
+            {"ids": ids},
+        )
+        links_deleted = result2.rowcount
+
+        result3 = await db.execute(
+            text("DELETE FROM brands WHERE id IN :ids").bindparams(bp),
+            {"ids": ids},
+        )
+        brands_deleted = result3.rowcount
+
+        await db.commit()
 
     print(
         f"[APPLY] brands_deleted={brands_deleted} "
@@ -115,10 +148,14 @@ def run(apply: bool) -> int:
     return 0
 
 
-if __name__ == "__main__":
+async def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--apply", action="store_true")
     args = parser.parse_args()
     apply = bool(args.apply and not args.dry_run)
-    raise SystemExit(run(apply=apply))
+    return await run(apply=apply)
+
+
+if __name__ == "__main__":
+    raise SystemExit(asyncio.run(main()))

@@ -236,26 +236,120 @@ python scripts/agent_coord.py log --agent codex-dev --task-id T-... --message ".
 
 ---
 
-## Current Status (2026-02-27)
+## ⚠️ 스크립트 DB 접근 — 절대 규칙
+
+### 절대 하지 말 것
+
+```python
+# ❌ 금지: sqlite3 직접 사용, 하드코딩 경로
+import sqlite3
+DB_PATH = Path("data/fashion.db")
+conn = sqlite3.connect(DB_PATH)
+```
+
+이유: Railway PostgreSQL에서 동작하지 않음. 환경변수 DATABASE_URL을 무시함.
+
+### 반드시 이렇게 작성
+
+```python
+# ✅ 정답: SQLAlchemy async + DATABASE_URL 환경변수 자동 지원
+from __future__ import annotations
+import asyncio, sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "src"))
+
+from sqlalchemy import text                                   # noqa: E402
+from fashion_engine.database import AsyncSessionLocal, init_db  # noqa: E402
+
+async def run(*, apply: bool) -> int:
+    await init_db()
+    async with AsyncSessionLocal() as db:
+        rows = (await db.execute(text("SELECT id FROM brands"))).fetchall()
+        if apply:
+            await db.execute(text("UPDATE ..."))
+            await db.commit()
+    return 0
+
+if __name__ == "__main__":
+    raise SystemExit(asyncio.run(run(apply=False)))
+```
+
+실행 방법:
+```bash
+# 로컬 SQLite (기본, .env 또는 환경변수 없을 때)
+uv run python scripts/my_script.py --apply
+
+# Railway PostgreSQL
+DATABASE_URL=postgresql+asyncpg://user:pw@host:5432/railway \
+  uv run python scripts/my_script.py --apply
+```
+
+### IN 절 바인딩 (PostgreSQL 호환)
+
+```python
+# ❌ 금지: f-string SQL 인젝션 위험 + PostgreSQL 비호환
+cur.execute(f"DELETE FROM brands WHERE id IN ({','.join(map(str, ids))})")
+
+# ✅ 정답: SQLAlchemy expandable bindparam
+from sqlalchemy import bindparam, text
+
+bp = bindparam("ids", expanding=True)
+await db.execute(
+    text("DELETE FROM brands WHERE id IN :ids").bindparams(bp),
+    {"ids": ids},
+)
+await db.commit()
+```
+
+### 기존 올바른 스크립트 참고 (반드시 확인)
+
+- `scripts/purge_fake_brands.py` — 삭제 스크립트의 정석
+- `scripts/seed_directors.py` — CSV 시드 스크립트의 정석
+- `scripts/remap_product_brands.py` — 대량 UPDATE 배치 처리
+
+---
+
+## 배포 환경
+
+| 환경 | DB | 실행 방법 |
+|------|----|-----------|
+| 로컬 개발 | SQLite (`data/fashion.db`) | `uv run python scripts/xxx.py` |
+| Railway (운영) | PostgreSQL | `DATABASE_URL=postgresql+asyncpg://... uv run python scripts/xxx.py` |
+
+**Railway 재배포 트리거**: git push 후 Railway 자동 배포 → `alembic upgrade head` 자동 실행
+**Railway 스크립트 실행**: 로컬에서 `DATABASE_URL` 환경변수 설정 후 실행
+
+---
+
+## Current Status (2026-03-01)
 
 ### Done ✅
 
 | Phase | 내용 |
 |-------|------|
-| Phase 1 | 159개 채널, 2,508개 브랜드, 120개 tier 분류, 34개 협업 |
-| Phase 2 | Cafe24 크롤러 개선 (43/75 편집샵), Landscape API |
-| Phase 3 | product_key 교차채널 매칭, ExchangeRate, 898개 제품 초기 크롤 |
-| Phase 4 | Purchase 성공도, WatchList 알림 필터, Drop 크롤러, Discord webhook |
-| Phase 5 | Next.js 11개 페이지, CORS, highlight/related-search API, agents/ 협업 시스템 |
+| Phase 1~5 | 159채널·2,561브랜드·120 tier, 협업/구매점수/Discord알림/Next.js 15개 페이지 |
+| Phase 6 | Makefile, 뉴스 RSS 크롤러, 협업 타임라인 페이지 |
+| Phase 7 | BrandDirector 모델, Admin 입력폼, Instagram URL, 브랜드 상세 통합뷰 |
+| Phase 8~9 | 세일 dedup(product_key 최저가), 협업 Admin CRUD, 채널-브랜드 감사 도구 |
+| Phase 10~11 | 품절 아카이브(archived_at), 멀티채널 경쟁 페이지, Cloud(Railway+Vercel) 전환 |
+| Phase 12~13 | 브랜드 인리치먼트(CSV), 크리에이티브 디렉터 CSV(125개), 가짜 브랜드 정제(~500개 삭제) |
+| GH#41 | Product.vendor 컬럼 + product_key→brand_id 재매핑(2,423개 복구) |
 
-### Pending
+### DB 현황 (2026-03-01)
 
-| Task ID | 내용 | 담당 | 우선순위 |
-|---------|------|------|----------|
-| FRONTEND_02 | 대시보드 검색 브랜드 자동완성 드롭다운 | codex-dev | P1 |
-| FRONTEND_03 | 브랜드/채널 페이지 클라이언트 사이드 검색 필터 | codex-dev | P1 |
-| DB_01 | 0결과 채널 원인 분류 + 재크롤 전략 실행 | codex-dev | P1 |
-| DB_02 | DB 인덱스 최적화 + 쿼리 개선 | codex-dev | P2 |
+| 항목 | 수치 |
+|------|------|
+| 채널 | 159개 (edit-shop 81 + brand-store 78) |
+| 브랜드 | ~2,561개 (Railway) |
+| 제품 | ~26,000개 |
+| brand_directors | 125개 (로컬) / 109개 (Railway) |
+| brand_id NULL 제품 | ~18,900개 (FASCINATE 등 vendor=채널명인 경우) |
+
+### 진행 중 / Pending
+
+`agents/TASK_DIRECTIVE.md` 참조 (항상 최신 소스).
 
 ---
 
@@ -267,3 +361,8 @@ python scripts/agent_coord.py log --agent codex-dev --task-id T-... --message ".
 - **크롤러 전략 변경 시 `--limit 1` 테스트 먼저**
 - **Alembic**: 모델 변경 시 `uv run alembic revision --autogenerate` 필수
 - **프론트엔드 nvm 필요**: `export NVM_DIR="$HOME/.nvm" && . "$NVM_DIR/nvm.sh"` 먼저 실행
+- **스크립트 DB 접근**: 반드시 위의 "스크립트 DB 접근 — 절대 규칙" 섹션 준수
+  - `sqlite3` 직접 사용 절대 금지 — Railway PostgreSQL에서 동작 안 함
+  - 하드코딩된 `DB_PATH = Path("data/fashion.db")` 절대 금지
+  - 반드시 `AsyncSessionLocal` + `init_db()` 패턴 사용
+  - 이 규칙 위반 시 PR 전체 반려

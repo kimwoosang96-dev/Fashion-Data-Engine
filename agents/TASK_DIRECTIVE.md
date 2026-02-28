@@ -11,12 +11,13 @@ PM/개발 작업 통제를 위한 단일 기준 문서입니다.
 
 ## 진행 중 작업
 <!-- ACTIVE_TASKS_START -->
-- [ ] T-20260228-032 | ARCHIVE_01: 품절 제품 아카이브 처리 | owner:codex-dev | priority:P1 | status:pending | created:2026-02-28 | details:GH#34. `products.archived_at` Alembic 마이그레이션, `upsert_product()` 품절 전환 시 타임스탬프 설정, 기존 목록 API `is_active==True` 필터 추가, `GET /products/archive` 신규 엔드포인트.
-- [ ] T-20260228-033 | COMPETE_PAGE_01: 멀티채널 경쟁 제품 페이지 | owner:codex-dev | priority:P2 | status:pending | created:2026-02-28 | details:GH#35. `get_multi_channel_products()` 서비스 함수(product_key 기준 채널 수 + 스프레드 집계), `GET /products/multi-channel` API, `/compete` 프론트엔드 페이지, Nav "경쟁" 메뉴 추가.
+- [ ] T-20260228-034 | CLOUD_MIGRATION_01: Railway + Vercel 클라우드 전환 | owner:codex-dev | priority:P1 | status:pending | created:2026-02-28 | details:GH#36. (1) alembic/env.py에서 settings.database_url 읽도록 수정 (2) CORS allowed_origins 환경변수화 (3) /health 엔드포인트 추가 (4) railway.json 신규 (5) frontend/vercel.json 신규 (6) scripts/migrate_sqlite_to_pg.py 신규 — 시드 데이터(brands/channels/collabs 등) SQLite→PG 이전, products는 재크롤 (7) .env.example 업데이트. 로컬 개발은 SQLite 유지. DoD: docker-compose postgres 로컬 테스트 통과, /health 200, migrate 스크립트 dry-run 정상.
 <!-- ACTIVE_TASKS_END -->
 
 ## 최근 완료 작업
 <!-- COMPLETED_TASKS_START -->
+- [x] T-20260228-033 | COMPETE_PAGE_01: 멀티채널 경쟁 제품 페이지 | owner:codex-dev | priority:P2 | status:done | created:2026-02-28 | completed:2026-02-28 | details:GH#35 완료: `get_multi_channel_products()` + `GET /products/multi-channel` API 연결, `frontend/src/app/compete/page.tsx` 신규 페이지 구현, Nav "경쟁" 메뉴 추가.
+- [x] T-20260228-032 | ARCHIVE_01: 품절 제품 아카이브 처리 | owner:codex-dev | priority:P1 | status:done | created:2026-02-28 | completed:2026-02-28 | details:GH#34 완료: `products.archived_at` 마이그레이션 추가, `upsert_product()` 품절 전환/복구 시 `archived_at` 반영, 주요 제품 목록 쿼리에 `is_active==True` 필터 적용, `GET /products/archive` 엔드포인트 추가.
 - [x] T-20260228-030 | OFFICIAL_CHANNEL_01: 비교 페이지 공식 채널 구분 배지 | owner:codex-dev | priority:P1 | status:done | created:2026-02-28 | completed:2026-02-28 | details:GH#33 완료: `get_price_comparison()`에 Brand LEFT JOIN 추가, `is_official`/`channel_type` 필드 응답 확장, Compare 페이지에 "공식" 배지 및 채널 타입 표시 UI 반영.
 - [x] T-20260228-029 | FIX_NULL_BRAND_ID_01: brand_id NULL 제품 13,874개 채널 기반 재매핑 | owner:codex-dev | priority:P1 | status:done | created:2026-02-28 | completed:2026-02-28 | details:GH#32 완료: `scripts/fix_null_brand_id.py` 추가(dry-run/apply). brand-store↔brand 매칭 31쌍(보수적 ambiguous 해소 1건) 기준으로 NULL brand_id 재매핑 지원. `make fix-null-brands` 추가.
 - [x] T-20260228-028 | FIX_CHANNEL_BRANDS_01: 편집숍(edit-shop)이 brands 테이블에 잘못 분류된 21개 항목 수정 | owner:codex-dev | priority:P1 | status:done | created:2026-02-28 | completed:2026-02-28 | details:GH#31 완료: `cleanup_mixed_brand_channel.py`에 `--apply-with-products` 플래그 추가(①products.brand_id=NULL ②channel_brands 삭제 ③brands 삭제), `make fix-brands` 추가.

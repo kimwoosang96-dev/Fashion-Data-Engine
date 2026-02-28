@@ -11,11 +11,13 @@ PM/개발 작업 통제를 위한 단일 기준 문서입니다.
 
 ## 진행 중 작업
 <!-- ACTIVE_TASKS_START -->
-- [ ] T-20260228-030 | OFFICIAL_CHANNEL_01: 비교 페이지 공식 채널 구분 배지 | owner:codex-dev | priority:P1 | status:todo | created:2026-02-28 | details:GH#33 — `get_price_comparison()`에 Brand LEFT JOIN 추가. `is_official = channel_type=='brand-store' AND lower(channel.name)==lower(brand.name)` 계산. `PriceComparisonItem`에 `is_official`, `channel_type` 필드 추가. Compare 페이지에 "공식" 배지 UI. 마이그레이션 불필요.
+- [ ] T-20260228-032 | ARCHIVE_01: 품절 제품 아카이브 처리 | owner:codex-dev | priority:P1 | status:pending | created:2026-02-28 | details:GH#34. `products.archived_at` Alembic 마이그레이션, `upsert_product()` 품절 전환 시 타임스탬프 설정, 기존 목록 API `is_active==True` 필터 추가, `GET /products/archive` 신규 엔드포인트.
+- [ ] T-20260228-033 | COMPETE_PAGE_01: 멀티채널 경쟁 제품 페이지 | owner:codex-dev | priority:P2 | status:pending | created:2026-02-28 | details:GH#35. `get_multi_channel_products()` 서비스 함수(product_key 기준 채널 수 + 스프레드 집계), `GET /products/multi-channel` API, `/compete` 프론트엔드 페이지, Nav "경쟁" 메뉴 추가.
 <!-- ACTIVE_TASKS_END -->
 
 ## 최근 완료 작업
 <!-- COMPLETED_TASKS_START -->
+- [x] T-20260228-030 | OFFICIAL_CHANNEL_01: 비교 페이지 공식 채널 구분 배지 | owner:codex-dev | priority:P1 | status:done | created:2026-02-28 | completed:2026-02-28 | details:GH#33 완료: `get_price_comparison()`에 Brand LEFT JOIN 추가, `is_official`/`channel_type` 필드 응답 확장, Compare 페이지에 "공식" 배지 및 채널 타입 표시 UI 반영.
 - [x] T-20260228-029 | FIX_NULL_BRAND_ID_01: brand_id NULL 제품 13,874개 채널 기반 재매핑 | owner:codex-dev | priority:P1 | status:done | created:2026-02-28 | completed:2026-02-28 | details:GH#32 완료: `scripts/fix_null_brand_id.py` 추가(dry-run/apply). brand-store↔brand 매칭 31쌍(보수적 ambiguous 해소 1건) 기준으로 NULL brand_id 재매핑 지원. `make fix-null-brands` 추가.
 - [x] T-20260228-028 | FIX_CHANNEL_BRANDS_01: 편집숍(edit-shop)이 brands 테이블에 잘못 분류된 21개 항목 수정 | owner:codex-dev | priority:P1 | status:done | created:2026-02-28 | completed:2026-02-28 | details:GH#31 완료: `cleanup_mixed_brand_channel.py`에 `--apply-with-products` 플래그 추가(①products.brand_id=NULL ②channel_brands 삭제 ③brands 삭제), `make fix-brands` 추가.
 - [x] T-20260228-027 | BRAND_MECE_FIX_01: 브랜드 데이터 MECE 정제 스크립트 | owner:codex-dev | priority:P2 | status:done | created:2026-02-28 | completed:2026-02-28 | details:GH#30 완료: `scripts/fix_brand_mece.py` 추가. 기본 dry-run/`--apply` 지원, `suspicion=high` 항목 및 안전 삭제 후보 출력.

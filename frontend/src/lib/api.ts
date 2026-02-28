@@ -218,11 +218,11 @@ export const getAdminBrandChannelAudit = (token: string, limit = 200) =>
 // ── News / Collabs ───────────────────────────────────────────────────────
 export const getBrandNews = (brandSlug: string, limit = 20) =>
   apiFetch<FashionNews[]>(
-    `/news?brand_slug=${encodeURIComponent(brandSlug)}&limit=${limit}`
+    `/news/?brand_slug=${encodeURIComponent(brandSlug)}&limit=${limit}`
   );
 
 export const getNews = (limit = 50, offset = 0) =>
-  apiFetch<FashionNews[]>(`/news?limit=${limit}&offset=${offset}`);
+  apiFetch<FashionNews[]>(`/news/?limit=${limit}&offset=${offset}`);
 
 export const getCollabs = (category?: string) =>
   apiFetch<CollabItem[]>(
@@ -234,4 +234,4 @@ export const getCollabHypeByCategory = () =>
     "/collabs/hype-by-category"
   );
 export const getDirectors = (limit = 200, offset = 0) =>
-  apiFetch<BrandDirector[]>(`/directors?limit=${limit}&offset=${offset}`);
+  apiFetch<BrandDirector[]>(`/directors/?limit=${limit}&offset=${offset}`);

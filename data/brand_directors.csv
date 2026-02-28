@@ -1,33 +1,110 @@
-brand_slug,name,role,start_year,end_year,note,source_url,verified_at
-dior,Maria Grazia Chiuri,Creative Director,2016,,여성복 총괄,https://www.dior.com,2026-02-28
-dior,Kim Jones,Artistic Director,2018,,남성복 총괄,https://www.dior.com,2026-02-28
-gucci,Sabato De Sarno,Creative Director,2023,2025,,https://www.gucci.com,2026-02-28
-gucci,Alessandro Michele,Creative Director,2015,2022,,https://www.gucci.com,2026-02-28
-louis-vuitton,Pharrell Williams,Creative Director,2023,,남성복,https://us.louisvuitton.com,2026-02-28
-louis-vuitton,Nicolas Ghesquiere,Artistic Director,2013,,여성복,https://us.louisvuitton.com,2026-02-28
-balenciaga,Demna,Creative Director,2015,,,https://www.balenciaga.com,2026-02-28
-celine,Hedi Slimane,Creative Director,2018,,,https://www.celine.com,2026-02-28
-loewe,Jonathan Anderson,Creative Director,2013,2025,,https://www.loewe.com,2026-02-28
-bottega-veneta,Matthieu Blazy,Creative Director,2021,2024,,https://www.bottegaveneta.com,2026-02-28
-bottega-veneta,Louise Trotter,Creative Director,2024,,,https://www.bottegaveneta.com,2026-02-28
-burberry,Daniel Lee,Chief Creative Officer,2022,,,https://www.burberry.com,2026-02-28
-prada,Miuccia Prada,Co-Creative Director,1978,,,https://www.prada.com,2026-02-28
-prada,Raf Simons,Co-Creative Director,2020,,,https://www.prada.com,2026-02-28
-jacquemus,Simon Porte Jacquemus,Founder & Creative Director,2009,,,https://www.jacquemus.com,2026-02-28
-maison-margiela,John Galliano,Creative Director,2014,,,https://www.maisonmargiela.com,2026-02-28
-rick-owens,Rick Owens,Founder & Creative Director,1994,,,https://www.rickowens.eu,2026-02-28
-off-white,Ibrahim Kamara,Art & Image Director,2022,,,https://www.off---white.com,2026-02-28
-chanel,Virginie Viard,Creative Director,2019,2024,,https://www.chanel.com,2026-02-28
-chanel,Matthieu Blazy,Creative Director,2025,,,https://www.chanel.com,2026-02-28
-saint-laurent,Anthony Vaccarello,Creative Director,2016,,,https://www.ysl.com,2026-02-28
-fendi,Kim Jones,Artistic Director,2020,2024,꾸뛰르/여성복,https://www.fendi.com,2026-02-28
-valentino,Alessandro Michele,Creative Director,2024,,,https://www.valentino.com,2026-02-28
-givenchy,Matthew M. Williams,Creative Director,2020,2023,,https://www.givenchy.com,2026-02-28
-givenchy,Sarah Burton,Creative Director,2024,,,https://www.givenchy.com,2026-02-28
-alexander-mcqueen,Seán McGirr,Creative Director,2023,,,https://www.alexandermcqueen.com,2026-02-28
-calvin-klein,Veronica Leoni,Creative Director,2024,,,https://www.calvinklein.com,2026-02-28
-tom-ford,Haider Ackermann,Creative Director,2024,,,https://www.tomford.com,2026-02-28
-dries-van-noten,Julian Klausner,Creative Director,2024,,,https://www.driesvannoten.com,2026-02-28
-mugler,Casey Cadwallader,Creative Director,2018,2024,,https://www.mugler.com,2026-02-28
-mugler,Miguel Castro Freitas,Creative Director,2024,,,https://www.mugler.com,2026-02-28
-lanvin,Peter Copping,Artistic Director,2024,,,https://www.lanvin.com,2026-02-28
+brand_slug,name,role,start_year,end_year,note
+gucci,Tom Ford,Creative Director,1994,2004,1994년에 Creative Director로 승진; 2004 퇴임
+gucci,Alessandra Facchinetti,Creative Director (Womenswear),2004,2006,여성 RTW 중심; 2006 퇴임
+gucci,Frida Giannini,Creative Director,2006,2015,
+gucci,Alessandro Michele,Creative Director,2015,2022,
+gucci,Sabato De Sarno,Creative Director,2023,2025,Kering 발표로 2025-02 협업 종료
+gucci,Demna,Artistic Director,2025,,Kering 발표; 2025-07(early) 시작
+louis-vuitton,Marc Jacobs,Artistic Director / Creative Director (Womenswear RTW),1997,2013,LV RTW 런칭/총괄로 통용
+louis-vuitton,Nicolas Ghesquière,Artistic Director (Womens Collections),2013,,
+louis-vuitton,Kim Jones,Artistic Director (Menswear),2011,2018,
+louis-vuitton,Virgil Abloh,Artistic Director (Menswear),2018,2021,
+louis-vuitton,Pharrell Williams,Men's Creative Director,2023,,
+balenciaga,Nicolas Ghesquière,Creative Director,1997,2012,
+balenciaga,Alexander Wang,Creative Director,2012,2015,
+balenciaga,Demna,Artistic Director,2015,2025,2025-07 Gucci로 이동
+balenciaga,Pierpaolo Piccioli,Creative Director,2025,,Kering 발표; 2025-07-10 효력
+loewe,Narciso Rodriguez,Creative Director,1997,2001,
+loewe,José Enrique Oña Selfa,Creative Director,2001,2007,
+loewe,Stuart Vevers,Creative Director,2007,2013,
+loewe,Jonathan Anderson,Creative Director,2013,2025,2025-03 퇴임(공식 발표)
+loewe,Jack McCollough & Lazaro Hernandez,Creative Directors,2025,,2025-04-07 시작(공식 발표)
+bottega-veneta,Edward Buchanan,Design Director / Creative Director,1995,2000,
+bottega-veneta,Tomas Maier,Creative Director,2001,2018,
+bottega-veneta,Daniel Lee,Creative Director,2018,2021,
+bottega-veneta,Matthieu Blazy,Creative Director,2021,2024,
+bottega-veneta,Louise Trotter,Creative Director,2025,,Kering 발표; 2025-01 말 합류
+prada,Miuccia Prada,(Co-)Creative Director / Designer,1978,,
+prada,Raf Simons,Co-Creative Director,2020,,2020-04-02부터 공동 크리에이티브 디렉션
+miu-miu,Miuccia Prada,Founder / Creative Director,1993,,Prada와 별도; Miu Miu는 공동 크리에이티브 체제 제외로 발표됨
+givenchy,Hubert de Givenchy,Founder / Couturier,1952,1995,
+givenchy,John Galliano,Creative Director,1995,1996,
+givenchy,Alexander McQueen,Creative Director,1996,2001,
+givenchy,Julien Macdonald,Creative Director,2001,2004,
+givenchy,Riccardo Tisci,Creative Director,2005,2017,
+givenchy,Clare Waight Keller,Artistic Director,2017,2020,
+givenchy,Matthew M. Williams,Creative Director,2020,2023,2023 말/2024 초 퇴임 발표(연도 단위 표기)
+givenchy,Sarah Burton,Creative Director,2024,,LVMH 발표; 첫 컬렉션 2025-03 예정
+valentino,Valentino Garavani,Founder / Creative Director,1960,2008,
+valentino,Maria Grazia Chiuri & Pierpaolo Piccioli,Co-Creative Directors,2008,2016,
+valentino,Pierpaolo Piccioli,Creative Director,2016,2024,
+valentino,Alessandro Michele,Creative Director,2024,,2024-03 임명; 2024-04(초) 시작
+maison-margiela,Martin Margiela,Founder / Creative Director,1988,2008,
+maison-margiela,Maison Margiela design team (collective),Design Team / Studio (no named CD),2009,2014,'anonymous design team' 체제
+maison-margiela,John Galliano,Creative Director,2014,2024,
+maison-margiela,Glenn Martens,Creative Director,2025,,OTB 발표; 2025-01-29 임명
+jil-sander,Jil Sander,Founder / Creative Director,1968,2000,
+jil-sander,Jil Sander,Creative Director (return),2003,2004,복귀 후 재퇴임
+jil-sander,Milan Vukmirovic,Creative Director,2004,2005,자료마다 연도 표기 차이 가능
+jil-sander,Raf Simons,Creative Director,2005,2012,
+jil-sander,Jil Sander,Creative Director (return),2012,2013,2차 복귀
+jil-sander,Rodolfo Paglialunga,Creative Director,2014,2018,
+jil-sander,Lucie & Luke Meier,Co-Creative Directors,2017,2025,2025-02 퇴임
+jil-sander,Simone Bellotti,Creative Director,2025,,OTB 발표; 2025-03 임명
+marni,Consuelo Castiglioni,Founder / Creative Director,1994,2016,
+marni,Francesco Risso,Creative Director,2016,,
+comme-des-garcons,Rei Kawakubo,Founder / Creative Director,1969,,
+yohji-yamamoto,Yohji Yamamoto,Founder / Creative Director,1981,,
+kenzo,Kenzo Takada,Founder / Designer,1970,1999,
+kenzo,Kenzo design teams (various),Design Team / Studio (transition),2000,2011,1999 이후~2011 전후까지 여러 디자이너/스튜디오 체제
+kenzo,Humberto Leon & Carol Lim,Creative Directors,2011,2019,
+kenzo,Felipe Oliveira Baptista,Artistic Director,2019,2021,
+kenzo,Nigo,Artistic Director,2021,,
+dries-van-noten,Dries Van Noten,Founder / Creative Director,1986,2024,마지막 컬렉션 2024-06(남성) 이후 은퇴
+dries-van-noten,Julian Klausner,Creative Director,2024,,2024-12 임명; 여성/남성 총괄
+vivienne-westwood,Vivienne Westwood,Founder / Creative Director,1981,2022,2022-12-29 별세
+vivienne-westwood,Andreas Kronthaler,Creative Director,2016,,2016부터 라인 'Andreas Kronthaler for Vivienne Westwood'로 표기; 현재 크리에이티브 총괄
+moncler,N/A (rotating/guest designers),Collaborative creative model (no single CD),2018,,Moncler Genius 등 협업/게스트 디자이너 중심; 단일 CD 체제 아님
+jacquemus,Simon Porte Jacquemus,Founder / Creative Director,2009,,
+rick-owens,Rick Owens,Founder / Creative Director,1994,,
+raf-simons,Raf Simons,Founder / Creative Director,1995,2022,2022 브랜드 종료(런웨이/레디투웨어 중단)
+acne-studios,Jonny Johansson,Co-founder / Creative Director,1996,,
+ann-demeulemeester,Ann Demeulemeester,Founder / Creative Director,1985,2013,
+ann-demeulemeester,Sébastien Meunier,Artistic Director / Creative Director,2013,2020,
+ann-demeulemeester,Ann Demeulemeester design team (in-house),Design Team / Studio (interim),2020,2022,공식 CD 공백기(인하우스)
+ann-demeulemeester,Ludovic de Saint Sernin,Creative Director,2022,2023,2022 임명; 2023 퇴임
+ann-demeulemeester,Stefano Gallici,Creative Director,2023,,
+jean-paul-gaultier,Jean Paul Gaultier,Founder / Creative Director,1976,2020,2020 couture 은퇴 선언
+jean-paul-gaultier,Guest couture designers (various),Guest Creative Directors (no permanent CD),2021,2025,시즌별 게스트(예: Sacai/Glenn Martens/Haider Ackermann 등)
+jean-paul-gaultier,Duran Lantink,Creative Director,2025,,Puig 발표; 첫 RTW 2025-09 예정(발표 기준)
+helmut-lang,Helmut Lang,Founder / Designer,1986,2005,2005 Prada/Link Theory 체제에서 이탈
+helmut-lang,Michael & Nicole Colovos,Creative Directors,2006,2014,Link Theory 임명(2006)
+helmut-lang,Isabella Burley,Editor-in-Residence (creative lead),2017,2018,브랜드 리런치 크리에이티브 총괄 역할
+helmut-lang,Alix Browne,Editor-in-Residence (creative lead),2018,2019,
+helmut-lang,Mark Howard Thomas,Creative Director,2017,2019,2019 퇴임(다른 브랜드로 이직)
+helmut-lang,Thomas Cawson,Creative Director,2019,2023,2020년대 초반 CD로 언급됨
+helmut-lang,Peter Do,Creative Director,2023,2024,2024 퇴임
+wales-bonner,Grace Wales Bonner,Founder / Creative Director,2014,,
+martine-rose,Martine Rose,Founder / Creative Director,2007,,
+ami,Alexandre Mattiussi,Founder / Creative Director,2011,,
+craig-green,Craig Green,Founder / Creative Director,2012,,
+a-cold-wall,Samuel Ross,Founder / Creative Director,2015,2024,Tomorrow에 매각/파트너십 발표 후 크리에이티브에서 한발 물러남
+a-cold-wall,N/A (collective leadership),Collective creative leadership (no named CD),2024,,Art Director/Brand Director 중심 재편(공식 발표)
+simone-rocha,Simone Rocha,Founder / Creative Director,2010,,
+ambush,Yoon Ahn,Co-founder / Creative Director,2008,,
+bode,Emily Adams Bode Aujla,Founder / Creative Director,2016,,
+supreme,James Jebbia,Founder / Creative oversight,1994,2022,공식 CD 타이틀 없이 창립자 중심 체제(자료/인터뷰 기반)
+supreme,Tremaine Emory,Creative Director,2022,2023,2022-02 임명; 2023-08 사임
+supreme,Supreme design team (in-house),Design Team / Studio (no named CD),2023,,공개된 후임 CD 없음
+stussy,Shawn Stussy,Founder / Designer,1980,1996,1990s 중반 브랜드에서 손 뗀 것으로 널리 알려짐
+stussy,Stüssy design team (in-house),Design/Creative Team (no public single CD),1996,,캠페인 크레딧은 있으나 하우스 CD는 비공개/변동
+a-bathing-ape,Nigo (Tomoaki Nagao),Founder / Creative Director,1993,2013,2013 크리에이티브에서 물러남
+a-bathing-ape,Michael Yolkic,Creative Director,2013,,FashionUnited 등에서 현 CD로 언급됨(공식/연도 표기 상이 가능)
+stone-island,Massimo Osti,Founder / Designer,1982,1994,
+stone-island,Paul Harvey,Head Designer / Design Director,1996,2008,Stone Island 공식 히스토리: 2008까지 디자인팀 리드
+stone-island,Carlo Rivetti,Creative Director,2008,,Stone Island 공식 히스토리: 2008부터 CD 역할 언급; 현재 직함/체제는 별도 확인 필요
+new-balance,Teddy Santis,Creative Director (MADE in USA),2022,,New Balance 공식 발표; 'MADE in USA' 라인 크리에이티브 총괄
+arc-teryx,Katie Becker,Chief Creative Officer,2020,,Arc'teryx 공식(Executive Team) 프로필
+arc-teryx,Ben Stubbington,Creative Director (Veilance),2025,,Arc'teryx 공식 발표; Veilance 라인
+adidas,Dirk Schönberger,Creative Director (Sport Style Division),2010,2018,WWD 등: 2010부터 CD; 2018 퇴사
+adidas,adidas in-house teams,In-house design/creative leadership (no single public CD),2018,,부문별 디자인/브랜드 팀 체제

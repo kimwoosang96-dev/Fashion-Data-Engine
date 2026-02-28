@@ -121,7 +121,7 @@ frontend/
 channels:       id, name, url (UNIQUE), channel_type, country, is_active
 brands:         id, name, slug (UNIQUE), name_ko, tier, origin_country, description_ko
 channel_brands: channel_id FK, brand_id FK, crawled_at
-products:       id, channel_id FK, brand_id FK, name, product_key,
+products:       id, channel_id FK, brand_id FK, name, vendor, product_key,
                 url (UNIQUE), image_url, price_krw, original_price_krw,
                 currency, is_active, is_new, is_sale, discount_rate
 price_history:  id, product_id FK, price_krw, original_price_krw,

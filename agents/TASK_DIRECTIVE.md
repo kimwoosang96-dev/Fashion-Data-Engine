@@ -11,11 +11,11 @@ PM/개발 작업 통제를 위한 단일 기준 문서입니다.
 
 ## 진행 중 작업
 <!-- ACTIVE_TASKS_START -->
-- [ ] T-20260301-041 | CHANNEL_STRATEGY_01: 편집샵 크롤 전략 + product_key→brand_id 재매핑 | owner:codex-dev | priority:P1 | status:active | created:2026-03-01 | details:GH#41 참조. ①`remap_product_brands.py` — edit-shop product_key prefix slug→brands.slug JOIN으로 brand_id 자동 매핑(Goodhood 2,155개 즉시 복구 가능). ②`Product.vendor` 컬럼 추가(Alembic revision `add_vendor_to_products`) + 크롤러/서비스 저장 반영 — FASCINATE류 채널(vendor=채널명) 향후 재매핑 기반. ③Bodega(bdgastore.com) Shopify 접근 가능 확인 → 다음 크롤에서 자동 수집. 47개 미크롤 채널 플랫폼 분류: Shopify차단(SEVENSTORE 403), 비Shopify(HBX 자체/Kasina Cafe24/ARKnets일본), 일본PaaS(Color Me/OCNK/BASE), Shopline(VINAVAST) — 장기 커스텀 크롤러 전략 별도 검토.
 <!-- ACTIVE_TASKS_END -->
 
 ## 최근 완료 작업
 <!-- COMPLETED_TASKS_START -->
+- [x] T-20260301-041 | CHANNEL_STRATEGY_01: 편집샵 크롤 전략 + product_key→brand_id 재매핑 | owner:codex-dev | priority:P1 | status:done | created:2026-03-01 | completed:2026-03-01 | details:GH#41 완료: `scripts/remap_product_brands.py` 추가(dry-run/apply) 및 적용으로 edit-shop NULL `brand_id` 2,423건 복구(13,642→11,219). `products.vendor` 컬럼 Alembic(`a7c9d1e3f5b7_add_vendor_to_products`) 추가 후 `upsert_product()`에서 vendor 저장 반영, Makefile `remap-product-brands`/`remap-product-brands-apply` 타깃 추가.
 - [x] T-20260228-039 | FAKE_BRAND_PURGE_01: 브랜드 테이블 가짜 항목 정리 | owner:codex-dev | priority:P1 | status:done | created:2026-02-28 | completed:2026-02-28 | details:GH#40 완료: `scripts/purge_fake_brands.py` 추가(dry-run/apply), `brand_crawler.py`에 `is_fake_brand()` 필터 추가, Makefile `purge-fake-brands`/`purge-fake-brands-apply` 타겟 추가. 적용 결과 fake 416건 삭제, channel_brands 397건 삭제, products.brand_id NULL 402건 처리(Archive id=1199 포함).
 - [x] T-20260228-038 | ENRICH_01: 브랜드 인리치먼트 — description_ko, origin_country, 디렉터 이름 정정 | owner:codex-dev | priority:P2 | status:done | created:2026-02-28 | completed:2026-02-28 | details:GH#39 완료: `brand_directors.csv` 실명 정정 + `source_url/verified_at` 컬럼 반영, `seed_brands_luxury.py`로 누락 럭셔리 9개 시드 적용, `brand_enrichment.csv`(24행) + `enrich_brands.py`로 브랜드 소개/국가/공식/인스타 인리치 적용, Makefile `seed-brands-luxury`/`enrich-brands` 계열 타겟 추가 및 검증.
 - [x] T-20260228-037 | BRAND_DIRECTOR_SEED_01: 주요 브랜드 크리에이티브 디렉터 CSV 시드 | owner:codex-dev | priority:P2 | status:done | created:2026-02-28 | completed:2026-02-28 | details:GH#38 완료: `data/brand_directors.csv`(32행) 추가, `scripts/seed_directors.py`(dry-run/apply) 구현, `make seed-directors`/`seed-directors-apply` 타겟 추가. 로컬 DB apply 결과 21건 생성(미존재 slug 11건 스킵) 확인.

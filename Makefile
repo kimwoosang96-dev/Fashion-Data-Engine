@@ -1,4 +1,4 @@
-.PHONY: setup api web dev crawl crawl-news news update-rates scheduler-dry scheduler reclassify brand-mece fix-brands fix-null-brands seed-directors seed-directors-apply seed-brands-luxury seed-brands-luxury-apply enrich-brands enrich-brands-apply purge-fake-brands purge-fake-brands-apply
+.PHONY: setup api web dev crawl crawl-news news update-rates scheduler-dry scheduler reclassify brand-mece fix-brands fix-null-brands remap-product-brands remap-product-brands-apply seed-directors seed-directors-apply seed-brands-luxury seed-brands-luxury-apply enrich-brands enrich-brands-apply purge-fake-brands purge-fake-brands-apply
 
 setup:
 	uv sync
@@ -42,6 +42,12 @@ fix-brands:
 
 fix-null-brands:
 	uv run python scripts/fix_null_brand_id.py
+
+remap-product-brands:
+	uv run python scripts/remap_product_brands.py --dry-run
+
+remap-product-brands-apply:
+	uv run python scripts/remap_product_brands.py --apply
 
 seed-directors:
 	uv run python scripts/seed_directors.py --csv data/brand_directors.csv --dry-run

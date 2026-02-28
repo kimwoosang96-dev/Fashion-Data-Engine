@@ -66,6 +66,7 @@ async def upsert_product(
         sale_just_started = (not prev_sale) and is_sale
         was_active = bool(existing.is_active)
         existing.name = info.title
+        existing.vendor = info.vendor or None
         existing.product_key = info.product_key
         existing.gender = info.gender
         existing.subcategory = info.subcategory
@@ -83,6 +84,7 @@ async def upsert_product(
             channel_id=channel_id,
             brand_id=brand_id,
             name=info.title,
+            vendor=info.vendor or None,
             product_key=info.product_key,
             gender=info.gender,
             subcategory=info.subcategory,

@@ -24,6 +24,7 @@ class Product(Base):
     category_id: Mapped[int | None] = mapped_column(ForeignKey("categories.id"))
 
     name: Mapped[str] = mapped_column(String(500), nullable=False)
+    vendor: Mapped[str | None] = mapped_column(String(255), index=True)
     product_key: Mapped[str | None] = mapped_column(String(300), index=True)  # "brand-slug:handle" 교차 채널 매칭용
     gender: Mapped[str | None] = mapped_column(String(20), index=True)         # men / women / unisex / kids
     subcategory: Mapped[str | None] = mapped_column(String(100), index=True)   # shoes / outer / top / ...

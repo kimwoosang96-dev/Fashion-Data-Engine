@@ -10,6 +10,18 @@ export interface Product {
   image_url: string | null;
   is_sale: boolean;
   is_active: boolean;
+  archived_at?: string | null;
+}
+
+export interface MultiChannelProduct {
+  product_key: string;
+  product_name: string;
+  image_url: string | null;
+  channel_count: number;
+  min_price_krw: number;
+  max_price_krw: number;
+  price_spread_krw: number;
+  spread_rate_pct: number;
 }
 
 export interface SaleFilters {
@@ -23,6 +35,8 @@ export interface PriceComparisonItem {
   channel_name: string;
   channel_country: string | null;
   channel_url: string;
+  channel_type: string | null;
+  is_official: boolean;
   price_krw: number;
   original_price_krw: number | null;
   is_sale: boolean;
@@ -47,6 +61,7 @@ export interface Brand {
   name_ko: string | null;
   origin_country: string | null;
   official_url: string | null;
+  instagram_url: string | null;
   tier: string | null;
   description_ko: string | null;
 }
@@ -57,6 +72,7 @@ export interface Channel {
   url: string;
   channel_type: string | null;
   country: string | null;
+  instagram_url: string | null;
   is_active: boolean;
 }
 
@@ -150,12 +166,14 @@ export interface SaleHighlight {
   price_krw: number;
   original_price_krw: number | null;
   discount_rate: number | null;
+  total_channels: number;
 }
 
 export interface ChannelHighlight {
   channel_id: number;
   channel_name: string;
   channel_url: string;
+  instagram_url: string | null;
   channel_type: string | null;
   country: string | null;
   total_product_count: number;
@@ -169,6 +187,7 @@ export interface BrandHighlight {
   brand_id: number;
   brand_name: string;
   brand_slug: string;
+  instagram_url: string | null;
   tier: string | null;
   total_product_count: number;
   new_product_count: number;
@@ -212,6 +231,19 @@ export interface CollabItem {
   created_at: string;
 }
 
+export interface BrandDirector {
+  id: number;
+  brand_id: number;
+  brand_name: string | null;
+  brand_slug: string | null;
+  name: string;
+  role: string;
+  start_year: number | null;
+  end_year: number | null;
+  note: string | null;
+  created_at: string;
+}
+
 export interface AdminStats {
   counts: {
     channels: number;
@@ -240,4 +272,31 @@ export interface AdminChannelHealth {
   product_count: number;
   sale_count: number;
   health: "ok" | "needs_review";
+}
+
+export interface AdminCollabItem {
+  id: number;
+  brand_a_id: number;
+  brand_b_id: number;
+  collab_name: string;
+  collab_category: string | null;
+  release_year: number | null;
+  hype_score: number;
+  source_url: string | null;
+  notes: string | null;
+  created_at: string | null;
+  brand_a_name: string | null;
+  brand_a_slug: string | null;
+}
+
+export interface AdminAuditItem {
+  audit_type: string;
+  channel_id: number;
+  channel_name: string;
+  channel_type: string | null;
+  channel_url: string;
+  brand_count: number;
+  linked_brands: string[];
+  reason: string;
+  suggestion: string;
 }

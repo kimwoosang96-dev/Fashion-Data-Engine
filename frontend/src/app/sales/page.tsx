@@ -196,6 +196,11 @@ export default function SalesPage() {
                         NEW
                       </span>
                     )}
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">
+                      {item.total_channels > 1
+                        ? `${item.total_channels}개 채널 최저가`
+                        : "단일 채널 최저가"}
+                    </span>
                   </div>
                 </div>
               </div>

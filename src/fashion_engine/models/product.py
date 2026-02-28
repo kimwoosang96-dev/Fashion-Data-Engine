@@ -35,6 +35,7 @@ class Product(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_new: Mapped[bool] = mapped_column(Boolean, default=False)                     # 신상품 여부
     is_sale: Mapped[bool] = mapped_column(Boolean, default=False)                    # 세일 여부
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

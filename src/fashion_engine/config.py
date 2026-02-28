@@ -5,6 +5,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     database_url: str = "sqlite+aiosqlite:///./data/fashion.db"
+    cors_allowed_origins: str = "http://localhost:3000"
 
     crawler_delay_seconds: float = 2.0
     crawler_max_retries: int = 3
@@ -18,6 +19,10 @@ class Settings(BaseSettings):
 
     discord_webhook_url: str | None = None
     alert_price_drop_threshold: float = 0.10  # 10% 이상 하락 시 알림
+
+    @property
+    def cors_allowed_origins_list(self) -> list[str]:
+        return [origin.strip() for origin in self.cors_allowed_origins.split(",") if origin.strip()]
 
 
 settings = Settings()

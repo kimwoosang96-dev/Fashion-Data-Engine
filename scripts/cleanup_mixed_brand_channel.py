@@ -4,13 +4,21 @@
 기준:
 - 브랜드명 정규화 값이 edit-shop 채널명/도메인 정규화 값과 동일
 - 단, 브랜드 자체 판매페이지(brand-store/official_url)가 있으면 보존
-- 그리고 안전 삭제 조건 충족:
+- 안전 삭제 조건:
   - products에서 해당 brand_id 사용 0건
   - channel_brands 연결 채널 수 <= 1
 
+적용 모드:
+- --apply: 안전 삭제 조건 대상만 삭제
+- --apply-with-products: 제품 참조가 있어도 아래 3단계로 강제 정리
+  1) products.brand_id -> NULL
+  2) channel_brands 삭제
+  3) brands 삭제
+
 사용법:
-  .venv/bin/python scripts/cleanup_mixed_brand_channel.py          # dry-run
-  .venv/bin/python scripts/cleanup_mixed_brand_channel.py --apply  # 적용
+  .venv/bin/python scripts/cleanup_mixed_brand_channel.py                        # dry-run
+  .venv/bin/python scripts/cleanup_mixed_brand_channel.py --apply                # 안전 삭제만
+  .venv/bin/python scripts/cleanup_mixed_brand_channel.py --apply-with-products  # 제품 참조 포함 강제 정리
 """
 import argparse
 import re
@@ -32,7 +40,7 @@ def normalize_domain(url: str) -> str:
     return normalize_name(core)
 
 
-def main(apply: bool) -> None:
+def main(apply: bool, apply_with_products: bool) -> None:
     if not DB_PATH.exists():
         raise SystemExit(f"DB not found: {DB_PATH}")
 
@@ -118,7 +126,29 @@ def main(apply: bool) -> None:
         for row in manual_review[:80]:
             print(f"id={row[0]} name={row[1]} slug={row[2]} links={row[3]} products={row[4]}")
 
-    if apply and safe_to_delete:
+    if apply_with_products:
+        # keep 대상 제외 + blocked 충돌 전체를 정리 대상으로 사용
+        force_delete = [row for row in suspects if not row[5]]
+        ids = [row[0] for row in force_delete]
+        if ids:
+            q_marks = ",".join("?" for _ in ids)
+            # 1) products.brand_id -> NULL
+            cur.execute(f"UPDATE products SET brand_id=NULL WHERE brand_id IN ({q_marks})", ids)
+            products_updated = cur.rowcount
+            # 2) channel_brands 삭제
+            cur.execute(f"DELETE FROM channel_brands WHERE brand_id IN ({q_marks})", ids)
+            links_deleted = cur.rowcount
+            # 3) brands 삭제
+            cur.execute(f"DELETE FROM brands WHERE id IN ({q_marks})", ids)
+            brands_deleted = cur.rowcount
+            conn.commit()
+            print(
+                f"\nApplied with products: brands={brands_deleted} "
+                f"channel_brands={links_deleted} products_brand_id_null={products_updated}"
+            )
+        else:
+            print("\nNothing to delete (force mode).")
+    elif apply and safe_to_delete:
         ids = [row[0] for row in safe_to_delete]
         q_marks = ",".join("?" for _ in ids)
         cur.execute(f"DELETE FROM channel_brands WHERE brand_id IN ({q_marks})", ids)
@@ -134,5 +164,10 @@ def main(apply: bool) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--apply", action="store_true", help="실제 삭제 적용")
+    parser.add_argument(
+        "--apply-with-products",
+        action="store_true",
+        help="제품 참조가 있어도 products.brand_id NULL 처리 후 삭제 적용",
+    )
     args = parser.parse_args()
-    main(apply=args.apply)
+    main(apply=args.apply, apply_with_products=args.apply_with_products)

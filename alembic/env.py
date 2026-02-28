@@ -14,10 +14,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 import fashion_engine.models  # noqa: F401 — 모든 mapper 등록
 from fashion_engine.database import Base
+from fashion_engine.config import settings
 
 config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
+config.set_main_option("sqlalchemy.url", settings.database_url)
 
 target_metadata = Base.metadata
 

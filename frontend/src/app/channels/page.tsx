@@ -75,6 +75,16 @@ export default function ChannelsPage() {
                       {ch.channel_name}
                     </a>
                     <p className="text-xs text-gray-400">{ch.channel_type ?? "-"}</p>
+                    {ch.instagram_url && (
+                      <a
+                        href={ch.instagram_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs text-pink-600 hover:underline"
+                      >
+                        인스타그램
+                      </a>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-gray-500">{ch.country ?? "-"}</td>
                   <td className="px-4 py-3">

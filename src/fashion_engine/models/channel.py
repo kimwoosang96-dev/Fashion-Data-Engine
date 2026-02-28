@@ -22,6 +22,7 @@ class Channel(Base):
     channel_type: Mapped[str | None] = mapped_column(String(50))                     # 'multi-brand', 'official', 'marketplace'
     country: Mapped[str | None] = mapped_column(String(50))                          # 'KR', 'US', 'JP', ...
     description: Mapped[str | None] = mapped_column(Text)
+    instagram_url: Mapped[str | None] = mapped_column(String(500))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

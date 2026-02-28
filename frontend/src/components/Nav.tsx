@@ -5,8 +5,10 @@ import { usePathname } from "next/navigation";
 const links = [
   { href: "/", label: "대시보드", icon: "📊" },
   { href: "/sales", label: "세일 제품", icon: "🔥" },
+  { href: "/compete", label: "경쟁", icon: "⚔️" },
   { href: "/channels", label: "판매채널", icon: "🏪" },
   { href: "/brands", label: "브랜드", icon: "🏷️" },
+  { href: "/directors", label: "디렉터", icon: "🧠" },
   { href: "/news", label: "뉴스", icon: "📰" },
   { href: "/collabs", label: "협업", icon: "🤝" },
   { href: "/watchlist", label: "관심목록", icon: "❤️" },

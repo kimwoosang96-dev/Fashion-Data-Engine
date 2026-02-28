@@ -94,3 +94,18 @@
 - 2026-02-28 07:48:05 | agent:codex-dev | task:T-20260228-016 | action:complete | message:GH#21 완료: /directors 페이지 및 Nav 메뉴 추가, 브랜드 상세 디렉터 섹션 연동.
 - 2026-02-28 07:48:05 | agent:codex-dev | task:T-20260228-017 | action:complete | message:GH#22 완료: brands/channels instagram_url 컬럼 + Admin PATCH API + Admin 입력 UI + 프론트 인스타 링크 표시.
 - 2026-02-28 07:48:05 | agent:codex-dev | task:T-20260228-018 | action:complete | message:GH#23 완료: /brands/{slug}/collabs API 및 브랜드 상세 통합 뷰(협업/디렉터/인스타/뉴스) 완성.
+- 2026-02-28 08:07:15 | agent:codex-dev | task:T-20260228-019 | action:complete | message:GH#24 완료: sales-highlights를 product_key 최저가 dedup으로 개선하고 total_channels/최저가 배지 반영.
+- 2026-02-28 08:07:15 | agent:codex-dev | task:T-20260228-020 | action:complete | message:GH#25 완료: compare 페이지 상단 이동을 브라우저 히스토리 기반 router.back()으로 변경.
+- 2026-02-28 08:07:15 | agent:codex-dev | task:T-20260228-021 | action:complete | message:GH#26 완료: Admin 협업 관리 API(GET/POST/DELETE /admin/collabs) 및 관리자 UI 추가.
+- 2026-02-28 08:07:15 | agent:codex-dev | task:T-20260228-022 | action:complete | message:GH#27 완료: 채널-브랜드 혼재 감사 API(/admin/brand-channel-audit) 및 관리자 감사 UI 추가.
+- 2026-02-28 08:21:45 | agent:codex-dev | task:T-20260228-025 | action:complete | message:GH#28 완료: products 재분류 스크립트(reclassify_products) 추가, classify_gender_and_subcategory 재사용, make reclassify 타깃 반영.
+- 2026-02-28 08:21:45 | agent:codex-dev | task:T-20260228-026 | action:complete | message:GH#29 완료: 대시보드 기본 세일 데이터 소스를 sales-highlights로 전환해 최저가 dedup 목록 기반으로 노출.
+- 2026-02-28 08:21:45 | agent:codex-dev | task:T-20260228-027 | action:complete | message:GH#30 완료: 브랜드 MECE 정제 스크립트(fix_brand_mece) 추가, 기본 dry-run 및 suspicion=high/안전삭제 후보 출력.
+- 2026-02-28 13:34:29 | agent:codex-dev | task:T-20260228-028 | action:complete | message:GH#31 완료: cleanup_mixed_brand_channel에 --apply-with-products 추가(제품 brand_id NULL→링크 삭제→브랜드 삭제) 및 make fix-brands 반영.
+- 2026-02-28 13:34:29 | agent:codex-dev | task:T-20260228-029 | action:complete | message:GH#32 완료: fix_null_brand_id 스크립트 추가(dry-run/apply), brand-store 매칭 31쌍 기준 NULL brand_id 재매핑 및 make fix-null-brands 반영.
+- 2026-02-28 13:41:25 | agent:codex-dev | task:T-20260228-028 | action:log | message:실데이터 적용 실행: --apply-with-products 결과 brands 21건 삭제, channel_brands 7건 삭제, products brand_id NULL 9005건 처리.
+- 2026-02-28 13:41:25 | agent:codex-dev | task:T-20260228-029 | action:log | message:실데이터 적용 실행: fix_null_brand_id --apply 결과 1896건 재매핑, 후속 dry-run remap_candidates=0 확인.
+- 2026-02-28 13:42:50 | agent:codex-dev | task:T-20260228-030 | action:complete | message:GH#33 완료: 가격비교 API 응답에 is_official/channel_type 추가, Compare 페이지 공식 배지 및 채널타입 UI 반영.
+- 2026-02-28 14:00:46 | agent:codex-dev | task:T-20260228-032 | action:complete | message:GH#34 완료: products.archived_at 마이그레이션, upsert_product 품절 전환 타임스탬프 반영, 목록 API 활성 제품 필터링, /products/archive 엔드포인트 추가.
+- 2026-02-28 14:00:46 | agent:codex-dev | task:T-20260228-033 | action:complete | message:GH#35 완료: 멀티채널 경쟁 제품 집계 API(/products/multi-channel)와 /compete 페이지, Nav 경쟁 메뉴 구현.
+- 2026-02-28 15:12:48 | agent:codex-dev | task:T-20260228-034 | action:complete | message:GH#36 완료: Alembic settings DB URL 연동, CORS 환경변수화, Railway/Vercel 설정 파일 추가, SQLite→PG 시드 마이그레이션 스크립트 및 dry-run 검증 완료.

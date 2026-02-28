@@ -23,6 +23,7 @@ class Brand(Base):
     description: Mapped[str | None] = mapped_column(Text)
     description_ko: Mapped[str | None] = mapped_column(Text)                         # 한국어 소개 (수동 큐레이션)
     official_url: Mapped[str | None] = mapped_column(String(500))
+    instagram_url: Mapped[str | None] = mapped_column(String(500))
     tier: Mapped[str | None] = mapped_column(String(20))                              # high-end | premium | street | sports | spa
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 

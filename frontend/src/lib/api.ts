@@ -4,7 +4,7 @@ import type {
   SaleHighlight, ChannelHighlight, BrandHighlight, ChannelPriceHistory,
   SaleFilters,
   AdminStats, AdminChannelHealth,
-  FashionNews, CollabItem,
+  FashionNews, CollabItem, BrandDirector, AdminCollabItem, AdminAuditItem, MultiChannelProduct,
 } from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -68,6 +68,12 @@ export const getPriceHistory = (productKey: string, days = 30) =>
   apiFetch<ChannelPriceHistory[]>(
     `/products/price-history/${encodeURIComponent(productKey)}?days=${days}`
   );
+export const getArchivedProducts = (limit = 100, offset = 0) =>
+  apiFetch<Product[]>(`/products/archive?limit=${limit}&offset=${offset}`);
+export const getMultiChannelProducts = (limit = 100, offset = 0, minChannels = 2) =>
+  apiFetch<MultiChannelProduct[]>(
+    `/products/multi-channel?limit=${limit}&offset=${offset}&min_channels=${minChannels}`
+  );
 
 // ── Brands ────────────────────────────────────────────────────────────────
 export const getBrands = () => apiFetch<Brand[]>("/brands/");
@@ -83,6 +89,10 @@ export const getBrandProducts = (slug: string, isSale?: boolean, limit = 500) =>
   apiFetch<Product[]>(
     `/brands/${encodeURIComponent(slug)}/products?limit=${limit}${isSale ? "&is_sale=true" : ""}`
   );
+export const getBrandDirectors = (slug: string) =>
+  apiFetch<BrandDirector[]>(`/brands/${encodeURIComponent(slug)}/directors`);
+export const getBrandCollabs = (slug: string) =>
+  apiFetch<CollabItem[]>(`/brands/${encodeURIComponent(slug)}/collabs`);
 
 // ── Channels ──────────────────────────────────────────────────────────────
 export const getChannels = () => apiFetch<Channel[]>("/channels/");
@@ -134,6 +144,76 @@ export const triggerAdminCrawl = (token: string, job: "brands" | "products" | "d
     token,
     { method: "POST" }
   );
+export const getAdminDirectors = (token: string, brandId?: number) =>
+  adminFetch<BrandDirector[]>(
+    `/admin/directors${brandId ? `?brand_id=${brandId}` : ""}`,
+    token
+  );
+export const createAdminDirector = (
+  token: string,
+  payload: {
+    brand_id?: number;
+    brand_slug?: string;
+    name: string;
+    role?: string;
+    start_year?: number;
+    end_year?: number;
+    note?: string;
+  }
+) =>
+  adminFetch<{ ok: boolean; id: number }>("/admin/directors", token, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+export const deleteAdminDirector = (token: string, directorId: number) =>
+  adminFetch<{ ok: boolean }>(`/admin/directors/${directorId}`, token, {
+    method: "DELETE",
+  });
+export const patchAdminBrandInstagram = (token: string, brandId: number, instagramUrl?: string) =>
+  adminFetch<{ ok: boolean; id: number; instagram_url: string | null }>(
+    `/admin/brands/${brandId}/instagram`,
+    token,
+    { method: "PATCH", body: JSON.stringify({ instagram_url: instagramUrl ?? null }) }
+  );
+export const patchAdminChannelInstagram = (token: string, channelId: number, instagramUrl?: string) =>
+  adminFetch<{ ok: boolean; id: number; instagram_url: string | null }>(
+    `/admin/channels/${channelId}/instagram`,
+    token,
+    { method: "PATCH", body: JSON.stringify({ instagram_url: instagramUrl ?? null }) }
+  );
+export const getAdminCollabs = (token: string, limit = 200, offset = 0) =>
+  adminFetch<AdminCollabItem[]>(
+    `/admin/collabs?limit=${limit}&offset=${offset}`,
+    token
+  );
+export const createAdminCollab = (
+  token: string,
+  payload: {
+    brand_a_id?: number;
+    brand_b_id?: number;
+    brand_a_slug?: string;
+    brand_b_slug?: string;
+    collab_name: string;
+    collab_category?: string;
+    release_year?: number;
+    hype_score?: number;
+    source_url?: string;
+    notes?: string;
+  }
+) =>
+  adminFetch<{ ok: boolean; id: number }>("/admin/collabs", token, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+export const deleteAdminCollab = (token: string, collabId: number) =>
+  adminFetch<{ ok: boolean }>(`/admin/collabs/${collabId}`, token, {
+    method: "DELETE",
+  });
+export const getAdminBrandChannelAudit = (token: string, limit = 200) =>
+  adminFetch<{ total: number; items: AdminAuditItem[] }>(
+    `/admin/brand-channel-audit?limit=${limit}`,
+    token
+  );
 
 // ── News / Collabs ───────────────────────────────────────────────────────
 export const getBrandNews = (brandSlug: string, limit = 20) =>
@@ -153,3 +233,5 @@ export const getCollabHypeByCategory = () =>
   apiFetch<Array<{ category: string; count: number; avg_hype: number; max_hype: number }>>(
     "/collabs/hype-by-category"
   );
+export const getDirectors = (limit = 200, offset = 0) =>
+  apiFetch<BrandDirector[]>(`/directors?limit=${limit}&offset=${offset}`);

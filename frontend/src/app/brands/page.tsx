@@ -88,6 +88,17 @@ export default function BrandsPage() {
                       </Link>
                     </p>
                     <p className="text-xs text-gray-400">{brand.brand_slug}</p>
+                    {brand.instagram_url && (
+                      <a
+                        href={brand.instagram_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="text-xs text-pink-600 hover:underline"
+                      >
+                        인스타그램
+                      </a>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-gray-600">{brand.tier ?? "-"}</td>
                   <td className="px-4 py-3">

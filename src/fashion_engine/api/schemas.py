@@ -8,6 +8,7 @@ class ChannelOut(BaseModel):
     url: str
     channel_type: str | None
     country: str | None
+    instagram_url: str | None
     is_active: bool
 
     model_config = {"from_attributes": True}
@@ -20,6 +21,7 @@ class BrandOut(BaseModel):
     name_ko: str | None
     origin_country: str | None
     official_url: str | None
+    instagram_url: str | None
     tier: str | None
     description_ko: str | None
 
@@ -60,6 +62,21 @@ class FashionNewsOut(BaseModel):
     published_at: datetime | None
     source: str
     crawled_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class BrandDirectorOut(BaseModel):
+    id: int
+    brand_id: int
+    brand_name: str | None = None
+    brand_slug: str | None = None
+    name: str
+    role: str
+    start_year: int | None
+    end_year: int | None
+    note: str | None
+    created_at: datetime
 
     model_config = {"from_attributes": True}
 
@@ -124,6 +141,7 @@ class ProductOut(BaseModel):
     image_url: str | None
     is_sale: bool
     is_active: bool
+    archived_at: datetime | None
 
     model_config = {"from_attributes": True}
 
@@ -141,12 +159,14 @@ class SaleHighlightOut(BaseModel):
     price_krw: int
     original_price_krw: int | None
     discount_rate: int | None
+    total_channels: int
 
 
 class ChannelHighlightOut(BaseModel):
     channel_id: int
     channel_name: str
     channel_url: str
+    instagram_url: str | None
     channel_type: str | None
     country: str | None
     total_product_count: int
@@ -160,6 +180,7 @@ class BrandHighlightOut(BaseModel):
     brand_id: int
     brand_name: str
     brand_slug: str
+    instagram_url: str | None
     tier: str | None
     total_product_count: int
     new_product_count: int
@@ -175,6 +196,8 @@ class PriceComparisonItem(BaseModel):
     channel_name: str
     channel_country: str | None
     channel_url: str
+    channel_type: str | None
+    is_official: bool
     price_krw: int
     original_price_krw: int | None
     is_sale: bool
@@ -201,6 +224,17 @@ class PriceHistoryPoint(BaseModel):
 class ChannelPriceHistory(BaseModel):
     channel_name: str
     history: list[PriceHistoryPoint]
+
+
+class MultiChannelProductOut(BaseModel):
+    product_key: str
+    product_name: str
+    image_url: str | None
+    channel_count: int
+    min_price_krw: int
+    max_price_krw: int
+    price_spread_krw: int
+    spread_rate_pct: float
 
 
 # ── 구매 이력 스키마 ───────────────────────────────────────────────────────────

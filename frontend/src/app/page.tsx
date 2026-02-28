@@ -1,22 +1,22 @@
 "use client";
 import { useEffect, useState, useCallback, useRef } from "react";
 import {
-  getSaleProducts,
+  getSaleHighlights,
   getChannels,
   getBrands,
   searchProducts,
   getRelatedSearches,
   searchBrands,
 } from "@/lib/api";
-import type { Product, Channel, Brand } from "@/lib/types";
+import type { Product, Channel, Brand, SaleHighlight } from "@/lib/types";
 import { ProductCard } from "@/components/ProductCard";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
 import { SearchDropdown } from "@/components/SearchDropdown";
 
 export default function DashboardPage() {
-  const [saleProducts, setSaleProducts] = useState<Product[]>([]);
-  const [baseSaleProducts, setBaseSaleProducts] = useState<Product[]>([]);
+  const [saleProducts, setSaleProducts] = useState<SaleHighlight[]>([]);
+  const [baseSaleProducts, setBaseSaleProducts] = useState<SaleHighlight[]>([]);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [searchResults, setSearchResults] = useState<Product[] | null>(null);
@@ -28,7 +28,7 @@ export default function DashboardPage() {
   const searchBoxRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    Promise.all([getSaleProducts(60), getChannels(), getBrands()])
+    Promise.all([getSaleHighlights(60, 0), getChannels(), getBrands()])
       .then(([products, ch, br]) => {
         setSaleProducts(products);
         setBaseSaleProducts(products);
@@ -70,9 +70,8 @@ export default function DashboardPage() {
   }, [baseSaleProducts]);
 
   const handleBrandClick = useCallback(async (brand: Brand) => {
-    const filtered = await getSaleProducts(60, brand.slug);
-    setSaleProducts(filtered);
-    setSearchResults(null);
+    const filtered = await searchProducts(brand.name);
+    setSearchResults(filtered);
     setBrandSuggestions([]);
     setQuery(brand.name);
     setDropdownOpen(false);
@@ -84,8 +83,6 @@ export default function DashboardPage() {
     setDropdownOpen(false);
     setQuery(product.name);
   }, []);
-
-  const displayed = searchResults ?? saleProducts;
 
   return (
     <div className="p-6 space-y-6">
@@ -152,18 +149,48 @@ export default function DashboardPage() {
       {/* Products grid */}
       {loading ? (
         <div className="text-sm text-gray-400">로딩 중...</div>
-      ) : displayed.length === 0 ? (
+      ) : searchResults ? (
+        searchResults.length === 0 ? (
+          <div className="text-sm text-gray-400">검색 결과 없음</div>
+        ) : (
+          <div>
+            <p className="text-xs text-gray-400 mb-3">검색 결과 {searchResults.length}개</p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+              {searchResults.map((p) => (
+                <ProductCard key={p.id} product={p} />
+              ))}
+            </div>
+          </div>
+        )
+      ) : saleProducts.length === 0 ? (
         <div className="text-sm text-gray-400">
-          {query ? "검색 결과 없음" : "세일 제품 없음"}
+          세일 제품 없음
         </div>
       ) : (
         <div>
-          <p className="text-xs text-gray-400 mb-3">
-            {searchResults ? `검색 결과 ${searchResults.length}개` : `세일 ${saleProducts.length}개`}
-          </p>
+          <p className="text-xs text-gray-400 mb-3">세일 {saleProducts.length}개</p>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-            {displayed.map((p) => (
-              <ProductCard key={p.id} product={p} />
+            {saleProducts.map((p) => (
+              <ProductCard
+                key={p.product_id}
+                product={{
+                  id: p.product_id,
+                  channel_id: 0,
+                  brand_id: null,
+                  name: p.product_name,
+                  product_key: p.product_key,
+                  gender: null,
+                  subcategory: null,
+                  url: p.product_url,
+                  image_url: p.image_url,
+                  is_sale: true,
+                  is_active: p.is_active,
+                }}
+                channelName={p.channel_name}
+                priceKrw={p.price_krw}
+                originalPriceKrw={p.original_price_krw ?? undefined}
+                discountRate={p.discount_rate ?? undefined}
+              />
             ))}
           </div>
         </div>

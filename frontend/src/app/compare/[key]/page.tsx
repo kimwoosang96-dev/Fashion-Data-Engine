@@ -1,13 +1,13 @@
 "use client";
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
-import Link from "next/link";
+import { useParams, useRouter } from "next/navigation";
 import { getPriceComparison, getPriceHistory } from "@/lib/api";
 import type { PriceComparison, PriceComparisonItem, ChannelPriceHistory } from "@/lib/types";
 import Image from "next/image";
 
 export default function ComparePage() {
   const { key } = useParams<{ key: string }>();
+  const router = useRouter();
   const [data, setData] = useState<PriceComparison | null>(null);
   const [history, setHistory] = useState<ChannelPriceHistory[]>([]);
   const [days, setDays] = useState<7 | 30 | 0>(30);
@@ -39,7 +39,13 @@ export default function ComparePage() {
   return (
     <div className="p-6 max-w-3xl space-y-6">
       <div>
-        <Link href="/" className="text-xs text-gray-400 hover:text-gray-600">← 대시보드</Link>
+        <button
+          type="button"
+          onClick={() => router.back()}
+          className="text-xs text-gray-400 hover:text-gray-600"
+        >
+          ← 뒤로가기
+        </button>
         <h1 className="text-xl font-bold mt-1">{data.product_name}</h1>
         <p className="text-xs text-gray-400 font-mono mt-0.5">{data.product_key}</p>
       </div>
@@ -137,8 +143,16 @@ function ListingRow({
     <tr className={`hover:bg-gray-50 transition-colors ${isCheapest ? "bg-emerald-50" : ""}`}>
       <td className="px-4 py-3">
         <span className="font-medium">{listing.channel_name}</span>
+        {listing.is_official && (
+          <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full font-medium">
+            공식
+          </span>
+        )}
         {isCheapest && (
           <span className="ml-2 text-xs text-emerald-600 font-semibold">최저가</span>
+        )}
+        {listing.channel_type && (
+          <p className="text-[11px] text-gray-400 mt-1">{listing.channel_type}</p>
         )}
       </td>
       <td className="px-4 py-3 text-gray-500 text-xs">{listing.channel_country ?? "—"}</td>

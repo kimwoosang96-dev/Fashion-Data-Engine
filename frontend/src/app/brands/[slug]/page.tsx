@@ -3,8 +3,15 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { getBrand, getBrandChannels, getBrandNews, getBrandProducts } from "@/lib/api";
-import type { Brand, Channel, FashionNews, Product } from "@/lib/types";
+import {
+  getBrand,
+  getBrandChannels,
+  getBrandCollabs,
+  getBrandDirectors,
+  getBrandNews,
+  getBrandProducts,
+} from "@/lib/api";
+import type { Brand, BrandDirector, Channel, CollabItem, FashionNews, Product } from "@/lib/types";
 import { ProductCard } from "@/components/ProductCard";
 
 export default function BrandDetailPage() {
@@ -13,6 +20,8 @@ export default function BrandDetailPage() {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [news, setNews] = useState<FashionNews[]>([]);
+  const [directors, setDirectors] = useState<BrandDirector[]>([]);
+  const [collabs, setCollabs] = useState<CollabItem[]>([]);
   const [saleOnly, setSaleOnly] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -21,14 +30,18 @@ export default function BrandDetailPage() {
     const load = async () => {
       try {
         const decoded = decodeURIComponent(slug);
-        const [brandRes, channelsRes, productsRes] = await Promise.all([
+        const [brandRes, channelsRes, productsRes, directorsRes, collabsRes] = await Promise.all([
           getBrand(decoded),
           getBrandChannels(decoded),
           getBrandProducts(decoded, false, 500),
+          getBrandDirectors(decoded),
+          getBrandCollabs(decoded),
         ]);
         setBrand(brandRes);
         setChannels(channelsRes);
         setProducts(productsRes);
+        setDirectors(directorsRes);
+        setCollabs(collabsRes);
         const newsRes = await getBrandNews(decoded, 20);
         setNews(newsRes);
       } catch (e) {
@@ -67,6 +80,16 @@ export default function BrandDetailPage() {
           <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">{brand.slug}</span>
           <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">{brand.tier ?? "tier 미분류"}</span>
           <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">{brand.origin_country ?? "국가 미상"}</span>
+          {brand.instagram_url && (
+            <a
+              href={brand.instagram_url}
+              target="_blank"
+              rel="noreferrer"
+              className="px-2 py-0.5 rounded-full bg-pink-100 text-pink-700 hover:underline"
+            >
+              Instagram
+            </a>
+          )}
         </div>
       </div>
 
@@ -86,6 +109,55 @@ export default function BrandDetailPage() {
           세일 제품만 보기
         </label>
       </div>
+
+      <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-1 bg-white border border-gray-200 rounded-xl p-4 space-y-3">
+          <h2 className="text-base font-semibold">크리에이티브 디렉터</h2>
+          {directors.length === 0 ? (
+            <p className="text-sm text-gray-400">등록된 디렉터 정보가 없습니다.</p>
+          ) : (
+            <div className="space-y-2">
+              {directors.slice(0, 8).map((d) => (
+                <div key={d.id} className="border border-gray-100 rounded-md p-2">
+                  <p className="text-sm font-medium">{d.name}</p>
+                  <p className="text-xs text-gray-500">{d.role}</p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    {d.start_year ?? "?"} ~ {d.end_year ?? "현재"}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="lg:col-span-2 bg-white border border-gray-200 rounded-xl p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-semibold">협업 이력</h2>
+            <Link href="/collabs" className="text-xs text-gray-500 hover:underline">
+              전체 협업 보기
+            </Link>
+          </div>
+          {collabs.length === 0 ? (
+            <p className="text-sm text-gray-400">협업 데이터가 없습니다.</p>
+          ) : (
+            <div className="space-y-2">
+              {collabs.slice(0, 8).map((c) => (
+                <article key={c.id} className="border border-gray-100 rounded-md p-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-medium">{c.collab_name}</p>
+                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-red-100 text-red-700">
+                      HYPE {c.hype_score}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {c.release_year ?? "연도 미상"} · {c.collab_category ?? "카테고리 미분류"}
+                  </p>
+                </article>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
 
       <section className="space-y-3">
         <div className="flex items-center justify-between">

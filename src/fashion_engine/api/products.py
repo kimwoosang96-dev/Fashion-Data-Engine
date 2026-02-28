@@ -9,6 +9,7 @@ from fashion_engine.api.schemas import (
     PriceComparisonItem,
     SaleHighlightOut,
     ChannelPriceHistory,
+    MultiChannelProductOut,
 )
 
 router = APIRouter(prefix="/products", tags=["products"])
@@ -144,6 +145,32 @@ async def get_product_price_history(
 ):
     """제품 가격 히스토리 (채널별 시계열)."""
     return await product_service.get_price_history(db, product_key=product_key, days=days)
+
+
+@router.get("/archive", response_model=list[ProductOut])
+async def get_archived_products(
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    db: AsyncSession = Depends(get_db),
+):
+    """아카이브(품절 전환) 제품 목록."""
+    return await product_service.get_archived_products(db, limit=limit, offset=offset)
+
+
+@router.get("/multi-channel", response_model=list[MultiChannelProductOut])
+async def get_multi_channel_products(
+    min_channels: int = Query(2, ge=2, le=20),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    db: AsyncSession = Depends(get_db),
+):
+    """동일 product_key가 여러 채널에 존재하는 경쟁 제품 목록."""
+    return await product_service.get_multi_channel_products(
+        db,
+        min_channels=min_channels,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.get("/", response_model=list[ProductOut])

@@ -2,7 +2,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 
 from slugify import slugify
-from sqlalchemy import select, func, desc
+from sqlalchemy import select, func, desc, cast, String
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -64,12 +64,17 @@ async def upsert_product(
     if existing:
         prev_sale = existing.is_sale
         sale_just_started = (not prev_sale) and is_sale
+        was_active = bool(existing.is_active)
         existing.name = info.title
         existing.product_key = info.product_key
         existing.gender = info.gender
         existing.subcategory = info.subcategory
         existing.is_sale = is_sale
         existing.is_active = info.is_available
+        if was_active and not info.is_available:
+            existing.archived_at = datetime.utcnow()
+        elif info.is_available:
+            existing.archived_at = None
         existing.image_url = info.image_url
         existing.updated_at = datetime.utcnow()
         return existing, False, sale_just_started
@@ -86,6 +91,7 @@ async def upsert_product(
             image_url=info.image_url,
             is_active=info.is_available,
             is_sale=is_sale,
+            archived_at=None if info.is_available else datetime.utcnow(),
         )
         db.add(product)
         await db.flush()  # id 확보
@@ -164,7 +170,7 @@ async def get_sale_products(
         select(Product)
         .join(latest_price, Product.id == latest_price.c.product_id)
         .options(selectinload(Product.channel), selectinload(Product.brand))
-        .where(Product.is_sale == True)
+        .where(Product.is_sale == True, Product.is_active == True)
         .order_by(desc(latest_price.c.discount_rate))
         .limit(limit)
         .offset(offset)
@@ -198,7 +204,7 @@ async def search_products(
     result = await db.execute(
         select(Product)
         .options(selectinload(Product.channel), selectinload(Product.brand))
-        .where(Product.name.ilike(pct))
+        .where(Product.name.ilike(pct), Product.is_active == True)
         .order_by(Product.name)
         .limit(limit)
     )
@@ -214,7 +220,7 @@ async def get_sale_highlights(
     limit: int = 120,
     offset: int = 0,
 ) -> list[dict]:
-    """세일 제품 하이라이트 (세일율/가격/채널 포함)."""
+    """세일 제품 하이라이트 (product_key 기준 최저가 1건 + 채널 수)."""
     latest_sub = (
         select(
             PriceHistory.product_id,
@@ -224,7 +230,8 @@ async def get_sale_highlights(
         .subquery()
     )
 
-    query = (
+    dedup_key = func.coalesce(Product.product_key, cast(Product.id, String))
+    ranked = (
         select(Product, PriceHistory, Channel)
         .join(latest_sub, Product.id == latest_sub.c.product_id)
         .join(
@@ -233,38 +240,66 @@ async def get_sale_highlights(
             & (PriceHistory.crawled_at == latest_sub.c.latest),
         )
         .join(Channel, Product.channel_id == Channel.id)
-        .where(Product.is_sale == True)
-        .order_by(desc(PriceHistory.discount_rate), Product.name)
-        .limit(limit)
-        .offset(offset)
+        .where(Product.is_sale == True, Product.is_active == True)
+        .with_only_columns(
+            Product.id.label("product_id"),
+            Product.name.label("product_name"),
+            Product.product_key.label("product_key"),
+            Product.url.label("product_url"),
+            Product.image_url.label("image_url"),
+            Product.is_new.label("is_new"),
+            Product.is_active.label("is_active"),
+            Channel.name.label("channel_name"),
+            Channel.country.label("channel_country"),
+            PriceHistory.price.label("price_krw"),
+            PriceHistory.original_price.label("original_price_krw"),
+            PriceHistory.discount_rate.label("discount_rate"),
+            func.count(Product.id).over(partition_by=dedup_key).label("total_channels"),
+            func.row_number()
+            .over(
+                partition_by=dedup_key,
+                order_by=(PriceHistory.price.asc(), Product.id.asc()),
+            )
+            .label("price_rank"),
+        )
     )
     if gender:
-        query = query.where(Product.gender == gender)
+        ranked = ranked.where(Product.gender == gender)
     if category:
-        query = query.where(Product.subcategory == category)
+        ranked = ranked.where(Product.subcategory == category)
     if min_price is not None:
-        query = query.where(PriceHistory.price >= min_price)
+        ranked = ranked.where(PriceHistory.price >= min_price)
     if max_price is not None:
-        query = query.where(PriceHistory.price <= max_price)
+        ranked = ranked.where(PriceHistory.price <= max_price)
 
-    rows = (await db.execute(query)).all()
+    ranked_sub = ranked.subquery()
+    rows = (
+        await db.execute(
+            select(ranked_sub)
+            .where(ranked_sub.c.price_rank == 1)
+            .order_by(desc(ranked_sub.c.discount_rate), ranked_sub.c.product_name.asc())
+            .limit(limit)
+            .offset(offset)
+        )
+    ).all()
 
     result: list[dict] = []
-    for product, ph, channel in rows:
+    for row in rows:
         result.append(
             {
-                "product_id": product.id,
-                "product_name": product.name,
-                "product_key": product.product_key,
-                "product_url": product.url,
-                "image_url": product.image_url,
-                "channel_name": channel.name,
-                "channel_country": channel.country,
-                "is_new": bool(product.is_new),
-                "is_active": bool(product.is_active),
-                "price_krw": int(ph.price),
-                "original_price_krw": int(ph.original_price) if ph.original_price else None,
-                "discount_rate": ph.discount_rate,
+                "product_id": row.product_id,
+                "product_name": row.product_name,
+                "product_key": row.product_key,
+                "product_url": row.product_url,
+                "image_url": row.image_url,
+                "channel_name": row.channel_name,
+                "channel_country": row.channel_country,
+                "is_new": bool(row.is_new),
+                "is_active": bool(row.is_active),
+                "price_krw": int(row.price_krw),
+                "original_price_krw": int(row.original_price_krw) if row.original_price_krw else None,
+                "discount_rate": row.discount_rate,
+                "total_channels": int(row.total_channels or 1),
             }
         )
     return result
@@ -272,7 +307,9 @@ async def get_sale_highlights(
 
 async def get_sale_products_count(db: AsyncSession) -> int:
     """현재 세일 제품 총 개수."""
-    result = await db.execute(select(func.count(Product.id)).where(Product.is_sale == True))
+    result = await db.execute(
+        select(func.count(Product.id)).where(Product.is_sale == True, Product.is_active == True)
+    )
     return int(result.scalar_one() or 0)
 
 
@@ -299,7 +336,7 @@ async def get_sale_products_count_filtered(
             (PriceHistory.product_id == Product.id)
             & (PriceHistory.crawled_at == latest_sub.c.latest),
         )
-        .where(Product.is_sale == True)
+        .where(Product.is_sale == True, Product.is_active == True)
     )
     if gender:
         query = query.where(Product.gender == gender)
@@ -330,7 +367,7 @@ async def get_related_searches(
         await db.execute(
             select(Product.name, Brand.name)
             .join(Brand, Product.brand_id == Brand.id, isouter=True)
-            .where(Product.name.ilike(f"%{query}%"))
+            .where(Product.name.ilike(f"%{query}%"), Product.is_active == True)
             .limit(300)
         )
     ).all()
@@ -413,7 +450,7 @@ async def get_price_comparison(
 
     rows = (
         await db.execute(
-            select(Product, PriceHistory, Channel)
+            select(Product, PriceHistory, Channel, Brand)
             .join(
                 latest_sub,
                 (Product.id == latest_sub.c.product_id),
@@ -424,18 +461,26 @@ async def get_price_comparison(
                 & (PriceHistory.crawled_at == latest_sub.c.latest),
             )
             .join(Channel, Product.channel_id == Channel.id)
-            .where(Product.product_key == product_key)
+            .join(Brand, Product.brand_id == Brand.id, isouter=True)
+            .where(Product.product_key == product_key, Product.is_active == True)
             .order_by(PriceHistory.price)
         )
     ).all()
 
     listings = []
-    for product, ph, channel in rows:
+    for product, ph, channel, brand in rows:
+        is_official = bool(
+            channel.channel_type == "brand-store"
+            and brand
+            and (channel.name or "").strip().lower() == (brand.name or "").strip().lower()
+        )
         listings.append(
             {
                 "channel_name": channel.name,
                 "channel_country": channel.country,
                 "channel_url": channel.url,
+                "channel_type": channel.channel_type,
+                "is_official": is_official,
                 "price_krw": int(ph.price),
                 "original_price_krw": int(ph.original_price) if ph.original_price else None,
                 "is_sale": ph.is_sale,
@@ -494,7 +539,7 @@ async def get_brand_products(
         select(Product)
         .join(Brand, Product.brand_id == Brand.id)
         .options(selectinload(Product.channel), selectinload(Product.brand))
-        .where(Brand.slug == brand_slug)
+        .where(Brand.slug == brand_slug, Product.is_active == True)
         .order_by(desc(Product.is_sale), Product.name)
         .limit(limit)
         .offset(offset)
@@ -503,3 +548,85 @@ async def get_brand_products(
         query = query.where(Product.is_sale == is_sale)
     result = await db.execute(query)
     return list(result.scalars().all())
+
+
+async def get_archived_products(
+    db: AsyncSession,
+    limit: int = 100,
+    offset: int = 0,
+) -> list[Product]:
+    """아카이브(품절 전환) 제품 목록."""
+    result = await db.execute(
+        select(Product)
+        .options(selectinload(Product.channel), selectinload(Product.brand))
+        .where(Product.is_active == False, Product.archived_at.isnot(None))
+        .order_by(Product.archived_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    return list(result.scalars().all())
+
+
+async def get_multi_channel_products(
+    db: AsyncSession,
+    min_channels: int = 2,
+    limit: int = 100,
+    offset: int = 0,
+) -> list[dict]:
+    """멀티채널에서 판매되는 product_key 집계 목록."""
+    latest_sub = (
+        select(
+            PriceHistory.product_id,
+            func.max(PriceHistory.crawled_at).label("latest"),
+        )
+        .group_by(PriceHistory.product_id)
+        .subquery()
+    )
+
+    rows = (
+        await db.execute(
+            select(
+                Product.product_key.label("product_key"),
+                func.min(Product.name).label("product_name"),
+                func.min(Product.image_url).label("image_url"),
+                func.count(func.distinct(Product.channel_id)).label("channel_count"),
+                func.min(PriceHistory.price).label("min_price"),
+                func.max(PriceHistory.price).label("max_price"),
+            )
+            .join(latest_sub, Product.id == latest_sub.c.product_id)
+            .join(
+                PriceHistory,
+                (PriceHistory.product_id == Product.id)
+                & (PriceHistory.crawled_at == latest_sub.c.latest),
+            )
+            .where(Product.product_key.isnot(None), Product.is_active == True)
+            .group_by(Product.product_key)
+            .having(func.count(func.distinct(Product.channel_id)) >= min_channels)
+            .order_by(
+                desc(func.count(func.distinct(Product.channel_id))),
+                desc(func.max(PriceHistory.price) - func.min(PriceHistory.price)),
+            )
+            .limit(limit)
+            .offset(offset)
+        )
+    ).all()
+
+    result: list[dict] = []
+    for row in rows:
+        min_price = int(row.min_price)
+        max_price = int(row.max_price)
+        spread = max_price - min_price
+        spread_rate = round((spread / min_price) * 100, 1) if min_price > 0 else 0.0
+        result.append(
+            {
+                "product_key": row.product_key,
+                "product_name": row.product_name,
+                "image_url": row.image_url,
+                "channel_count": int(row.channel_count),
+                "min_price_krw": min_price,
+                "max_price_krw": max_price,
+                "price_spread_krw": spread,
+                "spread_rate_pct": spread_rate,
+            }
+        )
+    return result

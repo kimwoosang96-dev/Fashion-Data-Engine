@@ -11,6 +11,8 @@ PM/개발 작업 통제를 위한 단일 기준 문서입니다.
 
 ## 진행 중 작업
 <!-- ACTIVE_TASKS_START -->
+- [ ] T-20260228-036 | SCHEDULER_WORKER_01: Railway Worker 자동 크롤 설정 + Makefile 정비 | owner:codex-dev | priority:P1 | status:todo | created:2026-02-28 | details:GH#37. (1) Makefile fix-brands/fix-null-brands `.venv/bin/python` → `uv run python` 수정, (2) crawl/crawl-news/update-rates/scheduler-dry Makefile 타겟 추가, (3) Railway Worker 설정 방법 README 또는 docs/DEPLOYMENT.md에 문서화, (4) scheduler.py --dry-run 에러 없이 동작 확인.
+- [ ] T-20260228-037 | BRAND_DIRECTOR_SEED_01: 주요 브랜드 크리에이티브 디렉터 CSV 시드 | owner:codex-dev | priority:P2 | status:todo | created:2026-02-28 | details:GH#38. (1) data/brand_directors.csv 작성(최소 30행: Dior/Gucci/LV/Balenciaga/Celine/Loewe/Bottega/Burberry/Prada/Jacquemus/Maison Margiela/Rick Owens/Off-White 등), (2) scripts/seed_directors.py 작성(brand_slug→brand_id 매핑, dry-run/apply), (3) make seed-directors 타겟 추가, (4) /directors 페이지 표시 확인.
 <!-- ACTIVE_TASKS_END -->
 
 ## 최근 완료 작업

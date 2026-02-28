@@ -65,12 +65,13 @@ async def _get_prev_price_krw(db, product_id: int) -> int | None:
 def main(
     limit: int = typer.Option(0, help="크롤링할 채널 수 (0=전체)"),
     channel_type: str = typer.Option("", help="채널 타입 필터 (edit-shop / brand-store / 빈 문자열=전체)"),
+    channel_id: int = typer.Option(0, help="특정 채널 ID만 크롤링 (0=비활성)"),
     no_alerts: bool = typer.Option(False, "--no-alerts", help="Discord 알림 비활성화"),
 ):
-    asyncio.run(run(limit, channel_type or None, no_alerts))
+    asyncio.run(run(limit, channel_type or None, channel_id if channel_id > 0 else None, no_alerts))
 
 
-async def run(limit: int, channel_type: str | None, no_alerts: bool) -> None:
+async def run(limit: int, channel_type: str | None, channel_id: int | None, no_alerts: bool) -> None:
     console.print("[bold blue]Fashion Data Engine — 제품 가격 크롤링[/bold blue]\n")
     if settings.discord_webhook_url and not no_alerts:
         console.print("[green]Discord 알림 활성화[/green]")
@@ -81,6 +82,8 @@ async def run(limit: int, channel_type: str | None, no_alerts: bool) -> None:
 
     async with AsyncSessionLocal() as db:
         query = select(Channel).where(Channel.is_active == True)
+        if channel_id:
+            query = query.filter(Channel.id == channel_id)
         if channel_type:
             query = query.filter(Channel.channel_type == channel_type)
         channels = list((await db.execute(query)).scalars().all())

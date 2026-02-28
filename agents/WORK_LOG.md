@@ -119,3 +119,394 @@
 - 2026-03-01 01:19:34 | agent:codex-dev | task:T-20260301-042 | action:complete | message:FIX_CURRENCY_01 완료: 환율 통화 확대(DKK/SEK/SGD/CAD/AUD/TWD/CNY), HK/SG/CA 서브도메인 통화감지 보강, 미등록 통화 fallback warning 추가, update-rates 실행 검증 완료.
 - 2026-03-01 01:22:38 | agent:codex-dev | task:T-20260301-043 | action:complete | message:FIX_MULTI_CHANNEL_01 완료: multi-channel 집계를 latest price LEFT JOIN 방식으로 변경, min_channels=2 기준 200건 조회 확인.
 - 2026-03-01 01:22:38 | agent:codex-dev | task:T-20260301-044 | action:complete | message:DIRECTOR_PAGE_01 완료: /directors/by-brand API+스키마 추가, 프론트 브랜드 섹션 UI(현행 우선/현재 배지/헤더 링크/검색 필터) 반영.
+- 2026-03-01 01:39:18 | agent:codex-dev | task:T-20260301-045 | action:log | message:data_audit 실행 완료(local sqlite). 요약: ERROR 1 / WARNING 3 (brand_id NULL 비율 23.67%, 제품0 채널 78, 7일+ 미크롤 78).
+
+## 2026-03-01 01:39:18 data_audit 출력 전문
+```text
+Fashion Data Audit
+DB Target: sqlite+aiosqlite:///...
+Started At (UTC): 2026-02-28T16:38:44.741403+00:00
+
+──────────────────────────────── [1] 채널 현황 ─────────────────────────────────
+  채널 기본 통계   
+┏━━━━━━━━━━━┳━━━━━┓
+┃ 항목      ┃  값 ┃
+┡━━━━━━━━━━━╇━━━━━┩
+│ 전체 채널 │ 159 │
+│ 활성 채널 │ 159 │
+└───────────┴─────┘
+     채널별 제품 수 상위      
+┏━━━━━━━━━━━━━━━━━━┳━━━━━━━━━┓
+┃ 채널             ┃ 제품 수 ┃
+┡━━━━━━━━━━━━━━━━━━╇━━━━━━━━━┩
+│ 082plus          │    4000 │
+│ Goodhood         │    4000 │
+│ H. Lorenzo       │    4000 │
+│ NUBIAN           │    4000 │
+│ THE NATURES      │    4000 │
+│ cocorozashi      │    4000 │
+│ unexpected store │    4000 │
+│ JACK in the NET  │    3999 │
+│ Limited Edt      │    3999 │
+│ FASCINATE        │    3993 │
+│ Slam Jam         │    3990 │
+│ Slam Jam         │    3990 │
+│ ADDICTED         │    2698 │
+│ COVERCHORD       │    2374 │
+│ SOUTH STORE      │    2054 │
+│ Family 3.0       │    2027 │
+│ Tree and Branch  │    1221 │
+│ ANNMS Shop       │    1215 │
+│ CHERRY LA        │    1200 │
+│ NOMAD            │    1086 │
+└──────────────────┴─────────┘
+                         제품 0개 채널 목록                         
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ 채널                     ┃ URL                                   ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ 8DIVISION                │ https://www.8division.com             │
+│ ACRMTSM                  │ https://www.acrmtsm.jp                │
+│ ADEKUVER                 │ https://www.adekuver.com              │
+│ APPLIXY                  │ https://www.applixy.com               │
+│ ARKnets                  │ https://www.arknets.co.jp             │
+│ AXEL ARIGATO             │ https://www.axelarigato.com           │
+│ Alfred                   │ https://www.thegreatalfred.com        │
+│ BAYCREW'S                │ https://www.baycrews.jp               │
+│ BIZZARE                  │ https://www.bizzare.co.kr             │
+│ Bodega                   │ https://bdgastore.com                 │
+│ CAYL                     │ https://www.cayl.co.kr                │
+│ CLESSTE                  │ https://www.clesste.com               │
+│ COEVO                    │ https://www.coevo.com                 │
+│ Camperlab                │ https://www.camperlab.com             │
+│ Casestudy                │ https://www.casestudystore.co.kr      │
+│ Dover Street Market      │ https://store.doverstreetmarket.com   │
+│ ECRU Online              │ https://www.ecru.co.kr                │
+│ EFFORTLESS               │ https://www.effortless-store.com      │
+│ ETC SEOUL                │ https://www.etcseoul.com              │
+│ F/CE                     │ https://www.fce-store.com             │
+│ GOOUTSTORE               │ https://gooutstore.cafe24.com         │
+│ Goldwin                  │ https://www.goldwin-global.com        │
+│ HBX                      │ https://hbx.com                       │
+│ HIP                      │ https://www.thehipstore.co.uk         │
+│ Harrods                  │ https://www.harrods.com               │
+│ Joe Freshgoods           │ https://www.joefreshgoods.com         │
+│ KA-YO                    │ https://www.ka-yo.com                 │
+│ Kasina                   │ https://www.kasina.co.kr              │
+│ Kerouac                  │ https://www.kerouac.okinawa           │
+│ LTTT                     │ https://www.lttt.life                 │
+│ Laid back                │ https://laidback0918.shop-pro.jp      │
+│ MODE MAN                 │ https://www.mode-man.com              │
+│ MaisonShunIshizawa store │ https://www.maisonshunishizawa.online │
+│ Meclads                  │ https://www.meclads.com               │
+│ Mercari (메루카리)       │ https://jp.mercari.com                │
+│ MusterWerk               │ https://www.musterwerk-sud.com        │
+│ NOCLAIM                  │ https://www.noclaim.co.kr             │
+│ Openershop               │ https://www.openershop.co.kr          │
+│ PALACE SKATEBOARDS       │ https://shop.palaceskateboards.com    │
+│ PARLOUR                  │ https://www.parlour.kr                │
+│ Pherrow's                │ https://www.pherrows.tokyo            │
+│ ROOM ONLINE STORE        │ https://www.room-onlinestore.jp       │
+│ Rino Store               │ https://www.rinostore.co.kr           │
+│ Rogues                   │ https://www.rogues.co.jp              │
+│ SCULP STORE              │ https://www.sculpstore.com            │
+│ SEVENSTORE               │ https://www.sevenstore.com            │
+│ SHRED                    │ https://www.srd-osaka.com             │
+│ SOMEIT                   │ https://someit.stores.jp              │
+│ Stone Island             │ https://www.stoneisland.com           │
+│ Sun Chamber Society      │ https://www.sunchambersociety.com     │
+│ Séfr                     │ https://www.sefr-online.com           │
+│ THEXSHOP                 │ https://www.thexshop.co.kr            │
+│ TIGHTBOOTH               │ https://shop.tightbooth.com           │
+│ TINY OSAKA               │ https://www.tinyworld.jp              │
+│ TITY                     │ https://tity.ocnk.net                 │
+│ TTTMSW                   │ https://www.tttmsw.jp                 │
+│ TUNE.KR                  │ https://www.tune.kr                   │
+│ The Real McCoy's         │ https://www.therealmccoys.jp          │
+│ The Trilogy Tapes        │ https://www.thetrilogytapes.com       │
+│ UNDERCOVER Kanazawa      │ https://undercoverk.theshop.jp        │
+│ Unipair                  │ https://www.unipair.com               │
+│ VINAVAST                 │ https://www.vinavast.co               │
+│ Warren Lotas             │ https://www.warrenlotas.com           │
+│ a.dresser                │ https://www.adressershop.com          │
+│ and wander               │ https://www.andwander.co.kr           │
+│ browniegift              │ https://www.brownieonline.jp          │
+│ elephant TRIBAL fabrics  │ https://elephab.buyshop.jp            │
+│ empty                    │ https://www.empty.seoul.kr            │
+│ grds                     │ https://www.grds.com                  │
+│ heritagefloss            │ https://www.heritagefloss.com         │
+│ nightwaks                │ https://www.nightwaks.com             │
+│ obscura                  │ https://www.obscura-store.com         │
+│ thisisneverthat          │ https://www.thisisneverthat.com       │
+│ wegenk                   │ https://www.wegenk.com                │
+│ 브레슈 (Breche)          │ https://www.breche-online.com         │
+│ 블루스맨 (Bluesman)      │ https://www.bluesman.co.kr            │
+│ 슈피겐                   │ https://www.spigen.co.kr              │
+│ 앤드헵 (Pheb)            │ https://shop.pheb.jp                  │
+└──────────────────────────┴───────────────────────────────────────┘
+           7일 이상 미크롤 채널           
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┓
+┃ 채널                     ┃ 마지막 크롤 ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━┩
+│ Alfred                   │ never       │
+│ Meclads                  │ never       │
+│ Openershop               │ never       │
+│ KA-YO                    │ never       │
+│ empty                    │ never       │
+│ 8DIVISION                │ never       │
+│ ACRMTSM                  │ never       │
+│ Goldwin                  │ never       │
+│ VINAVAST                 │ never       │
+│ thisisneverthat          │ never       │
+│ a.dresser                │ never       │
+│ obscura                  │ never       │
+│ MODE MAN                 │ never       │
+│ THEXSHOP                 │ never       │
+│ Rogues                   │ never       │
+│ CAYL                     │ never       │
+│ SCULP STORE              │ never       │
+│ BIZZARE                  │ never       │
+│ elephant TRIBAL fabrics  │ never       │
+│ MaisonShunIshizawa store │ never       │
+│ 브레슈 (Breche)          │ never       │
+│ Kerouac                  │ never       │
+│ CLESSTE                  │ never       │
+│ and wander               │ never       │
+│ HIP                      │ never       │
+│ grds                     │ never       │
+│ heritagefloss            │ never       │
+│ AXEL ARIGATO             │ never       │
+│ Harrods                  │ never       │
+│ LTTT                     │ never       │
+│ ETC SEOUL                │ never       │
+│ ECRU Online              │ never       │
+│ 앤드헵 (Pheb)            │ never       │
+│ Rino Store               │ never       │
+│ COEVO                    │ never       │
+│ Sun Chamber Society      │ never       │
+│ GOOUTSTORE               │ never       │
+│ MusterWerk               │ never       │
+│ Unipair                  │ never       │
+│ ADEKUVER                 │ never       │
+│ TITY                     │ never       │
+│ TTTMSW                   │ never       │
+│ browniegift              │ never       │
+│ PARLOUR                  │ never       │
+│ SOMEIT                   │ never       │
+│ Pherrow's                │ never       │
+│ The Trilogy Tapes        │ never       │
+│ Joe Freshgoods           │ never       │
+│ Warren Lotas             │ never       │
+│ 블루스맨 (Bluesman)      │ never       │
+│ EFFORTLESS               │ never       │
+│ SHRED                    │ never       │
+│ TIGHTBOOTH               │ never       │
+│ Séfr                     │ never       │
+│ ROOM ONLINE STORE        │ never       │
+│ wegenk                   │ never       │
+│ Kasina                   │ never       │
+│ SEVENSTORE               │ never       │
+│ NOCLAIM                  │ never       │
+│ Laid back                │ never       │
+│ nightwaks                │ never       │
+│ Mercari (메루카리)       │ never       │
+│ Casestudy                │ never       │
+│ APPLIXY                  │ never       │
+│ Stone Island             │ never       │
+│ PALACE SKATEBOARDS       │ never       │
+│ ARKnets                  │ never       │
+│ The Real McCoy's         │ never       │
+│ UNDERCOVER Kanazawa      │ never       │
+│ TINY OSAKA               │ never       │
+│ TUNE.KR                  │ never       │
+│ BAYCREW'S                │ never       │
+│ F/CE                     │ never       │
+│ Camperlab                │ never       │
+│ 슈피겐                   │ never       │
+│ Dover Street Market      │ never       │
+│ HBX                      │ never       │
+│ Bodega                   │ never       │
+└──────────────────────────┴─────────────┘
+───────────────────────────── [2] 브랜드 매핑 품질 ─────────────────────────────
+         브랜드 매핑 요약         
+┏━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┓
+┃ 항목          ┃             값 ┃
+┡━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━┩
+│ 전체 제품     │          80096 │
+│ brand_id NULL │ 18962 (23.67%) │
+└───────────────┴────────────────┘
+ channel_type별 brand_id NULL  
+┏━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┓
+┃ channel_type ┃ NULL 제품 수 ┃
+┡━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━┩
+│ edit-shop    │        11219 │
+│ brand-store  │         7743 │
+└──────────────┴──────────────┘
+   brand_id NULL 상위 10개 채널   
+┏━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━┓
+┃ 채널            ┃ NULL 제품 수 ┃
+┡━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━┩
+│ FASCINATE       │         3991 │
+│ SOUTH STORE     │         2054 │
+│ 082plus         │         1088 │
+│ HAMCUS          │          911 │
+│ Tree and Branch │          746 │
+│ CHERRY LA       │          738 │
+│ Velour Garments │          586 │
+│ PAN KANAZAWA    │          575 │
+│ MARKAWARE       │          569 │
+│ NƏW LIGHT       │          532 │
+└─────────────────┴──────────────┘
+         유령 브랜드          
+┏━━━━━━━━━━━━━━━━━━━━━┳━━━━━━┓
+┃ 항목                ┃   값 ┃
+┡━━━━━━━━━━━━━━━━━━━━━╇━━━━━━┩
+│ products 0개 브랜드 │ 1159 │
+└─────────────────────┴──────┘
+──────────────────────────────── [3] 가격 품질 ─────────────────────────────────
+       가격 이상치        
+┏━━━━━━━━━━━━━━━━━━━┳━━━━┓
+┃ 항목              ┃ 값 ┃
+┡━━━━━━━━━━━━━━━━━━━╇━━━━┩
+│ price=0 또는 NULL │  0 │
+│ price>50,000,000  │  0 │
+└───────────────────┴────┘
+         고가 이상값 샘플          
+┏━━━━━━━━━━━━┳━━━━━━┳━━━━━━━┳━━━━━┓
+┃ product_id ┃ name ┃ price ┃ url ┃
+┡━━━━━━━━━━━━╇━━━━━━╇━━━━━━━╇━━━━━┩
+└────────────┴──────┴───────┴─────┘
+ 통화별 제품 수(최신  
+      가격 기준)      
+┏━━━━━━━━━━┳━━━━━━━━━┓
+┃ currency ┃ 제품 수 ┃
+┡━━━━━━━━━━╇━━━━━━━━━┩
+│ KRW      │   80096 │
+└──────────┴─────────┘
+환율 미등록 통화 사용 
+         현황         
+┏━━━━━━━━━━┳━━━━━━━━━┓
+┃ currency ┃ 제품 수 ┃
+┡━━━━━━━━━━╇━━━━━━━━━┩
+└──────────┴─────────┘
+          역전 이상값          
+┏━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━┓
+┃ 항목                   ┃ 값 ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━┩
+│ original_price < price │  0 │
+└────────────────────────┴────┘
+──────────────────────────── [4] 세일 / 신상품 현황 ────────────────────────────
+        세일/신상품 요약         
+┏━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┓
+┃ 항목         ┃             값 ┃
+┡━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━┩
+│ is_sale=True │ 19997 (24.97%) │
+│ is_new=True  │       0 (0.0%) │
+└──────────────┴────────────────┘
+  discount_rate  
+분포(is_sale=True
+   최신 기준)    
+┏━━━━━━━┳━━━━━━━┓
+┃ 구간  ┃    수 ┃
+┡━━━━━━━╇━━━━━━━┩
+│ 40%+  │ 15646 │
+│ 30%대 │  2671 │
+│ 20%대 │  1426 │
+│ 10%대 │   244 │
+│ <10%  │    10 │
+└───────┴───────┘
+            세일 데이터 불일치             
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━┓
+┃ 항목                               ┃ 값 ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━┩
+│ is_sale=True && discount_rate=NULL │  0 │
+└────────────────────────────────────┴────┘
+────────────────────────────── [5] 활성/품절 현황 ──────────────────────────────
+                활성/품절 통계                 
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━┓
+┃ 항목                                ┃    값 ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━┩
+│ is_active=True                      │ 80096 │
+│ is_active=False                     │     0 │
+│ archived_at IS NOT NULL             │     0 │
+│ is_active=False && archived_at NULL │     0 │
+└─────────────────────────────────────┴───────┘
+──────────────────────────── [6] PriceHistory 품질 ─────────────────────────────
+                  PriceHistory 요약                   
+┏━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ 항목                  ┃                         값 ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ 총 레코드             │                      81892 │
+│ PriceHistory 0건 제품 │                          0 │
+│ 제품당 평균 레코드    │                      1.022 │
+│ 가장 오래된 날짜      │ 2026-02-26 12:10:36.766741 │
+│ 최신 날짜             │ 2026-02-26 13:25:42.230063 │
+└───────────────────────┴────────────────────────────┘
+──────────────────────────────── [7] 환율 현황 ─────────────────────────────────
+                  exchange_rates 목록                  
+┏━━━━━━┳━━━━━┳━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ from ┃ to  ┃      rate ┃ fetched_at                 ┃
+┡━━━━━━╇━━━━━╇━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ AUD  │ KRW │ 1024.5902 │ 2026-02-28 16:19:00.597118 │
+│ CAD  │ KRW │ 1054.8523 │ 2026-02-28 16:19:00.597118 │
+│ CNY  │ KRW │  207.8138 │ 2026-02-28 16:19:00.597118 │
+│ DKK  │ KRW │  227.9982 │ 2026-02-28 16:19:00.597118 │
+│ EUR  │ KRW │ 1700.6803 │ 2026-02-28 16:19:00.597118 │
+│ GBP  │ KRW │ 1941.7476 │ 2026-02-28 16:19:00.597118 │
+│ HKD  │ KRW │  184.1282 │ 2026-02-28 16:19:00.597118 │
+│ JPY  │ KRW │    9.2305 │ 2026-02-28 16:19:00.597118 │
+│ SEK  │ KRW │  159.3625 │ 2026-02-28 16:19:00.597118 │
+│ SGD  │ KRW │ 1138.9522 │ 2026-02-28 16:19:00.597118 │
+│ TWD  │ KRW │   45.9031 │ 2026-02-28 16:19:00.597118 │
+│ USD  │ KRW │ 1440.9222 │ 2026-02-28 16:19:00.597118 │
+└──────┴─────┴───────────┴────────────────────────────┘
+ products(최신 가격)  
+기준 환율 미등록 통화 
+┏━━━━━━━━━━┳━━━━━━━━━┓
+┃ currency ┃ 제품 수 ┃
+┡━━━━━━━━━━╇━━━━━━━━━┩
+└──────────┴─────────┘
+─────────────────────────── [8] 전체 요약 (Summary) ────────────────────────────
+                              품질 결과                               
+┏━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ 상태    ┃ 섹션                   ┃ 메시지                          ┃
+┡━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ WARNING │ [1] 채널 현황          │ 제품 0개 채널 78개              │
+│ WARNING │ [1] 채널 현황          │ 7일 이상 미크롤 채널 78개       │
+│ ERROR   │ [2] 브랜드 매핑 품질   │ brand_id NULL 비율 높음: 23.67% │
+│ WARNING │ [2] 브랜드 매핑 품질   │ 유령 브랜드 1159개              │
+│ OK      │ [3] 가격 품질          │ 고가 이상값 없음                │
+│ OK      │ [3] 가격 품질          │ 환율 미등록 통화 없음           │
+│ OK      │ [3] 가격 품질          │ 가격 역전 이상값 없음           │
+│ OK      │ [4] 세일 / 신상품 현황 │ 세일 데이터 일치                │
+│ OK      │ [5] 활성/품절 현황     │ 품절 타임스탬프 누락 없음       │
+│ OK      │ [6] PriceHistory 품질  │ 모든 제품에 PriceHistory 존재   │
+│ OK      │ [7] 환율 현황          │ 환율 미등록 통화 없음           │
+└─────────┴────────────────────────┴─────────────────────────────────┘
+      요약 카운트       
+┏━━━━━━━━━━━━━━━┳━━━━━━┓
+┃ 항목          ┃   값 ┃
+┡━━━━━━━━━━━━━━━╇━━━━━━┩
+│ OK            │    7 │
+│ WARNING       │    3 │
+│ ERROR         │    1 │
+│ 총 점검 항목  │   11 │
+│ 실행 시간(초) │ 0.85 │
+└───────────────┴──────┘
+             AGENTS 기준값 비교              
+┏━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ 항목            ┃                      값 ┃
+┡━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ channels_total  │     기준 159 / 현재 159 │
+│ brands_total    │   기준 2561 / 현재 2570 │
+│ products_total  │ 기준 26000 / 현재 80096 │
+│ directors_total │     기준 109 / 현재 125 │
+└─────────────────┴─────────────────────────┘
+[RESULT] ERROR 1개, WARNING 3개
+
+WARNING 총 3개 / ERROR 총 1개
+```
+- 2026-03-01 01:39:46 | agent:codex-dev | task:T-20260301-045 | action:complete | message:DATA_AUDIT_01 완료: scripts/data_audit.py 구현(8개 섹션+Summary), --help/실행 검증 및 WORK_LOG 출력 전문 append. 현 환경 DATABASE_URL=sqlite라 Railway 실행 커맨드만 제공.
+- 2026-03-01 02:02:58 | agent:codex-dev | task:T-20260301-046 | action:complete | message:fix_null_brand_id.py를 async SQLAlchemy 기반으로 재작성(PostgreSQL 호환), name/slug match 출력 및 --limit 추가, make fix-null-brands-dry/apply 추가. 로컬 dry-run 검증 완료.
+- 2026-03-01 02:02:58 | agent:codex-dev | task:T-20260301-046 | action:log | message:RAILWAY_DATABASE_URL 미설정으로 Railway dry-run/apply 실실행은 미수행. 준비 커맨드: DATABASE_URL=postgresql+asyncpg://... uv run python scripts/fix_null_brand_id.py --dry-run
+- 2026-03-01 02:02:58 | agent:codex-dev | task:T-20260301-047 | action:complete | message:Admin crawl-status API 및 단일 채널 크롤 트리거(job=channel&channel_id) 추가, Admin 페이지 채널 크롤 현황 테이블/상태필터/행별 실행 버튼 반영.
+- 2026-03-01 02:02:58 | agent:codex-dev | task:T-20260301-048 | action:complete | message:scheduler에 audit_weekly_sun_0900 등록, data_audit 결과 객체 반환(run_audit/main), send_audit_alert 추가, make audit/audit-railway 타겟 추가.

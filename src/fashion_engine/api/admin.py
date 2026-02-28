@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import sys
 from pathlib import Path
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy import case, func, select
@@ -26,6 +27,7 @@ SCRIPT_MAP = {
     "brands": ["scripts/crawl_brands.py"],
     "products": ["scripts/crawl_products.py"],
     "drops": ["scripts/crawl_drops.py"],
+    "channel": ["scripts/crawl_products.py"],
 }
 
 
@@ -144,15 +146,26 @@ async def get_channels_health(
 
 @router.post("/crawl-trigger")
 async def trigger_crawl(
-    job: str = Query(..., description="brands/products/drops"),
+    job: str = Query(..., description="brands/products/drops/channel"),
+    channel_id: int | None = Query(None, ge=1, description="job=channel일 때 대상 채널 ID"),
     dry_run: bool = Query(False),
     _: None = Depends(require_admin),
 ):
     if job not in SCRIPT_MAP:
         raise HTTPException(status_code=400, detail=f"Unknown job: {job}")
     cmd = [sys.executable, *SCRIPT_MAP[job]]
+    if job == "channel":
+        if not channel_id:
+            raise HTTPException(status_code=400, detail="job=channel에는 channel_id가 필요합니다.")
+        cmd += ["--channel-id", str(channel_id)]
     if dry_run:
-        return {"ok": True, "job": job, "dry_run": True, "command": " ".join(cmd)}
+        return {
+            "ok": True,
+            "job": job,
+            "channel_id": channel_id,
+            "dry_run": True,
+            "command": " ".join(cmd),
+        }
 
     proc = await asyncio.create_subprocess_exec(
         *cmd,
@@ -161,10 +174,67 @@ async def trigger_crawl(
     return {
         "ok": True,
         "job": job,
+        "channel_id": channel_id,
         "dry_run": False,
         "pid": proc.pid,
         "command": " ".join(cmd),
     }
+
+
+@router.get("/crawl-status")
+async def get_crawl_status(
+    limit: int = Query(500, ge=1, le=2000),
+    offset: int = Query(0, ge=0),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    rows = (
+        await db.execute(
+            select(
+                Channel.id,
+                Channel.name,
+                Channel.url,
+                Channel.channel_type,
+                func.count(Product.id).label("product_count"),
+                func.count(case((Product.is_active == True, 1), else_=None)).label("active_count"),
+                func.count(case((Product.is_active == False, 1), else_=None)).label("inactive_count"),
+                func.max(Product.created_at).label("last_crawled_at"),
+            )
+            .outerjoin(Product, Product.channel_id == Channel.id)
+            .group_by(Channel.id)
+            .order_by(Channel.name.asc())
+            .limit(limit)
+            .offset(offset)
+        )
+    ).all()
+
+    stale_cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+    payload = []
+    for row in rows:
+        last = row.last_crawled_at
+        if last is None:
+            status = "never"
+        else:
+            dt = last
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            status = "stale" if dt < stale_cutoff else "ok"
+
+        payload.append(
+            {
+                "channel_id": row.id,
+                "channel_name": row.name,
+                "channel_url": row.url,
+                "channel_type": row.channel_type,
+                "product_count": int(row.product_count or 0),
+                "active_count": int(row.active_count or 0),
+                "inactive_count": int(row.inactive_count or 0),
+                "last_crawled_at": last.isoformat() if last else None,
+                "status": status,
+            }
+        )
+
+    return payload
 
 
 @router.get("/collabs")

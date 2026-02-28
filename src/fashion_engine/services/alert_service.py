@@ -8,6 +8,7 @@ Discord webhook 알림 서비스.
 """
 import logging
 from dataclasses import dataclass
+from typing import Any
 
 import httpx
 
@@ -113,6 +114,38 @@ async def price_drop_alert(alert: AlertPayload) -> bool:
     if alert.image_url:
         embed["thumbnail"] = {"url": alert.image_url}
 
+    return await _send_embed({"embeds": [embed]})
+
+
+async def send_audit_alert(findings: list[Any]) -> bool:
+    """데이터 감사 결과 알림. ERROR>=1 또는 WARNING>=3일 때만 전송."""
+    err_items = [f for f in findings if getattr(f, "severity", "") == "ERROR"]
+    warn_items = [f for f in findings if getattr(f, "severity", "") == "WARNING"]
+    err_count = len(err_items)
+    warn_count = len(warn_items)
+
+    if err_count == 0 and warn_count < 3:
+        logger.info("audit alert skip: err=%s warn=%s", err_count, warn_count)
+        return False
+
+    color = 0xE74C3C if err_count > 0 else 0xF1C40F
+    top_items = (err_items + warn_items)[:8]
+    fields = []
+    for item in top_items:
+        fields.append(
+            {
+                "name": f"[{getattr(item, 'severity', '-')}] {getattr(item, 'section', '-')}",
+                "value": str(getattr(item, "message", "-"))[:900],
+                "inline": False,
+            }
+        )
+
+    embed = {
+        "title": "🧪 Data Audit Alert",
+        "description": f"ERROR {err_count}개 / WARNING {warn_count}개",
+        "color": color,
+        "fields": fields or [{"name": "결과", "value": "알림 조건 충족", "inline": False}],
+    }
     return await _send_embed({"embeds": [embed]})
 
 

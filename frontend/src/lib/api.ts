@@ -3,7 +3,7 @@ import type {
   Score, PurchaseStats, WatchListItem, Drop, Channel,
   SaleHighlight, ChannelHighlight, BrandHighlight, ChannelPriceHistory,
   SaleFilters,
-  AdminStats, AdminChannelHealth,
+  AdminStats, AdminChannelHealth, AdminCrawlStatus,
   FashionNews, CollabItem, BrandDirector, DirectorsByBrand, AdminCollabItem, AdminAuditItem, MultiChannelProduct,
 } from "./types";
 
@@ -138,11 +138,25 @@ export const getAdminChannelsHealth = (token: string, limit = 200, offset = 0) =
     token
   );
 
-export const triggerAdminCrawl = (token: string, job: "brands" | "products" | "drops", dryRun = false) =>
+export const triggerAdminCrawl = (
+  token: string,
+  job: "brands" | "products" | "drops" | "channel",
+  dryRun = false,
+  channelId?: number
+) =>
   adminFetch<{ ok: boolean; pid?: number; command: string; job: string }>(
-    `/admin/crawl-trigger?job=${job}&dry_run=${dryRun ? "true" : "false"}`,
+    `/admin/crawl-trigger?job=${job}&dry_run=${dryRun ? "true" : "false"}${
+      channelId ? `&channel_id=${channelId}` : ""
+    }`,
     token,
     { method: "POST" }
+  );
+export const triggerChannelCrawl = (token: string, channelId: number, dryRun = false) =>
+  triggerAdminCrawl(token, "channel", dryRun, channelId);
+export const getAdminCrawlStatus = (token: string, limit = 500, offset = 0) =>
+  adminFetch<AdminCrawlStatus[]>(
+    `/admin/crawl-status?limit=${limit}&offset=${offset}`,
+    token
   );
 export const getAdminDirectors = (token: string, brandId?: number) =>
   adminFetch<BrandDirector[]>(

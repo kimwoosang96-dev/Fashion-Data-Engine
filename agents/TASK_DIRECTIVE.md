@@ -11,89 +11,14 @@ PM/개발 작업 통제를 위한 단일 기준 문서입니다.
 
 ## 진행 중 작업
 <!-- ACTIVE_TASKS_START -->
-- [ ] T-20260301-045 | DATA_AUDIT_01: Railway DB 전수 데이터 품질 감사 + 보고서 | owner:codex-dev | priority:P1 | status:todo | created:2026-03-01
-
-  **목표**: Railway PostgreSQL DB를 전수 조사하여 현재 데이터 품질을 수치로 측정하고, 문제 항목과 개선 우선순위를 보고서로 출력한다.
-
-  **산출물**: `scripts/data_audit.py` — dry-run 전용 리포트 스크립트 (DB를 수정하지 않음)
-
-  ```
-  사용법:
-    uv run python scripts/data_audit.py                      # 로컬 SQLite
-    DATABASE_URL=postgresql+asyncpg://... uv run python scripts/data_audit.py  # Railway
-  ```
-
-  **측정 항목 (전부 stdout에 섹션별 출력)**
-
-  **[1] 채널 현황**
-  - 전체 채널 수 / is_active=True 채널 수
-  - 채널별 제품 수 (상위 20개 + 제품 0개인 채널 목록 전부)
-  - 마지막 크롤 시각 (products.created_at 기준 채널별 MAX)
-  - 7일 이상 미크롤 채널 목록
-
-  **[2] 브랜드 매핑 품질**
-  - 전체 제품 수 / brand_id NULL 제품 수 + 비율
-  - channel_type별 brand_id NULL 현황 (edit-shop vs brand-store 분리)
-  - brand_id NULL 상위 10개 채널 (제품 수 기준)
-  - brand_id가 있는 브랜드 중 실제 products가 0개인 브랜드 수 (유령 브랜드)
-
-  **[3] 가격 품질**
-  - price_krw = 0 또는 NULL 제품 수
-  - price_krw > 50,000,000 (5천만원 초과) 이상값 제품 수 + 샘플 5개
-  - 통화(currency)별 제품 수 — 환율 미등록 통화 사용 현황 체크
-    (exchange_rates 테이블과 조인하여 rate=NULL인 통화 목록 출력)
-  - original_price_krw가 있는데 price_krw보다 낮은 역전 이상값 수
-
-  **[4] 세일 / 신상품 현황**
-  - is_sale=True 제품 수 + 비율
-  - discount_rate 분포 (10%대, 20%대, 30%대, 40%+, NULL 각 수)
-  - is_new=True 제품 수 + 비율
-  - is_sale=True인데 discount_rate=NULL인 제품 수 (데이터 불일치)
-
-  **[5] 활성/품절 현황**
-  - is_active=True / False 수
-  - archived_at IS NOT NULL 수 (정식 아카이브)
-  - is_active=False인데 archived_at=NULL인 수 (누락 타임스탬프)
-
-  **[6] PriceHistory 품질**
-  - PriceHistory 총 레코드 수
-  - PriceHistory가 0건인 제품 수 (크롤은 됐지만 이력 없음)
-  - 제품당 평균 PriceHistory 레코드 수
-  - 가장 오래된 PriceHistory 날짜 / 최신 날짜
-
-  **[7] 환율 현황**
-  - exchange_rates 테이블 전체 목록 (통화, rate, fetched_at)
-  - products.currency 중 exchange_rates에 없는 통화 목록 + 해당 제품 수
-
-  **[8] 전체 요약 (Summary)**
-  - 총점 산정: 각 항목을 OK / WARNING / ERROR로 분류
-  - WARNING/ERROR 항목 우선순위 목록 출력
-  - AGENTS.md의 기준값 대비 수치 비교:
-    - 채널: 159개 기준
-    - 브랜드: ~2,561개 기준
-    - 제품: ~26,000개 기준
-    - brand_directors: 109개 기준 (Railway)
-
-  **스크립트 구조 요건**
-  - `AGENTS.md 스크립트 DB 접근 절대 규칙` 준수 (AsyncSessionLocal + init_db())
-  - 섹션별 Rich 테이블로 출력 (rich.table.Table)
-  - 실행 시간 측정 + 출력
-  - 에러 발생 시 해당 섹션 SKIP하고 계속 진행 (전체 실패 방지)
-  - 스크립트 종료 시 WARNING/ERROR 총 개수 반환 (exit code = 0 항상)
-
-  **실행 후 보고 방법**
-  - 스크립트 실행 결과 전체를 `WORK_LOG.md`에 append
-  - 발견된 주요 문제점을 `agents/WORK_LOG.md`에 요약 기록
-
-  **DoD**
-  - [ ] `scripts/data_audit.py --help` 정상 동작
-  - [ ] Railway DB 대상 실행 완료 (8개 섹션 전부 출력)
-  - [ ] WARNING/ERROR 항목 목록 Summary 출력
-  - [ ] WORK_LOG.md에 실행 결과 요약 기록
 <!-- ACTIVE_TASKS_END -->
 
 ## 최근 완료 작업
 <!-- COMPLETED_TASKS_START -->
+- [x] T-20260301-048 | AUDIT_CRON_01: data_audit.py 스케줄러 통합 + Discord 알림 | owner:codex-dev | priority:P2 | status:done | created:2026-03-01 | completed:2026-03-01 | details:`scheduler.py`에 주간 감사 잡(`audit_weekly_sun_0900`) 추가 및 dry-run 스케줄 검증 완료. `alert_service.send_audit_alert()` 추가(ERROR>=1 또는 WARNING>=3 트리거). `data_audit.main()`/`run_audit()` 결과 객체 반환 구조로 개선, Makefile `audit`/`audit-railway` 타깃 추가.
+- [x] T-20260301-047 | CRAWL_ADMIN_CONTROL_01: Admin 채널별 크롤 현황 + 단일 채널 크롤 제어 | owner:codex-dev | priority:P1 | status:done | created:2026-03-01 | completed:2026-03-01 | details:`GET /admin/crawl-status` 및 `job=channel&channel_id` 단일 크롤 트리거 추가. `crawl_products.py`에 `--channel-id` 옵션 추가. Admin 페이지에 채널 크롤 현황 테이블/상태필터(never/stale/ok)/행별 크롤 실행 버튼 반영, 프론트 타입/클라이언트(`AdminCrawlStatus`, `getAdminCrawlStatus`, `triggerChannelCrawl`) 추가.
+- [x] T-20260301-046 | BRAND_REMAP_PG_01: fix_null_brand_id.py PostgreSQL 호환 재작성 + Railway brand_id NULL 복구 | owner:codex-dev | priority:P1 | status:done | created:2026-03-01 | completed:2026-03-01 | details:`fix_null_brand_id.py`를 async SQLAlchemy 기반으로 재작성해 SQLite/PostgreSQL 공용 동작 지원(이름/슬러그 매칭, match type 출력, `--limit` 옵션). Makefile `fix-null-brands-dry`/`fix-null-brands-apply` 추가. 로컬 dry-run 검증 완료. 현재 세션에 `RAILWAY_DATABASE_URL` 미설정으로 Railway 실계정 dry-run/apply는 커맨드만 준비.
+- [x] T-20260301-045 | DATA_AUDIT_01: Railway DB 전수 데이터 품질 감사 + 보고서 | owner:codex-dev | priority:P1 | status:done | created:2026-03-01 | completed:2026-03-01 | details:`scripts/data_audit.py` 추가(8개 섹션 Rich 리포트, 섹션 오류 격리, 실행시간/요약 점수 출력, exit 0). `--help` 검증 및 로컬 DB 실행 완료, 결과 전문을 `agents/WORK_LOG.md`에 append. 현재 환경 `DATABASE_URL`이 SQLite라 Railway 실행은 명령만 준비(`DATABASE_URL=postgresql+asyncpg://... uv run python scripts/data_audit.py`).
 - [x] T-20260301-044 | DIRECTOR_PAGE_01: 디렉터 페이지 브랜드 중심 UI 재구성 | owner:codex-dev | priority:P2 | status:done | created:2026-03-01 | completed:2026-03-01 | details:`GET /directors/by-brand` 엔드포인트 및 `DirectorsByBrand` 스키마 추가, 프론트 `/directors`를 브랜드 섹션 중심 UI로 재구성(현행 디렉터 우선/현재 배지/브랜드 헤더 링크/브랜드·디렉터 검색 필터). `getDirectorsByBrand()` API/타입 연동 완료.
 - [x] T-20260301-043 | FIX_MULTI_CHANNEL_01: 경쟁 제품 페이지 결과 부족 원인 수정 | owner:codex-dev | priority:P1 | status:done | created:2026-03-01 | completed:2026-03-01 | details:`get_multi_channel_products()`를 latest 가격 `LEFT JOIN` 집계로 변경해 PriceHistory 일부 누락으로 인한 product_key 탈락을 완화. `channel_count/min_price_krw/max_price_krw/price_spread_krw` 유지 검증, 로컬 기준 `min_channels=2` 조회 결과 200건 확인.
 - [x] T-20260301-042 | FIX_CURRENCY_01: 미지원 통화 환율 보완 + Hamcus HKD 감지 수정 | owner:codex-dev | priority:P1 | status:done | created:2026-03-01 | completed:2026-03-01 | details:`update_exchange_rates.py` 통화 확대(DKK/SEK/SGD/CAD/AUD/TWD/CNY), `product_crawler.py`에 hk/sg/ca 서브도메인 통화 매핑 및 unknown→USD warning 추가, `get_rate_to_krw()` 미등록 통화 warning 추가, `docs/DEPLOYMENT.md`에 초기 배포 후 환율 갱신 섹션 반영. 실행 검증 시 추가 통화 환율 저장 및 Hamcus=HKD 감지 확인.

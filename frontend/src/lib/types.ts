@@ -282,6 +282,18 @@ export interface AdminChannelHealth {
   health: "ok" | "needs_review";
 }
 
+export interface AdminCrawlStatus {
+  channel_id: number;
+  channel_name: string;
+  channel_url: string;
+  channel_type: string | null;
+  product_count: number;
+  active_count: number;
+  inactive_count: number;
+  last_crawled_at: string | null;
+  status: "ok" | "never" | "stale";
+}
+
 export interface AdminCollabItem {
   id: number;
   brand_a_id: number;

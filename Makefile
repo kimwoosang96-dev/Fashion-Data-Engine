@@ -1,4 +1,4 @@
-.PHONY: setup api web dev crawl crawl-news news update-rates scheduler-dry scheduler reclassify brand-mece fix-brands fix-null-brands remap-product-brands remap-product-brands-apply seed-directors seed-directors-apply seed-brands-luxury seed-brands-luxury-apply enrich-brands enrich-brands-apply purge-fake-brands purge-fake-brands-apply
+.PHONY: setup api web dev crawl crawl-news news update-rates scheduler-dry scheduler data-audit audit audit-railway reclassify brand-mece fix-brands fix-null-brands fix-null-brands-dry fix-null-brands-apply remap-product-brands remap-product-brands-apply seed-directors seed-directors-apply seed-brands-luxury seed-brands-luxury-apply enrich-brands enrich-brands-apply purge-fake-brands purge-fake-brands-apply
 
 setup:
 	uv sync
@@ -31,6 +31,15 @@ scheduler-dry:
 scheduler:
 	uv run python scripts/scheduler.py
 
+data-audit:
+	uv run python scripts/data_audit.py
+
+audit:
+	uv run python scripts/data_audit.py
+
+audit-railway:
+	DATABASE_URL=$(RAILWAY_DATABASE_URL) uv run python scripts/data_audit.py
+
 reclassify:
 	uv run python scripts/reclassify_products.py --dry-run
 
@@ -42,6 +51,12 @@ fix-brands:
 
 fix-null-brands:
 	uv run python scripts/fix_null_brand_id.py
+
+fix-null-brands-dry:
+	uv run python scripts/fix_null_brand_id.py --dry-run
+
+fix-null-brands-apply:
+	uv run python scripts/fix_null_brand_id.py --apply
 
 remap-product-brands:
 	uv run python scripts/remap_product_brands.py --dry-run

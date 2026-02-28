@@ -24,7 +24,9 @@ sys.path.insert(0, str(ROOT / "src"))
 import crawl_products  # noqa: E402
 import crawl_drops  # noqa: E402
 import crawl_news  # noqa: E402
+import data_audit  # noqa: E402
 import update_exchange_rates  # noqa: E402
+from fashion_engine.services.alert_service import send_audit_alert  # noqa: E402
 
 
 def setup_logger() -> logging.Logger:
@@ -89,6 +91,23 @@ async def run_product_crawl_job() -> None:
         LOGGER.exception("[JOB] products failed")
 
 
+async def run_data_audit_job() -> None:
+    try:
+        LOGGER.info("[JOB] data-audit started")
+        result = await data_audit.run_audit(limit=20, print_report=True)
+        LOGGER.info(
+            "[JOB] data-audit completed (warning=%s error=%s elapsed=%.2fs)",
+            result.warning_count,
+            result.error_count,
+            result.elapsed_sec,
+        )
+        if settings.discord_webhook_url:
+            sent = await send_audit_alert(result.findings)
+            LOGGER.info("[JOB] data-audit discord_alert=%s", sent)
+    except Exception:
+        LOGGER.exception("[JOB] data-audit failed")
+
+
 def register_jobs(scheduler: AsyncIOScheduler) -> None:
     scheduler.add_job(
         run_product_crawl_job,
@@ -112,6 +131,12 @@ def register_jobs(scheduler: AsyncIOScheduler) -> None:
         run_news_crawl_job,
         CronTrigger(hour=8, minute=0),
         id="news_daily_0800",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        run_data_audit_job,
+        CronTrigger(day_of_week="sun", hour=9, minute=0),
+        id="audit_weekly_sun_0900",
         replace_existing=True,
     )
 

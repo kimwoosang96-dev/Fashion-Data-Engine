@@ -109,3 +109,7 @@
 - 2026-02-28 14:00:46 | agent:codex-dev | task:T-20260228-032 | action:complete | message:GH#34 완료: products.archived_at 마이그레이션, upsert_product 품절 전환 타임스탬프 반영, 목록 API 활성 제품 필터링, /products/archive 엔드포인트 추가.
 - 2026-02-28 14:00:46 | agent:codex-dev | task:T-20260228-033 | action:complete | message:GH#35 완료: 멀티채널 경쟁 제품 집계 API(/products/multi-channel)와 /compete 페이지, Nav 경쟁 메뉴 구현.
 - 2026-02-28 15:12:48 | agent:codex-dev | task:T-20260228-034 | action:complete | message:GH#36 완료: Alembic settings DB URL 연동, CORS 환경변수화, Railway/Vercel 설정 파일 추가, SQLite→PG 시드 마이그레이션 스크립트 및 dry-run 검증 완료.
+- 2026-02-28 22:56:53 | agent:codex-dev | task:T-20260228-036 | action:complete | message:GH#37 완료: Makefile 실행 커맨드를 uv run python으로 정비하고 crawl/crawl-news/update-rates/scheduler-dry 타겟 추가, Railway Worker 배포 가이드 문서화, scheduler dry-run 검증 완료.
+- 2026-02-28 22:56:53 | agent:codex-dev | task:T-20260228-037 | action:complete | message:GH#38 완료: brand_directors.csv(32행)와 seed_directors 스크립트(dry-run/apply) 추가, make seed-directors 타겟 반영, 로컬 DB 시드 적용(21건 생성) 확인.
+- 2026-02-28 23:21:59 | agent:codex-dev | task:T-20260228-038 | action:complete | message:GH#39 완료: 브랜드 인리치 CSV/스크립트 및 누락 럭셔리 브랜드 시드 스크립트 추가, 디렉터 CSV 실명/검증 메타 반영, make enrich-brands/seed-brands-luxury/seed-directors 검증 및 DB 적용 완료.
+- 2026-02-28 23:31:55 | agent:codex-dev | task:T-20260228-039 | action:complete | message:GH#40 완료: 가짜 브랜드 정리 스크립트/Makefile 타겟/크롤러 필터 추가 후 apply 실행. fake 416건 삭제, channel_brands 397건 삭제, products.brand_id NULL 402건 처리.

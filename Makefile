@@ -1,4 +1,4 @@
-.PHONY: setup api web dev news reclassify brand-mece fix-brands fix-null-brands
+.PHONY: setup api web dev crawl crawl-news news update-rates scheduler-dry scheduler reclassify brand-mece fix-brands fix-null-brands seed-directors seed-directors-apply seed-brands-luxury seed-brands-luxury-apply enrich-brands enrich-brands-apply purge-fake-brands purge-fake-brands-apply
 
 setup:
 	uv sync
@@ -16,14 +16,53 @@ dev:
 news:
 	uv run python scripts/crawl_news.py
 
+crawl:
+	uv run python scripts/crawl_products.py --no-alerts
+
+crawl-news:
+	uv run python scripts/crawl_news.py
+
+update-rates:
+	uv run python scripts/update_exchange_rates.py
+
+scheduler-dry:
+	uv run python scripts/scheduler.py --dry-run
+
+scheduler:
+	uv run python scripts/scheduler.py
+
 reclassify:
-	.venv/bin/python scripts/reclassify_products.py --dry-run
+	uv run python scripts/reclassify_products.py --dry-run
 
 brand-mece:
-	.venv/bin/python scripts/fix_brand_mece.py
+	uv run python scripts/fix_brand_mece.py
 
 fix-brands:
-	.venv/bin/python scripts/cleanup_mixed_brand_channel.py
+	uv run python scripts/cleanup_mixed_brand_channel.py
 
 fix-null-brands:
-	.venv/bin/python scripts/fix_null_brand_id.py
+	uv run python scripts/fix_null_brand_id.py
+
+seed-directors:
+	uv run python scripts/seed_directors.py --csv data/brand_directors.csv --dry-run
+
+seed-directors-apply:
+	uv run python scripts/seed_directors.py --csv data/brand_directors.csv --apply
+
+seed-brands-luxury:
+	uv run python scripts/seed_brands_luxury.py --dry-run
+
+seed-brands-luxury-apply:
+	uv run python scripts/seed_brands_luxury.py --apply
+
+enrich-brands:
+	uv run python scripts/enrich_brands.py --csv data/brand_enrichment.csv --dry-run
+
+enrich-brands-apply:
+	uv run python scripts/enrich_brands.py --csv data/brand_enrichment.csv --apply
+
+purge-fake-brands:
+	uv run python scripts/purge_fake_brands.py --dry-run
+
+purge-fake-brands-apply:
+	uv run python scripts/purge_fake_brands.py --apply

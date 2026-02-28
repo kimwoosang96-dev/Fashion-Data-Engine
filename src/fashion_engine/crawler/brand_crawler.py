@@ -226,6 +226,42 @@ _KO_NOT_BRAND_SUFFIX = ("바로가기", "더보기", "전체보기", "상품보�
 # 예: "Adidas Originals by Wales Bonner", "Fred Perry X Raf Simons"
 _COLLAB_RE = re.compile(r"(?i)\s+(?:by|x|×)\s+")
 
+_DISCOUNT_SUFFIX_RE = re.compile(r"(?i)(?:[-\s]?\d{1,3}%|season\s*off|sale)$")
+_NEW_ARRIVAL_RE = re.compile(r"(新入荷|xin\s*ru\s*he|new\s*arrival)", re.I)
+_CATEGORY_WORDS = frozenset(
+    {
+        "top", "tops", "bottom", "bottoms", "outer", "outerwear",
+        "shoes", "shoe", "bag", "bags", "hat", "hats",
+        "accessory", "accessories", "sale", "new", "archive",
+        "상의", "하의", "아우터", "신발", "가방", "모자", "악세사리", "액세서리",
+        "주얼리", "벨트", "신상품", "세일", "온라인샵", "라이프스타일",
+        "슈케어", "개인결제창",
+    }
+)
+
+
+def is_fake_brand(name: str) -> bool:
+    """카테고리/프로모션/제품명 형태의 가짜 브랜드 판별."""
+    text = (name or "").strip()
+    if not text:
+        return True
+    low = text.lower()
+    norm = re.sub(r"[^a-z0-9가-힣]+", "", low)
+
+    if norm in _CATEGORY_WORDS or low in _CATEGORY_WORDS:
+        return True
+    if _NEW_ARRIVAL_RE.search(text):
+        return True
+    if _DISCOUNT_SUFFIX_RE.search(text):
+        return True
+
+    # 제품명 패턴(의류 품목 단어 + 긴 이름)
+    product_words = ("t-shirt", "tee", "jacket", "pants", "hoodie", "sweat", "shirt")
+    if any(word in low for word in product_words) and len(text) >= 18:
+        return True
+
+    return False
+
 
 def _is_valid_brand_name(name: str) -> bool:
     """브랜드명으로 적합한지 검사"""
@@ -243,6 +279,9 @@ def _is_valid_brand_name(name: str) -> bool:
     # 콜라보 서브카테고리 차단: " by ", " x ", " X " 포함 + 길이 > 25자
     # 예: "Adidas Originals by Wales Bonner", "Fred Perry X Raf Simons"
     if len(name) > 40 and _COLLAB_RE.search(name):
+        return False
+
+    if is_fake_brand(name):
         return False
 
     # 한글 포함 여부

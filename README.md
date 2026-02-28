@@ -60,3 +60,4 @@ uv run python -m fashion_engine.cli search 아크테릭스
 
 - AI 에이전트용: AGENTS.md
 - Claude Code용: CLAUDE.md
+- 배포 가이드: docs/DEPLOYMENT.md

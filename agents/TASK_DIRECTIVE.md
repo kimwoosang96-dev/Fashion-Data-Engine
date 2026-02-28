@@ -11,6 +11,85 @@ PM/개발 작업 통제를 위한 단일 기준 문서입니다.
 
 ## 진행 중 작업
 <!-- ACTIVE_TASKS_START -->
+- [ ] T-20260301-045 | DATA_AUDIT_01: Railway DB 전수 데이터 품질 감사 + 보고서 | owner:codex-dev | priority:P1 | status:todo | created:2026-03-01
+
+  **목표**: Railway PostgreSQL DB를 전수 조사하여 현재 데이터 품질을 수치로 측정하고, 문제 항목과 개선 우선순위를 보고서로 출력한다.
+
+  **산출물**: `scripts/data_audit.py` — dry-run 전용 리포트 스크립트 (DB를 수정하지 않음)
+
+  ```
+  사용법:
+    uv run python scripts/data_audit.py                      # 로컬 SQLite
+    DATABASE_URL=postgresql+asyncpg://... uv run python scripts/data_audit.py  # Railway
+  ```
+
+  **측정 항목 (전부 stdout에 섹션별 출력)**
+
+  **[1] 채널 현황**
+  - 전체 채널 수 / is_active=True 채널 수
+  - 채널별 제품 수 (상위 20개 + 제품 0개인 채널 목록 전부)
+  - 마지막 크롤 시각 (products.created_at 기준 채널별 MAX)
+  - 7일 이상 미크롤 채널 목록
+
+  **[2] 브랜드 매핑 품질**
+  - 전체 제품 수 / brand_id NULL 제품 수 + 비율
+  - channel_type별 brand_id NULL 현황 (edit-shop vs brand-store 분리)
+  - brand_id NULL 상위 10개 채널 (제품 수 기준)
+  - brand_id가 있는 브랜드 중 실제 products가 0개인 브랜드 수 (유령 브랜드)
+
+  **[3] 가격 품질**
+  - price_krw = 0 또는 NULL 제품 수
+  - price_krw > 50,000,000 (5천만원 초과) 이상값 제품 수 + 샘플 5개
+  - 통화(currency)별 제품 수 — 환율 미등록 통화 사용 현황 체크
+    (exchange_rates 테이블과 조인하여 rate=NULL인 통화 목록 출력)
+  - original_price_krw가 있는데 price_krw보다 낮은 역전 이상값 수
+
+  **[4] 세일 / 신상품 현황**
+  - is_sale=True 제품 수 + 비율
+  - discount_rate 분포 (10%대, 20%대, 30%대, 40%+, NULL 각 수)
+  - is_new=True 제품 수 + 비율
+  - is_sale=True인데 discount_rate=NULL인 제품 수 (데이터 불일치)
+
+  **[5] 활성/품절 현황**
+  - is_active=True / False 수
+  - archived_at IS NOT NULL 수 (정식 아카이브)
+  - is_active=False인데 archived_at=NULL인 수 (누락 타임스탬프)
+
+  **[6] PriceHistory 품질**
+  - PriceHistory 총 레코드 수
+  - PriceHistory가 0건인 제품 수 (크롤은 됐지만 이력 없음)
+  - 제품당 평균 PriceHistory 레코드 수
+  - 가장 오래된 PriceHistory 날짜 / 최신 날짜
+
+  **[7] 환율 현황**
+  - exchange_rates 테이블 전체 목록 (통화, rate, fetched_at)
+  - products.currency 중 exchange_rates에 없는 통화 목록 + 해당 제품 수
+
+  **[8] 전체 요약 (Summary)**
+  - 총점 산정: 각 항목을 OK / WARNING / ERROR로 분류
+  - WARNING/ERROR 항목 우선순위 목록 출력
+  - AGENTS.md의 기준값 대비 수치 비교:
+    - 채널: 159개 기준
+    - 브랜드: ~2,561개 기준
+    - 제품: ~26,000개 기준
+    - brand_directors: 109개 기준 (Railway)
+
+  **스크립트 구조 요건**
+  - `AGENTS.md 스크립트 DB 접근 절대 규칙` 준수 (AsyncSessionLocal + init_db())
+  - 섹션별 Rich 테이블로 출력 (rich.table.Table)
+  - 실행 시간 측정 + 출력
+  - 에러 발생 시 해당 섹션 SKIP하고 계속 진행 (전체 실패 방지)
+  - 스크립트 종료 시 WARNING/ERROR 총 개수 반환 (exit code = 0 항상)
+
+  **실행 후 보고 방법**
+  - 스크립트 실행 결과 전체를 `WORK_LOG.md`에 append
+  - 발견된 주요 문제점을 `agents/WORK_LOG.md`에 요약 기록
+
+  **DoD**
+  - [ ] `scripts/data_audit.py --help` 정상 동작
+  - [ ] Railway DB 대상 실행 완료 (8개 섹션 전부 출력)
+  - [ ] WARNING/ERROR 항목 목록 Summary 출력
+  - [ ] WORK_LOG.md에 실행 결과 요약 기록
 <!-- ACTIVE_TASKS_END -->
 
 ## 최근 완료 작업

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from fashion_engine.api.schemas import BrandDirectorOut
+from fashion_engine.api.schemas import BrandDirectorOut, DirectorsByBrand
 from fashion_engine.database import get_db
 from fashion_engine.models.brand import Brand
 from fashion_engine.models.brand_director import BrandDirector
@@ -43,3 +43,53 @@ async def list_directors(
         )
         for row in rows
     ]
+
+
+@router.get("/by-brand", response_model=list[DirectorsByBrand])
+async def list_directors_by_brand(
+    db: AsyncSession = Depends(get_db),
+):
+    rows = (
+        await db.execute(
+            select(BrandDirector, Brand.name, Brand.slug)
+            .join(Brand, Brand.id == BrandDirector.brand_id)
+            .order_by(
+                Brand.name.asc(),
+                BrandDirector.end_year.is_(None).desc(),
+                BrandDirector.end_year.desc().nullslast(),
+                BrandDirector.start_year.desc().nullslast(),
+                BrandDirector.id.desc(),
+            )
+        )
+    ).all()
+
+    grouped: dict[str, DirectorsByBrand] = {}
+    for director, brand_name, brand_slug in rows:
+        bucket = grouped.get(brand_slug)
+        if bucket is None:
+            bucket = DirectorsByBrand(
+                brand_slug=brand_slug,
+                brand_name=brand_name,
+                current_directors=[],
+                past_directors=[],
+            )
+            grouped[brand_slug] = bucket
+
+        item = BrandDirectorOut(
+            id=director.id,
+            brand_id=director.brand_id,
+            brand_name=brand_name,
+            brand_slug=brand_slug,
+            name=director.name,
+            role=director.role,
+            start_year=director.start_year,
+            end_year=director.end_year,
+            note=director.note,
+            created_at=director.created_at,
+        )
+        if director.end_year is None:
+            bucket.current_directors.append(item)
+        else:
+            bucket.past_directors.append(item)
+
+    return list(grouped.values())

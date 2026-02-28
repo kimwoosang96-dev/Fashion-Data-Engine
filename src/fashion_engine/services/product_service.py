@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from decimal import Decimal
+import logging
 
 from slugify import slugify
 from sqlalchemy import select, func, desc, cast, String
@@ -13,6 +14,7 @@ from fashion_engine.models.exchange_rate import ExchangeRate
 from fashion_engine.models.price_history import PriceHistory
 from fashion_engine.models.product import Product
 
+logger = logging.getLogger(__name__)
 
 # ── 환율 조회 ────────────────────────────────────────────────────────────
 
@@ -28,7 +30,10 @@ async def get_rate_to_krw(db: AsyncSession, currency: str) -> float:
             )
         )
     ).scalar_one_or_none()
-    return row.rate if row else 1.0
+    if row:
+        return row.rate
+    logger.warning("환율 미등록: %s, fallback 1.0 적용", currency)
+    return 1.0
 
 
 # ── 브랜드 조회 (vendor명으로) ────────────────────────────────────────────
@@ -584,6 +589,18 @@ async def get_multi_channel_products(
         .group_by(PriceHistory.product_id)
         .subquery()
     )
+    latest_price = (
+        select(
+            PriceHistory.product_id.label("product_id"),
+            PriceHistory.price.label("price_krw"),
+        )
+        .join(
+            latest_sub,
+            (PriceHistory.product_id == latest_sub.c.product_id)
+            & (PriceHistory.crawled_at == latest_sub.c.latest),
+        )
+        .subquery()
+    )
 
     rows = (
         await db.execute(
@@ -592,21 +609,17 @@ async def get_multi_channel_products(
                 func.min(Product.name).label("product_name"),
                 func.min(Product.image_url).label("image_url"),
                 func.count(func.distinct(Product.channel_id)).label("channel_count"),
-                func.min(PriceHistory.price).label("min_price"),
-                func.max(PriceHistory.price).label("max_price"),
+                func.min(latest_price.c.price_krw).label("min_price"),
+                func.max(latest_price.c.price_krw).label("max_price"),
             )
-            .join(latest_sub, Product.id == latest_sub.c.product_id)
-            .join(
-                PriceHistory,
-                (PriceHistory.product_id == Product.id)
-                & (PriceHistory.crawled_at == latest_sub.c.latest),
-            )
+            .outerjoin(latest_price, latest_price.c.product_id == Product.id)
             .where(Product.product_key.isnot(None), Product.is_active == True)
             .group_by(Product.product_key)
             .having(func.count(func.distinct(Product.channel_id)) >= min_channels)
+            .having(func.min(latest_price.c.price_krw).isnot(None))
             .order_by(
                 desc(func.count(func.distinct(Product.channel_id))),
-                desc(func.max(PriceHistory.price) - func.min(PriceHistory.price)),
+                desc(func.max(latest_price.c.price_krw) - func.min(latest_price.c.price_krw)),
             )
             .limit(limit)
             .offset(offset)

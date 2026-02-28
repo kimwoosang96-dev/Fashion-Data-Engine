@@ -5,7 +5,7 @@
     uv run python scripts/update_exchange_rates.py
 
 무료 API: https://open.er-api.com/v6/latest/KRW (API 키 불필요)
-USD, JPY, EUR, GBP, HKD → KRW 환율을 DB에 저장/갱신.
+USD, JPY, EUR, GBP, HKD 및 추가 통화 → KRW 환율을 DB에 저장/갱신.
 """
 import asyncio
 import sys
@@ -25,7 +25,20 @@ from fashion_engine.models.exchange_rate import ExchangeRate
 
 console = Console()
 
-CURRENCIES = ["USD", "JPY", "EUR", "GBP", "HKD"]
+CURRENCIES = [
+    "USD",
+    "JPY",
+    "EUR",
+    "GBP",
+    "HKD",
+    "DKK",
+    "SEK",
+    "SGD",
+    "CAD",
+    "AUD",
+    "TWD",
+    "CNY",
+]
 API_URL = "https://open.er-api.com/v6/latest/KRW"
 
 

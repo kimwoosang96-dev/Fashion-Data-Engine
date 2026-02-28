@@ -81,6 +81,13 @@ class BrandDirectorOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class DirectorsByBrand(BaseModel):
+    brand_slug: str
+    brand_name: str
+    current_directors: list[BrandDirectorOut]
+    past_directors: list[BrandDirectorOut]
+
+
 class LandscapeNode(BaseModel):
     id: int
     name: str

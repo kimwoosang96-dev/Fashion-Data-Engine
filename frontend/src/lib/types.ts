@@ -245,6 +245,13 @@ export interface BrandDirector {
   created_at: string;
 }
 
+export interface DirectorsByBrand {
+  brand_slug: string;
+  brand_name: string;
+  current_directors: BrandDirector[];
+  past_directors: BrandDirector[];
+}
+
 export interface AdminStats {
   counts: {
     channels: number;

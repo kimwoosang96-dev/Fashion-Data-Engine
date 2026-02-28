@@ -34,6 +34,7 @@ COUNTRY_CURRENCY: dict[str, str] = {
     "HK": "HKD",
     "SG": "SGD",
     "CA": "CAD",
+    "AU": "AUD",
     "TW": "TWD",
     "CN": "CNY",
 }
@@ -151,11 +152,22 @@ class ProductCrawler:
             "kr": "KRW", "jp": "JPY", "eu": "EUR",
             "de": "EUR", "fr": "EUR", "uk": "GBP",
             "us": "USD", "au": "AUD", "cn": "CNY",
+            "hk": "HKD", "sg": "SGD", "ca": "CAD",
         }
         prefix = host.split(".")[0]
         if prefix in SUBDOMAIN_CURRENCY:
             return SUBDOMAIN_CURRENCY[prefix]
-        return COUNTRY_CURRENCY.get(country or "", "USD")
+        country_code = (country or "").upper()
+        inferred = COUNTRY_CURRENCY.get(country_code)
+        if inferred:
+            return inferred
+
+        logger.warning(
+            "알 수 없는 통화: url=%s country=%s -> USD fallback 적용",
+            channel_url,
+            country_code or "-",
+        )
+        return "USD"
 
     async def crawl_channel(
         self, channel_url: str, country: str | None = None

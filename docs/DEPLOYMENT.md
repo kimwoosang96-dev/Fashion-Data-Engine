@@ -29,6 +29,16 @@
 make scheduler-dry
 ```
 
+## 2-1) 초기 배포 후 환율 업데이트 필수
+
+최초 배포 직후에는 환율 테이블이 비어 있을 수 있으므로, 아래 명령을 1회 실행해야 합니다.
+
+```bash
+make update-rates
+```
+
+권장: Worker 스케줄에 `update_exchange_rates.py`를 매일 1회 포함해 최신 환율을 유지합니다.
+
 ## 3) 프론트엔드 Vercel
 
 - 루트 디렉터리: `frontend/`

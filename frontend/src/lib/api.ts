@@ -4,7 +4,7 @@ import type {
   SaleHighlight, ChannelHighlight, BrandHighlight, ChannelPriceHistory,
   SaleFilters,
   AdminStats, AdminChannelHealth,
-  FashionNews, CollabItem, BrandDirector, AdminCollabItem, AdminAuditItem, MultiChannelProduct,
+  FashionNews, CollabItem, BrandDirector, DirectorsByBrand, AdminCollabItem, AdminAuditItem, MultiChannelProduct,
 } from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -235,3 +235,5 @@ export const getCollabHypeByCategory = () =>
   );
 export const getDirectors = (limit = 200, offset = 0) =>
   apiFetch<BrandDirector[]>(`/directors/?limit=${limit}&offset=${offset}`);
+export const getDirectorsByBrand = () =>
+  apiFetch<DirectorsByBrand[]>("/directors/by-brand");

@@ -56,24 +56,18 @@ async def run(*, apply: bool, channel_type: str) -> int:
         """), {"ct": channel_type})).scalar_one()
 
         # slug 매칭 후보 조회
+        # split_part(product_key, ':', 1) = ':' 앞 부분 (PostgreSQL)
+        # LIKE '%:%' 조건으로 ':' 항상 존재 보장
         candidates = (await db.execute(text("""
             SELECT
                 p.id AS product_id,
                 b.id AS brand_id,
-                lower(substr(p.product_key, 1,
-                    case when instr(p.product_key, ':') > 0
-                         then instr(p.product_key, ':') - 1
-                         else length(p.product_key)
-                    end)) AS slug,
+                lower(split_part(p.product_key, ':', 1)) AS slug,
                 p.channel_id
             FROM products p
             JOIN channels c ON c.id = p.channel_id
             JOIN brands b
-              ON b.slug = lower(substr(p.product_key, 1,
-                    case when instr(p.product_key, ':') > 0
-                         then instr(p.product_key, ':') - 1
-                         else length(p.product_key)
-                    end))
+              ON b.slug = lower(split_part(p.product_key, ':', 1))
             WHERE p.brand_id IS NULL
               AND c.channel_type = :ct
               AND p.product_key LIKE '%:%'

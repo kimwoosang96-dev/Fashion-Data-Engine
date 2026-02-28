@@ -189,6 +189,7 @@ export interface BrandHighlight {
   brand_slug: string;
   instagram_url: string | null;
   tier: string | null;
+  origin_country: string | null;
   total_product_count: number;
   new_product_count: number;
   is_selling_new_products: boolean;

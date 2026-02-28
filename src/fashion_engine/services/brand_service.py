@@ -65,6 +65,7 @@ async def get_brand_highlights(
                 Brand.slug,
                 Brand.instagram_url,
                 Brand.tier,
+                Brand.origin_country,
                 func.count(Product.id).label("total_product_count"),
                 func.sum(case((Product.is_new == True, 1), else_=0)).label("new_product_count"),
             )
@@ -90,6 +91,7 @@ async def get_brand_highlights(
                 "brand_slug": row.slug,
                 "instagram_url": row.instagram_url,
                 "tier": row.tier,
+                "origin_country": row.origin_country,
                 "total_product_count": int(row.total_product_count or 0),
                 "new_product_count": new_count,
                 "is_selling_new_products": new_count > 0,

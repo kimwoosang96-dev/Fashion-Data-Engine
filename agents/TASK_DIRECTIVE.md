@@ -11,6 +11,115 @@ PM/개발 작업 통제를 위한 단일 기준 문서입니다.
 
 ## 진행 중 작업
 <!-- ACTIVE_TASKS_START -->
+- [ ] T-20260301-042 | FIX_CURRENCY_01: 미지원 통화 환율 보완 + Hamcus HKD 감지 수정 | owner:codex-dev | priority:P1 | status:todo | created:2026-03-01
+  **배경**: `update_exchange_rates.py`의 `CURRENCIES = ["USD", "JPY", "EUR", "GBP", "HKD"]`만 업데이트 중. `product_crawler.py`의 `COUNTRY_CURRENCY`에는 DKK/SEK/SGD/CAD/TWD/CNY가 있어서 이 통화로 감지된 제품은 환율 없이 `get_rate_to_krw()` fallback 1.0 반환 → 가격이 원화처럼 취급됨. Hamcus는 HK 채널인데 `SUBDOMAIN_CURRENCY`에 `"hk"` 없어서 USD fallback 가능성 있음.
+  **Step 1 — `scripts/update_exchange_rates.py`**
+  - `CURRENCIES` 리스트에 추가: `"DKK", "SEK", "SGD", "CAD", "AUD"` (COUNTRY_CURRENCY 전체 커버)
+  - TWD, CNY는 선택적 추가 (오픈 API에서 제공 시)
+  **Step 2 — `src/fashion_engine/crawler/product_crawler.py`**
+  - `SUBDOMAIN_CURRENCY`에 `"hk": "HKD"`, `"sg": "SGD"`, `"ca": "CAD"` 추가
+  - `_infer_currency()` fallback이 USD인 경우 logger.warning으로 "알 수 없는 통화 → USD 가정" 로그 추가
+  **Step 3 — `src/fashion_engine/services/product_service.py`**
+  - `get_rate_to_krw()`에서 `row is None`일 때 `logger.warning(f"환율 미등록: {currency}, fallback 1.0")` 추가
+  **Step 4 — Railway 환율 갱신 가이드**
+  - `Makefile`에 `update-rates` 타겟 이미 있으면 활용, 없으면 추가
+  - `docs/DEPLOYMENT.md`에 "초기 배포 후 환율 업데이트 필수" 섹션 추가
+  **DoD**
+  - [ ] `update_exchange_rates.py` 실행 후 DKK/SEK/SGD/CAD/AUD 환율도 DB에 저장됨
+  - [ ] Hamcus 채널 크롤 시 currency=HKD로 감지 (또는 최소한 USD fallback 시 경고 로그)
+  - [ ] 환율 미등록 통화 사용 시 WARNING 로그 출력
+
+- [ ] T-20260301-043 | FIX_MULTI_CHANNEL_01: 경쟁 제품 페이지 결과 부족 원인 수정 | owner:codex-dev | priority:P1 | status:todo | created:2026-03-01
+  **배경**: `get_multi_channel_products()` 함수가 `PriceHistory` INNER JOIN 사용 → PriceHistory 레코드가 없는 제품은 집계에서 제외됨. Railway DB에서는 크롤 이후 PriceHistory가 충분히 쌓이지 않은 제품이 많아 경쟁 제품이 3개만 표시됨. `Product.price_krw`는 upsert 시 항상 저장되므로 이를 직접 사용해야 함.
+  **현재 코드 문제** (`src/fashion_engine/services/product_service.py`):
+  ```python
+  # ❌ PriceHistory INNER JOIN → PriceHistory 없는 제품 누락
+  latest_sub = select(PriceHistory.product_id, func.max(PriceHistory.crawled_at))...
+  .join(latest_sub, Product.id == latest_sub.c.product_id)  # ← INNER JOIN
+  .join(PriceHistory, ...)
+  ```
+  **수정 방향** — PriceHistory JOIN 제거, Product.price_krw 직접 사용:
+  ```python
+  # ✅ Product 테이블만 사용 — price_krw, original_price_krw 직접 집계
+  rows = await db.execute(
+      select(
+          Product.product_key,
+          func.min(Product.name).label("product_name"),
+          func.min(Product.image_url).label("image_url"),
+          func.count(func.distinct(Product.channel_id)).label("channel_count"),
+          func.min(Product.price_krw).label("min_price"),
+          func.max(Product.price_krw).label("max_price"),
+      )
+      .where(
+          Product.product_key.isnot(None),
+          Product.is_active == True,
+          Product.price_krw.isnot(None),
+          Product.price_krw > 0,
+      )
+      .group_by(Product.product_key)
+      .having(func.count(func.distinct(Product.channel_id)) >= min_channels)
+      .order_by(
+          desc(func.count(func.distinct(Product.channel_id))),
+          desc(func.max(Product.price_krw) - func.min(Product.price_krw)),
+      )
+      .limit(limit).offset(offset)
+  )
+  ```
+  **영향 파일**
+  - `src/fashion_engine/services/product_service.py` — `get_multi_channel_products()` 수정
+  **DoD**
+  - [ ] `GET /products/multi-channel` 응답에 30개 이상 제품 포함 (Railway 기준)
+  - [ ] `channel_count`, `min_price_krw`, `max_price_krw`, `price_spread_krw` 정상 반환
+  - [ ] `/compete` 페이지 정상 표시
+
+- [ ] T-20260301-044 | DIRECTOR_PAGE_01: 디렉터 페이지 브랜드 중심 UI 재구성 | owner:codex-dev | priority:P2 | status:todo | created:2026-03-01
+  **배경**: 현재 `/directors` 페이지는 디렉터 개인 카드를 나열 (브랜드 구분 없음). 사용자가 원하는 것은 브랜드별 섹션 구성 + 현행 디렉터(end_year IS NULL) 우선 표시.
+  **백엔드 — `src/fashion_engine/api/directors.py`**
+  - 신규 엔드포인트 추가: `GET /directors/by-brand`
+    - 브랜드별로 그룹핑된 데이터 반환
+    - 각 브랜드 내: 현행 디렉터(end_year IS NULL) 먼저, 이후 역임 디렉터(최근 연도순)
+    - 응답 스키마:
+    ```python
+    class DirectorsByBrand(BaseModel):
+        brand_slug: str
+        brand_name: str
+        current_directors: list[BrandDirectorOut]   # end_year IS NULL
+        past_directors: list[BrandDirectorOut]       # end_year IS NOT NULL, 최근순
+    ```
+    - 쿼리: `ORDER BY Brand.name ASC, BrandDirector.end_year DESC NULLS FIRST, BrandDirector.start_year DESC`
+  **프론트엔드 — `frontend/src/app/directors/page.tsx`**
+  - API 호출: `getDirectorsByBrand()` (신규, `GET /directors/by-brand`)
+  - UI 구조:
+    ```
+    [브랜드 헤더] LOUIS VUITTON
+      ├── [현행] Nicolas Ghesquière — Creative Director, 2013~현재
+      └── [역임] Marc Jacobs — Creative Director, 1997~2013
+    [브랜드 헤더] DIOR
+      ├── [현행] Maria Grazia Chiuri — Creative Director, 2016~현재
+      └── ...
+    ```
+    - 현행 디렉터: 진한 텍스트 + "현재" 뱃지 (green)
+    - 역임 디렉터: 회색 텍스트, 기본 접히지 않음 (전부 표시)
+    - 브랜드 헤더 클릭 → `/brands/[slug]` 이동
+    - 검색창: 브랜드명 또는 디렉터명으로 필터 (기존 유지)
+  **`frontend/src/lib/api.ts`**
+  - `getDirectorsByBrand()` 함수 추가: `GET /directors/by-brand`
+  **`frontend/src/lib/types.ts`**
+  - `DirectorsByBrand` 타입 추가
+  **`src/fashion_engine/api/schemas.py`**
+  - `DirectorsByBrand` Pydantic 스키마 추가
+  **영향 파일**
+  - `src/fashion_engine/api/directors.py` — `/by-brand` 엔드포인트 추가
+  - `src/fashion_engine/api/schemas.py` — `DirectorsByBrand` 스키마
+  - `frontend/src/app/directors/page.tsx` — 브랜드 섹션 UI로 재구성
+  - `frontend/src/lib/api.ts` — `getDirectorsByBrand()` 추가
+  - `frontend/src/lib/types.ts` — `DirectorsByBrand` 타입
+  **DoD**
+  - [ ] `GET /directors/by-brand` 정상 응답 (브랜드별 그룹핑, 현행 먼저)
+  - [ ] `/directors` 페이지에서 브랜드 섹션 구조 표시
+  - [ ] 현행 디렉터(end_year null)가 각 브랜드 섹션 최상단에 표시
+  - [ ] 브랜드 헤더 클릭 → `/brands/[slug]` 이동
+  - [ ] `npm run build` 타입 에러 없음
 <!-- ACTIVE_TASKS_END -->
 
 ## 최근 완료 작업

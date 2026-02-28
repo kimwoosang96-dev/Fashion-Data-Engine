@@ -11,13 +11,15 @@ PM/개발 작업 통제를 위한 단일 기준 문서입니다.
 
 ## 진행 중 작업
 <!-- ACTIVE_TASKS_START -->
-- [ ] T-20260228-025 | RECLASSIFY_01: 기존 제품 카테고리/성별 일괄 재분류 스크립트 | owner:codex-dev | priority:P1 | status:todo | created:2026-02-28 | details:GH#28 — `scripts/reclassify_products.py` 신규 구현. `product_classifier.py`의 `classify_gender_and_subcategory()` 재사용. `--dry-run` 지원. `make reclassify` 추가.
-- [ ] T-20260228-026 | DASHBOARD_DEDUP_01: 대시보드 세일 제품 최저가 dedup 적용 | owner:codex-dev | priority:P1 | status:todo | created:2026-02-28 | details:GH#29 — `frontend/src/app/page.tsx`에서 `getSaleProducts` → `getSaleHighlights` 교체. SaleHighlight 타입 재사용.
-- [ ] T-20260228-027 | BRAND_MECE_FIX_01: 브랜드 데이터 MECE 정제 스크립트 | owner:codex-dev | priority:P2 | status:todo | created:2026-02-28 | details:GH#30 — `scripts/fix_brand_mece.py` 신규 구현. `--dry-run` 기본, `--apply`로 실제 정제. suspicion=high 항목 출력.
+- [ ] T-20260228-028 | FIX_CHANNEL_BRANDS_01: 편집숍(edit-shop)이 brands 테이블에 잘못 분류된 21개 항목 수정 | owner:codex-dev | priority:P1 | status:todo | created:2026-02-28 | details:GH#31 — `cleanup_mixed_brand_channel.py`에 `--apply-with-products` 플래그 추가. 3단계: ①제품 brand_id→NULL ②channel_brands 삭제 ③brands 삭제. 대상: FASCINATE(3,991개), SOUTH STORE(2,054개) 등 21건. `make fix-brands` 추가.
+- [ ] T-20260228-029 | FIX_NULL_BRAND_ID_01: brand_id NULL 제품 13,874개 채널 기반 재매핑 | owner:codex-dev | priority:P1 | status:todo | created:2026-02-28 | details:GH#32 — 신규 `scripts/fix_null_brand_id.py`. brand-store 채널 ↔ brands 이름 일치 31쌍으로 brand_id 할당. `--dry-run`/`--apply` 지원. GH#31 이후 실행. `make fix-null-brands` 추가.
 <!-- ACTIVE_TASKS_END -->
 
 ## 최근 완료 작업
 <!-- COMPLETED_TASKS_START -->
+- [x] T-20260228-027 | BRAND_MECE_FIX_01: 브랜드 데이터 MECE 정제 스크립트 | owner:codex-dev | priority:P2 | status:done | created:2026-02-28 | completed:2026-02-28 | details:GH#30 완료: `scripts/fix_brand_mece.py` 추가. 기본 dry-run/`--apply` 지원, `suspicion=high` 항목 및 안전 삭제 후보 출력.
+- [x] T-20260228-026 | DASHBOARD_DEDUP_01: 대시보드 세일 제품 최저가 dedup 적용 | owner:codex-dev | priority:P1 | status:done | created:2026-02-28 | completed:2026-02-28 | details:GH#29 완료: `/` 대시보드의 기본 세일 데이터 소스를 `getSaleHighlights()`로 전환하고 `SaleHighlight` 타입을 재사용하도록 반영.
+- [x] T-20260228-025 | RECLASSIFY_01: 기존 제품 카테고리/성별 일괄 재분류 스크립트 | owner:codex-dev | priority:P1 | status:done | created:2026-02-28 | completed:2026-02-28 | details:GH#28 완료: `scripts/reclassify_products.py` 구현(`classify_gender_and_subcategory()` 재사용, dry-run/apply), `make reclassify` 타깃 추가.
 - [x] T-20260228-022 | CHANNEL_BRAND_AUDIT_01: 채널-브랜드 혼재 감사 도구 | owner:codex-dev | priority:P2 | status:done | created:2026-02-28 | completed:2026-02-28 | details:GH#27 완료: `GET /admin/brand-channel-audit` 추가(유형 불일치/이상치 탐지), `/admin`에 혼재 감사 결과 UI 섹션 반영.
 - [x] T-20260228-021 | COLLAB_ADMIN_01: Admin 협업 관리 (추가/삭제) | owner:codex-dev | priority:P1 | status:done | created:2026-02-28 | completed:2026-02-28 | details:GH#26 완료: `GET/POST/DELETE /admin/collabs` 추가, `/admin`에 협업 등록/삭제 UI 섹션 반영.
 - [x] T-20260228-020 | NAV_BACK_01: compare 페이지 뒤로가기 브라우저 히스토리 기반 개선 | owner:codex-dev | priority:P2 | status:done | created:2026-02-28 | completed:2026-02-28 | details:GH#25 완료: `compare/[key]/page.tsx` 상단 이동을 `router.back()` 기반 버튼으로 교체.

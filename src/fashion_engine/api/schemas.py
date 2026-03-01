@@ -328,3 +328,37 @@ class DropOut(BaseModel):
     notified_at: datetime | None
 
     model_config = {"from_attributes": True}
+
+
+class CrawlChannelLogOut(BaseModel):
+    id: int
+    channel_id: int
+    channel_name: str
+    status: str
+    products_found: int
+    products_new: int
+    products_updated: int
+    error_msg: str | None
+    strategy: str | None
+    duration_ms: int
+    crawled_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class CrawlRunOut(BaseModel):
+    id: int
+    started_at: datetime
+    finished_at: datetime | None
+    status: str
+    total_channels: int
+    done_channels: int
+    new_products: int
+    updated_products: int
+    error_channels: int
+
+    model_config = {"from_attributes": True}
+
+
+class CrawlRunDetail(CrawlRunOut):
+    logs: list[CrawlChannelLogOut]

@@ -31,6 +31,7 @@ dependencies = [
     "rich>=13.0.0",             # CLI 출력
     "typer>=0.15.0",            # CLI 프레임워크
     "tldextract>=5.1.0",        # URL 도메인 추출
+    "sse-starlette>=3.3.2",
 ]
 
 [project.scripts]

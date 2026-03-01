@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import sys
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
-from sqlalchemy import case, func, select
+from sqlalchemy import case, func, select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+from sse_starlette.sse import EventSourceResponse
 
 from fashion_engine.config import settings
 from fashion_engine.database import get_db
@@ -19,6 +22,8 @@ from fashion_engine.models.brand_director import BrandDirector
 from fashion_engine.models.exchange_rate import ExchangeRate
 from fashion_engine.models.price_history import PriceHistory
 from fashion_engine.models.product import Product
+from fashion_engine.models.crawl_run import CrawlRun, CrawlChannelLog
+from fashion_engine.api.schemas import CrawlRunOut, CrawlRunDetail, CrawlChannelLogOut
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -580,3 +585,151 @@ async def admin_patch_channel_instagram(
     channel.instagram_url = (payload.get("instagram_url") or None)
     await db.commit()
     return {"ok": True, "id": channel.id, "instagram_url": channel.instagram_url}
+
+
+# ── 크롤 모니터 ───────────────────────────────────────────────────────────────
+
+
+@router.get("/crawl-runs", response_model=list[CrawlRunOut])
+async def get_crawl_runs(
+    limit: int = Query(20, le=100),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """최근 크롤 실행 목록."""
+    rows = (
+        await db.execute(
+            select(CrawlRun).order_by(desc(CrawlRun.started_at)).limit(limit)
+        )
+    ).scalars().all()
+    return rows
+
+
+@router.get("/crawl-runs/{run_id}", response_model=CrawlRunDetail)
+async def get_crawl_run_detail(
+    run_id: int,
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """특정 크롤 실행 상세 (채널별 로그 포함)."""
+    run = (
+        await db.execute(
+            select(CrawlRun)
+            .where(CrawlRun.id == run_id)
+            .options(selectinload(CrawlRun.logs).selectinload(CrawlChannelLog.channel))
+        )
+    ).scalar_one_or_none()
+    if not run:
+        raise HTTPException(status_code=404, detail="crawl run not found")
+
+    logs_out = [
+        CrawlChannelLogOut(
+            id=log.id,
+            channel_id=log.channel_id,
+            channel_name=log.channel.name if log.channel else str(log.channel_id),
+            status=log.status,
+            products_found=log.products_found,
+            products_new=log.products_new,
+            products_updated=log.products_updated,
+            error_msg=log.error_msg,
+            strategy=log.strategy,
+            duration_ms=log.duration_ms,
+            crawled_at=log.crawled_at,
+        )
+        for log in sorted(run.logs, key=lambda l: l.crawled_at)
+    ]
+    return CrawlRunDetail(
+        id=run.id,
+        started_at=run.started_at,
+        finished_at=run.finished_at,
+        status=run.status,
+        total_channels=run.total_channels,
+        done_channels=run.done_channels,
+        new_products=run.new_products,
+        updated_products=run.updated_products,
+        error_channels=run.error_channels,
+        logs=logs_out,
+    )
+
+
+@router.get("/crawl-runs/{run_id}/stream")
+async def stream_crawl_run(
+    run_id: int,
+    token: str = Query(""),
+    db: AsyncSession = Depends(get_db),
+):
+    # SSE는 Authorization 헤더를 쓸 수 없어 쿼리 파라미터로 인증
+    if token != settings.admin_bearer_token:
+        raise HTTPException(status_code=401, detail="Invalid admin token")
+    """SSE — 크롤 실행 중 실시간 진행상황 스트리밍 (3초 폴링)."""
+
+    async def event_generator():
+        from fashion_engine.database import AsyncSessionLocal
+        sent_log_ids: set[int] = set()
+        while True:
+            # 매 3초마다 DB 폴링
+            try:
+                async with AsyncSessionLocal() as sess:
+                    run = (
+                        await sess.execute(select(CrawlRun).where(CrawlRun.id == run_id))
+                    ).scalar_one_or_none()
+                    if not run:
+                        yield {"event": "error", "data": json.dumps({"detail": "not found"})}
+                        return
+
+                    # 새 로그만 전송
+                    log_query = (
+                        select(CrawlChannelLog)
+                        .where(CrawlChannelLog.run_id == run_id)
+                        .options(selectinload(CrawlChannelLog.channel))
+                        .order_by(CrawlChannelLog.crawled_at)
+                    )
+                    if sent_log_ids:
+                        log_query = log_query.where(CrawlChannelLog.id.not_in(sent_log_ids))
+                    new_logs = (await sess.execute(log_query)).scalars().all()
+
+                for log in new_logs:
+                    sent_log_ids.add(log.id)
+                    yield {
+                        "event": "log",
+                        "data": json.dumps({
+                            "id": log.id,
+                            "channel_id": log.channel_id,
+                            "channel_name": log.channel.name if log.channel else str(log.channel_id),
+                            "status": log.status,
+                            "products_found": log.products_found,
+                            "products_new": log.products_new,
+                            "products_updated": log.products_updated,
+                            "error_msg": log.error_msg,
+                            "strategy": log.strategy,
+                            "duration_ms": log.duration_ms,
+                            "crawled_at": log.crawled_at.isoformat(),
+                        }),
+                    }
+
+                # 진행률 업데이트
+                yield {
+                    "event": "progress",
+                    "data": json.dumps({
+                        "run_id": run.id,
+                        "status": run.status,
+                        "total_channels": run.total_channels,
+                        "done_channels": run.done_channels,
+                        "new_products": run.new_products,
+                        "error_channels": run.error_channels,
+                    }),
+                }
+
+                is_done = run.status != "running"
+
+                if is_done:
+                    yield {"event": "done", "data": json.dumps({"status": run.status})}
+                    return
+
+            except Exception as e:
+                yield {"event": "error", "data": json.dumps({"detail": str(e)})}
+                return
+
+            await asyncio.sleep(3)
+
+    return EventSourceResponse(event_generator())

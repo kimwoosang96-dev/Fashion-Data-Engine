@@ -5,6 +5,7 @@ import type {
   SaleFilters,
   AdminStats, AdminChannelHealth, AdminCrawlStatus,
   FashionNews, CollabItem, BrandDirector, DirectorsByBrand, AdminCollabItem, AdminAuditItem, MultiChannelProduct,
+  CrawlRunOut, CrawlRunDetail,
 } from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -251,3 +252,14 @@ export const getDirectors = (limit = 200, offset = 0) =>
   apiFetch<BrandDirector[]>(`/directors/?limit=${limit}&offset=${offset}`);
 export const getDirectorsByBrand = () =>
   apiFetch<DirectorsByBrand[]>("/directors/by-brand");
+
+export const getCrawlRuns = (token: string, limit = 20) =>
+  adminFetch<CrawlRunOut[]>(`/admin/crawl-runs?limit=${limit}`, token);
+
+export const getCrawlRunDetail = (token: string, runId: number) =>
+  adminFetch<CrawlRunDetail>(`/admin/crawl-runs/${runId}`, token);
+
+export const getCrawlRunStream = (token: string, runId: number): EventSource => {
+  const url = `${BASE}/admin/crawl-runs/${runId}/stream?token=${encodeURIComponent(token)}`;
+  return new EventSource(url);
+};

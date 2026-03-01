@@ -18,6 +18,9 @@ import {
   patchAdminChannelInstagram,
   triggerChannelCrawl,
   triggerAdminCrawl,
+  getCrawlRuns,
+  getCrawlRunDetail,
+  getCrawlRunStream,
 } from "@/lib/api";
 import type {
   AdminAuditItem,
@@ -28,6 +31,9 @@ import type {
   Brand,
   BrandDirector,
   Channel,
+  CrawlRunOut,
+  CrawlRunDetail,
+  CrawlChannelLog,
 } from "@/lib/types";
 import { Input } from "@/components/ui/input";
 
@@ -44,6 +50,9 @@ export default function AdminPage() {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string>("");
+  const [crawlRuns, setCrawlRuns] = useState<CrawlRunOut[]>([]);
+  const [selectedRun, setSelectedRun] = useState<CrawlRunDetail | null>(null);
+  const [streamLogs, setStreamLogs] = useState<CrawlChannelLog[]>([]);
   const [directorForm, setDirectorForm] = useState({
     brand_slug: "",
     name: "",
@@ -106,6 +115,44 @@ export default function AdminPage() {
       void load(stored);
     }
   }, []);
+
+  const loadCrawlRuns = async () => {
+    if (!token.trim()) return;
+    try {
+      const runs = await getCrawlRuns(token.trim(), 20);
+      setCrawlRuns(runs);
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "크롤 실행 목록 로드 실패");
+    }
+  };
+
+  const selectCrawlRun = async (runId: number, status: string) => {
+    if (!token.trim()) return;
+    try {
+      const detail = await getCrawlRunDetail(token.trim(), runId);
+      setSelectedRun(detail);
+      setStreamLogs(detail.logs);
+
+      if (status === "running") {
+        const es = getCrawlRunStream(token.trim(), runId);
+        es.addEventListener("log", (e) => {
+          const log: CrawlChannelLog = JSON.parse(e.data);
+          setStreamLogs((prev) => {
+            if (prev.find((l) => l.id === log.id)) return prev;
+            return [...prev, log];
+          });
+        });
+        es.addEventListener("progress", (e) => {
+          const prog = JSON.parse(e.data);
+          setSelectedRun((prev) => prev ? { ...prev, ...prog } : prev);
+        });
+        es.addEventListener("done", () => es.close());
+        es.addEventListener("error", () => es.close());
+      }
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "크롤 상세 로드 실패");
+    }
+  };
 
   const runJob = async (job: "brands" | "products" | "drops") => {
     if (!token.trim()) return;
@@ -584,6 +631,132 @@ export default function AdminPage() {
           </table>
         </div>
       )}
+
+      {/* ── 크롤 모니터 ─────────────────────────────────────────── */}
+      <div className="mt-10">
+        <div className="flex items-center gap-3 mb-4">
+          <h2 className="text-lg font-semibold">크롤 모니터</h2>
+          <button
+            onClick={loadCrawlRuns}
+            className="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg"
+          >
+            실행 목록 새로고침
+          </button>
+        </div>
+
+        {crawlRuns.length > 0 && (
+          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden mb-6">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 text-xs text-gray-500">
+                <tr>
+                  <th className="px-4 py-2 text-left">ID</th>
+                  <th className="px-4 py-2 text-left">시작</th>
+                  <th className="px-4 py-2 text-left">상태</th>
+                  <th className="px-4 py-2 text-right">진행</th>
+                  <th className="px-4 py-2 text-right">신규</th>
+                  <th className="px-4 py-2 text-right">에러</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {crawlRuns.map((run) => (
+                  <tr
+                    key={run.id}
+                    className="hover:bg-gray-50 cursor-pointer"
+                    onClick={() => selectCrawlRun(run.id, run.status)}
+                  >
+                    <td className="px-4 py-2 text-gray-400">#{run.id}</td>
+                    <td className="px-4 py-2">{new Date(run.started_at).toLocaleString("ko-KR")}</td>
+                    <td className="px-4 py-2">
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${
+                        run.status === "running" ? "bg-blue-100 text-blue-700" :
+                        run.status === "done" ? "bg-emerald-100 text-emerald-700" :
+                        "bg-red-100 text-red-700"
+                      }`}>
+                        {run.status === "running" ? "진행중" : run.status === "done" ? "완료" : "실패"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2 text-right text-gray-600">
+                      {run.done_channels}/{run.total_channels}
+                    </td>
+                    <td className="px-4 py-2 text-right text-emerald-600">+{run.new_products}</td>
+                    <td className="px-4 py-2 text-right text-red-500">{run.error_channels}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {selectedRun && (
+          <div className="bg-white border border-gray-200 rounded-xl p-5">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-medium">실행 #{selectedRun.id} 상세</h3>
+              <span className="text-xs text-gray-400">
+                {selectedRun.done_channels}/{selectedRun.total_channels} 채널
+              </span>
+            </div>
+
+            {/* 진행률 바 */}
+            <div className="w-full bg-gray-100 rounded-full h-2 mb-4">
+              <div
+                className="bg-blue-500 h-2 rounded-full transition-all"
+                style={{
+                  width: selectedRun.total_channels > 0
+                    ? `${Math.round((selectedRun.done_channels / selectedRun.total_channels) * 100)}%`
+                    : "0%",
+                }}
+              />
+            </div>
+            <div className="flex gap-4 text-xs text-gray-500 mb-4">
+              <span>신규 제품 +{selectedRun.new_products}</span>
+              <span>업데이트 {selectedRun.updated_products}</span>
+              <span className="text-red-500">에러 {selectedRun.error_channels}채널</span>
+            </div>
+
+            {/* 채널별 로그 테이블 */}
+            <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
+              <table className="w-full text-xs">
+                <thead className="bg-gray-50 text-gray-500 sticky top-0">
+                  <tr>
+                    <th className="px-3 py-2 text-left">채널</th>
+                    <th className="px-3 py-2 text-left">상태</th>
+                    <th className="px-3 py-2 text-right">제품</th>
+                    <th className="px-3 py-2 text-right">신규</th>
+                    <th className="px-3 py-2 text-left">전략</th>
+                    <th className="px-3 py-2 text-right">시간</th>
+                    <th className="px-3 py-2 text-left">에러</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {streamLogs.map((log) => (
+                    <tr key={log.id} className={log.status === "failed" ? "bg-red-50" : ""}>
+                      <td className="px-3 py-2 font-medium">{log.channel_name}</td>
+                      <td className="px-3 py-2">
+                        <span className={`px-1.5 py-0.5 rounded ${
+                          log.status === "success" ? "bg-emerald-100 text-emerald-700" :
+                          log.status === "failed" ? "bg-red-100 text-red-700" :
+                          "bg-gray-100 text-gray-500"
+                        }`}>
+                          {log.status === "success" ? "✅" : log.status === "failed" ? "❌" : "—"}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-right">{log.products_found}</td>
+                      <td className="px-3 py-2 text-right text-emerald-600">+{log.products_new}</td>
+                      <td className="px-3 py-2 text-gray-400">{log.strategy ?? "-"}</td>
+                      <td className="px-3 py-2 text-right text-gray-400">
+                        {log.duration_ms > 1000 ? `${(log.duration_ms / 1000).toFixed(1)}s` : `${log.duration_ms}ms`}
+                      </td>
+                      <td className="px-3 py-2 text-red-500 max-w-xs truncate" title={log.error_msg ?? ""}>
+                        {log.error_msg ?? ""}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

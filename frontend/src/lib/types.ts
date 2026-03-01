@@ -321,3 +321,33 @@ export interface AdminAuditItem {
   reason: string;
   suggestion: string;
 }
+
+export interface CrawlChannelLog {
+  id: number;
+  channel_id: number;
+  channel_name: string;
+  status: "success" | "failed" | "skipped";
+  products_found: number;
+  products_new: number;
+  products_updated: number;
+  error_msg: string | null;
+  strategy: string | null;
+  duration_ms: number;
+  crawled_at: string;
+}
+
+export interface CrawlRunOut {
+  id: number;
+  started_at: string;
+  finished_at: string | null;
+  status: "running" | "done" | "failed";
+  total_channels: number;
+  done_channels: number;
+  new_products: number;
+  updated_products: number;
+  error_channels: number;
+}
+
+export interface CrawlRunDetail extends CrawlRunOut {
+  logs: CrawlChannelLog[];
+}

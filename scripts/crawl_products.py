@@ -13,6 +13,8 @@
 """
 import asyncio
 import sys
+import time
+from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
@@ -29,6 +31,7 @@ from fashion_engine.models.channel_brand import ChannelBrand
 from fashion_engine.models.brand import Brand
 from fashion_engine.models.price_history import PriceHistory
 from fashion_engine.models.product import Product
+from fashion_engine.models.crawl_run import CrawlRun, CrawlChannelLog
 from fashion_engine.crawler.product_crawler import ProductCrawler
 from fashion_engine.services.product_service import (
     get_rate_to_krw,
@@ -98,6 +101,14 @@ async def run(limit: int, channel_type: str | None, channel_id: int | None, no_a
 
     console.print(f"대상 채널: {len(channels)}개\n")
 
+    # CrawlRun 생성
+    async with AsyncSessionLocal() as db:
+        crawl_run = CrawlRun(total_channels=len(channels), status="running")
+        db.add(crawl_run)
+        await db.commit()
+        await db.refresh(crawl_run)
+        run_id = crawl_run.id
+
     results_table = Table(title="크롤링 결과", show_lines=True)
     results_table.add_column("채널", style="cyan")
     results_table.add_column("국가", style="dim")
@@ -111,6 +122,7 @@ async def run(limit: int, channel_type: str | None, channel_id: int | None, no_a
     async with ProductCrawler(request_delay=0.5) as crawler:
         for channel in channels:
             console.print(f"[dim]크롤링:[/dim] {channel.url}")
+            t_start = time.time()
             cafe24_categories: list[tuple[str, str]] = []
             if channel.channel_type == "edit-shop":
                 async with AsyncSessionLocal() as db:
@@ -137,8 +149,10 @@ async def run(limit: int, channel_type: str | None, channel_id: int | None, no_a
                 cafe24_brand_categories=cafe24_categories,
             )
 
+            duration_ms = int((time.time() - t_start) * 1000)
             sale_count = 0
             new_count = 0
+            updated_count = 0
 
             if result.products and not result.error:
                 async with AsyncSessionLocal() as db:
@@ -173,6 +187,8 @@ async def run(limit: int, channel_type: str | None, channel_id: int | None, no_a
                             sale_count += 1
                         if is_new:
                             new_count += 1
+                        else:
+                            updated_count += 1
 
                         # ── 알림 트리거 (watchlist 매칭 시만) ────────────
                         brand_slug = brand.slug if brand else None
@@ -215,6 +231,35 @@ async def run(limit: int, channel_type: str | None, channel_id: int | None, no_a
 
                     await db.commit()
 
+            # CrawlChannelLog 저장
+            log_status = "success" if not result.error else "failed"
+            if not result.products and not result.error:
+                log_status = "skipped"
+
+            async with AsyncSessionLocal() as db:
+                log = CrawlChannelLog(
+                    run_id=run_id,
+                    channel_id=channel.id,
+                    status=log_status,
+                    products_found=len(result.products),
+                    products_new=new_count,
+                    products_updated=updated_count,
+                    error_msg=(result.error or "")[:500] if result.error else None,
+                    strategy=result.crawl_strategy,
+                    duration_ms=duration_ms,
+                )
+                db.add(log)
+
+                run_obj = await db.get(CrawlRun, run_id)
+                if run_obj:
+                    run_obj.done_channels += 1
+                    run_obj.new_products += new_count
+                    run_obj.updated_products += updated_count
+                    if result.error:
+                        run_obj.error_channels += 1
+
+                await db.commit()
+
             results_table.add_row(
                 channel.name,
                 channel.country or "-",
@@ -223,6 +268,14 @@ async def run(limit: int, channel_type: str | None, channel_id: int | None, no_a
                 str(new_count) if result.products else "-",
                 result.error or "",
             )
+
+    # CrawlRun 완료 처리
+    async with AsyncSessionLocal() as db:
+        run_obj = await db.get(CrawlRun, run_id)
+        if run_obj:
+            run_obj.status = "done"
+            run_obj.finished_at = datetime.utcnow()
+            await db.commit()
 
     console.print(results_table)
 

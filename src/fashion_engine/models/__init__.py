@@ -12,10 +12,12 @@ from fashion_engine.models.purchase import Purchase
 from fashion_engine.models.watchlist import WatchListItem
 from fashion_engine.models.drop import Drop
 from fashion_engine.models.brand_director import BrandDirector
+from fashion_engine.models.crawl_run import CrawlRun, CrawlChannelLog
 
 __all__ = [
     "Channel", "Brand", "ChannelBrand", "Category", "PriceHistory", "Product",
     "BrandCollaboration", "FashionNews", "ExchangeRate",
     "Purchase", "WatchListItem", "Drop",
     "BrandDirector",
+    "CrawlRun", "CrawlChannelLog",
 ]

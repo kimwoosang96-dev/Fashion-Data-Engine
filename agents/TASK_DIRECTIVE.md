@@ -11,6 +11,8 @@ PM/개발 작업 통제를 위한 단일 기준 문서입니다.
 
 ## 진행 중 작업
 <!-- ACTIVE_TASKS_START -->
+- [ ] T-20260301-054 | PRODUCT_DENYLIST_01: Shopify 크롤러 비패션 제품 필터링 (Route 배송보험·기프트카드 등) | owner:codex-dev | priority:P1 | status:todo | created:2026-03-01 | details:agents/issues/CRAWLER_02_product_denylist.md 참조. `product_crawler.py`에 vendor/title/product_type 거부 목록 추가. DB 마이그레이션 없음. 검증: 크롤 후 product_key에 "route:" 없음 확인.
+- [ ] T-20260301-055 | CHANNEL_TRAFFIC_LIGHT_01: 운영관리 채널별 크롤 건강도 트래픽 라이트 (🔴🟡🟢) | owner:codex-dev | priority:P1 | status:todo | created:2026-03-01 | details:agents/issues/ADMIN_02_channel_traffic_light.md 참조. 백엔드: /admin/channel-signals 신규 엔드포인트(CrawlChannelLog 최근 5회 집계 + traffic_light 판정). 프론트엔드: 채널 관리 탭 트래픽 라이트 도트 + 성공률 컬럼 표시.
 <!-- ACTIVE_TASKS_END -->
 
 ## 최근 완료 작업

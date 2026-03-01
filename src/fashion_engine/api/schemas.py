@@ -7,6 +7,7 @@ class ChannelOut(BaseModel):
     name: str
     url: str
     channel_type: str | None
+    platform: str | None
     country: str | None
     instagram_url: str | None
     is_active: bool
@@ -142,6 +143,8 @@ class ProductOut(BaseModel):
     brand_id: int | None
     name: str
     product_key: str | None
+    normalized_key: str | None
+    match_confidence: float | None
     gender: str | None
     subcategory: str | None
     url: str

@@ -19,7 +19,8 @@ class Channel(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     url: Mapped[str] = mapped_column(String(500), unique=True, nullable=False)       # 홈페이지 URL
     original_url: Mapped[str | None] = mapped_column(String(500))                    # 입력 원본 URL
-    channel_type: Mapped[str | None] = mapped_column(String(50))                     # 'multi-brand', 'official', 'marketplace'
+    channel_type: Mapped[str | None] = mapped_column(String(50))                     # 'brand-store', 'edit-shop', ...
+    platform: Mapped[str | None] = mapped_column(String(50))                         # 'shopify' | 'cafe24' | 'custom' | None
     country: Mapped[str | None] = mapped_column(String(50))                          # 'KR', 'US', 'JP', ...
     description: Mapped[str | None] = mapped_column(Text)
     instagram_url: Mapped[str | None] = mapped_column(String(500))

@@ -128,7 +128,12 @@ async def upsert_brand(db: AsyncSession, name: str, name_ko: str | None = None) 
     return brand
 
 
-async def link_brand_to_channel(db: AsyncSession, brand_id: int, channel_id: int) -> None:
+async def link_brand_to_channel(
+    db: AsyncSession,
+    brand_id: int,
+    channel_id: int,
+    cate_no: str | None = None,
+) -> None:
     """채널-브랜드 관계 연결 (중복 무시)"""
     result = await db.execute(
         select(ChannelBrand).where(
@@ -139,6 +144,15 @@ async def link_brand_to_channel(db: AsyncSession, brand_id: int, channel_id: int
     existing = result.scalar_one_or_none()
 
     if not existing:
-        link = ChannelBrand(brand_id=brand_id, channel_id=channel_id, crawled_at=datetime.utcnow())
+        link = ChannelBrand(
+            brand_id=brand_id,
+            channel_id=channel_id,
+            cate_no=cate_no,
+            crawled_at=datetime.utcnow(),
+        )
         db.add(link)
+        await db.commit()
+    elif cate_no and existing.cate_no != cate_no:
+        existing.cate_no = cate_no
+        existing.crawled_at = datetime.utcnow()
         await db.commit()

@@ -73,8 +73,11 @@ async def upsert_product(
         existing.name = info.title
         existing.vendor = info.vendor or None
         existing.product_key = info.product_key
+        existing.normalized_key = info.normalized_key
+        existing.match_confidence = info.match_confidence
         existing.gender = info.gender
         existing.subcategory = info.subcategory
+        existing.tags = info.tags
         existing.is_sale = is_sale
         existing.is_active = info.is_available
         if was_active and not info.is_available:
@@ -91,9 +94,12 @@ async def upsert_product(
             name=info.title,
             vendor=info.vendor or None,
             product_key=info.product_key,
+            normalized_key=info.normalized_key,
+            match_confidence=info.match_confidence,
             gender=info.gender,
             subcategory=info.subcategory,
             sku=info.sku,
+            tags=info.tags,
             url=info.product_url,
             image_url=info.image_url,
             is_active=info.is_available,

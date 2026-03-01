@@ -1,4 +1,4 @@
-.PHONY: setup api web dev crawl crawl-news news update-rates scheduler-dry scheduler data-audit audit audit-railway reclassify brand-mece fix-brands fix-null-brands fix-null-brands-dry fix-null-brands-apply remap-product-brands remap-product-brands-apply seed-directors seed-directors-apply seed-brands-luxury seed-brands-luxury-apply enrich-brands enrich-brands-apply purge-fake-brands purge-fake-brands-apply
+.PHONY: setup api web dev crawl crawl-cafe24 crawl-news news update-rates scheduler-dry scheduler data-audit audit audit-railway reclassify brand-mece fix-brands fix-null-brands fix-null-brands-dry fix-null-brands-apply remap-product-brands remap-product-brands-apply seed-directors seed-directors-apply seed-brands-luxury seed-brands-luxury-apply enrich-brands enrich-brands-apply purge-fake-brands purge-fake-brands-apply backfill-normalized-key backfill-normalized-key-apply backfill-normalized-key-force detect-platforms detect-platforms-apply
 
 setup:
 	uv sync
@@ -18,6 +18,9 @@ news:
 
 crawl:
 	uv run python scripts/crawl_products.py --no-alerts
+
+crawl-cafe24:
+	uv run python scripts/crawl_products.py --channel-type edit-shop --no-alerts
 
 crawl-news:
 	uv run python scripts/crawl_news.py
@@ -87,3 +90,18 @@ purge-fake-brands:
 
 purge-fake-brands-apply:
 	uv run python scripts/purge_fake_brands.py --apply
+
+backfill-normalized-key:
+	uv run python scripts/backfill_normalized_key.py
+
+backfill-normalized-key-apply:
+	uv run python scripts/backfill_normalized_key.py --apply
+
+backfill-normalized-key-force:
+	uv run python scripts/backfill_normalized_key.py --apply --force
+
+detect-platforms:
+	uv run python scripts/detect_platforms.py
+
+detect-platforms-apply:
+	uv run python scripts/detect_platforms.py --apply

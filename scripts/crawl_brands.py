@@ -32,12 +32,22 @@ def _normalize_name(value: str) -> str:
     return re.sub(r"[^a-z0-9가-힣]+", "", value.lower()).strip()
 
 
+def _extract_cate_no(url: str | None) -> str | None:
+    if not url:
+        return None
+    m = re.search(r"cate_no=(\d+)", url)
+    return m.group(1) if m else None
+
+
 @app.command()
-def main(limit: int = typer.Option(0, help="크롤링할 채널 수 (0=전체)")):
-    asyncio.run(run(limit))
+def main(
+    limit: int = typer.Option(0, help="크롤링할 채널 수 (0=전체)"),
+    channel_id: int = typer.Option(0, help="특정 채널 ID만 크롤링 (0=비활성)"),
+):
+    asyncio.run(run(limit, channel_id if channel_id > 0 else None))
 
 
-async def run(limit: int):
+async def run(limit: int, channel_id: int | None = None):
     console.print("[bold blue]Fashion Data Engine — 브랜드 크롤링[/bold blue]\n")
     await init_db()
 
@@ -61,6 +71,8 @@ async def run(limit: int):
         own_brand_norms.add(_normalize_name(c.name))
         own_brand_norms.add(_normalize_name(extract_domain(c.url)))
 
+    if channel_id:
+        channels = [c for c in channels if c.id == channel_id]
     if limit:
         channels = channels[:limit]
 
@@ -109,7 +121,12 @@ async def run(limit: int):
 
                     for brand_info in result.brands:
                         brand = await upsert_brand(db, brand_info.name)
-                        await link_brand_to_channel(db, brand.id, channel.id)
+                        await link_brand_to_channel(
+                            db,
+                            brand.id,
+                            channel.id,
+                            cate_no=_extract_cate_no(brand_info.url),
+                        )
 
             if dropped_mixed:
                 console.print(

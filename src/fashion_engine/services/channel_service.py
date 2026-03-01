@@ -96,3 +96,16 @@ async def upsert_channel(db: AsyncSession, data: dict) -> Channel:
     await db.commit()
     await db.refresh(channel)
     return channel
+
+
+async def update_platform(db: AsyncSession, channel_id: int, platform: str) -> bool:
+    """채널 플랫폼 값을 갱신한다. 변경이 없으면 False."""
+    channel = (
+        await db.execute(select(Channel).where(Channel.id == channel_id))
+    ).scalar_one_or_none()
+    if not channel:
+        return False
+    if channel.platform == platform:
+        return False
+    channel.platform = platform
+    return True

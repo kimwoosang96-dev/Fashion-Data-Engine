@@ -25,6 +25,8 @@ from sqlalchemy import select
 from fashion_engine.config import settings
 from fashion_engine.database import init_db, AsyncSessionLocal
 from fashion_engine.models.channel import Channel
+from fashion_engine.models.channel_brand import ChannelBrand
+from fashion_engine.models.brand import Brand
 from fashion_engine.models.price_history import PriceHistory
 from fashion_engine.models.product import Product
 from fashion_engine.crawler.product_crawler import ProductCrawler
@@ -34,6 +36,7 @@ from fashion_engine.services.product_service import (
     upsert_product,
     record_price,
 )
+from fashion_engine.services.channel_service import update_platform
 from fashion_engine.services.alert_service import (
     AlertPayload,
     new_product_alert,
@@ -108,13 +111,41 @@ async def run(limit: int, channel_type: str | None, channel_id: int | None, no_a
     async with ProductCrawler(request_delay=0.5) as crawler:
         for channel in channels:
             console.print(f"[dim]크롤링:[/dim] {channel.url}")
-            result = await crawler.crawl_channel(channel.url, country=channel.country)
+            cafe24_categories: list[tuple[str, str]] = []
+            if channel.channel_type == "edit-shop":
+                async with AsyncSessionLocal() as db:
+                    rows = (
+                        await db.execute(
+                            select(Brand.name, ChannelBrand.cate_no)
+                            .join(Brand, Brand.id == ChannelBrand.brand_id)
+                            .where(
+                                ChannelBrand.channel_id == channel.id,
+                                ChannelBrand.cate_no.is_not(None),
+                            )
+                            .order_by(Brand.name.asc())
+                        )
+                    ).all()
+                    cafe24_categories = [
+                        (str(r.name), str(r.cate_no))
+                        for r in rows
+                        if r.name and r.cate_no
+                    ]
+
+            result = await crawler.crawl_channel(
+                channel.url,
+                country=channel.country,
+                cafe24_brand_categories=cafe24_categories,
+            )
 
             sale_count = 0
             new_count = 0
 
             if result.products and not result.error:
                 async with AsyncSessionLocal() as db:
+                    if result.crawl_strategy == "shopify-api":
+                        await update_platform(db, channel.id, "shopify")
+                    elif result.crawl_strategy == "cafe24-html":
+                        await update_platform(db, channel.id, "cafe24")
                     currency = result.products[0].currency if result.products else "KRW"
                     rate = await get_rate_to_krw(db, currency)
 

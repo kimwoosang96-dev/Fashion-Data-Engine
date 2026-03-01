@@ -71,6 +71,7 @@ export interface Channel {
   name: string;
   url: string;
   channel_type: string | null;
+  platform: string | null;
   country: string | null;
   instagram_url: string | null;
   is_active: boolean;

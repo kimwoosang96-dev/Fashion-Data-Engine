@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, DateTime
+from sqlalchemy import ForeignKey, DateTime, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from fashion_engine.database import Base
@@ -18,6 +18,7 @@ class ChannelBrand(Base):
 
     channel_id: Mapped[int] = mapped_column(ForeignKey("channels.id"), primary_key=True)
     brand_id: Mapped[int] = mapped_column(ForeignKey("brands.id"), primary_key=True)
+    cate_no: Mapped[str | None] = mapped_column(String(50))
     crawled_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     channel: Mapped["Channel"] = relationship(back_populates="channel_brands")

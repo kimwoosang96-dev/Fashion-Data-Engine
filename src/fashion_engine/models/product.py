@@ -25,12 +25,15 @@ class Product(Base):
 
     name: Mapped[str] = mapped_column(String(500), nullable=False)
     vendor: Mapped[str | None] = mapped_column(String(255), index=True)
-    product_key: Mapped[str | None] = mapped_column(String(300), index=True)  # "brand-slug:handle" 교차 채널 매칭용
-    gender: Mapped[str | None] = mapped_column(String(20), index=True)         # men / women / unisex / kids
+    product_key: Mapped[str | None] = mapped_column(String(300), index=True)       # "brand-slug:handle" 채널 내 고유 식별
+    normalized_key: Mapped[str | None] = mapped_column(String(300), index=True)   # "brand-slug:model-code" 교차채널 매칭용
+    match_confidence: Mapped[float | None] = mapped_column()                       # normalized_key 신뢰도 (0.0~1.0)
+    gender: Mapped[str | None] = mapped_column(String(20), index=True)             # men / women / unisex / kids
     subcategory: Mapped[str | None] = mapped_column(String(100), index=True)   # shoes / outer / top / ...
     sku: Mapped[str | None] = mapped_column(String(255))
     url: Mapped[str] = mapped_column(String(1000), unique=True, nullable=False)
     image_url: Mapped[str | None] = mapped_column(String(1000))
+    tags: Mapped[str | None] = mapped_column(Text)  # JSON 문자열 저장
     description: Mapped[str | None] = mapped_column(Text)
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)

@@ -13,6 +13,7 @@ from fashion_engine.models.watchlist import WatchListItem
 from fashion_engine.models.drop import Drop
 from fashion_engine.models.brand_director import BrandDirector
 from fashion_engine.models.crawl_run import CrawlRun, CrawlChannelLog
+from fashion_engine.models.product_catalog import ProductCatalog
 
 __all__ = [
     "Channel", "Brand", "ChannelBrand", "Category", "PriceHistory", "Product",
@@ -20,4 +21,5 @@ __all__ = [
     "Purchase", "WatchListItem", "Drop",
     "BrandDirector",
     "CrawlRun", "CrawlChannelLog",
+    "ProductCatalog",
 ]

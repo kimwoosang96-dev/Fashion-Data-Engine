@@ -15,6 +15,7 @@ from fashion_engine.api.watchlist import router as watchlist_router
 from fashion_engine.api.admin import router as admin_router
 from fashion_engine.api.news import router as news_router
 from fashion_engine.api.directors import router as directors_router
+from fashion_engine.api.catalog import router as catalog_router
 
 
 @asynccontextmanager
@@ -48,6 +49,7 @@ app.include_router(watchlist_router)
 app.include_router(admin_router)
 app.include_router(news_router)
 app.include_router(directors_router)
+app.include_router(catalog_router)
 
 
 @app.get("/")

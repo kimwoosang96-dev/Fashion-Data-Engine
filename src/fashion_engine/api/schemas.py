@@ -362,3 +362,42 @@ class CrawlRunOut(BaseModel):
 
 class CrawlRunDetail(CrawlRunOut):
     logs: list[CrawlChannelLogOut]
+
+
+# ── ProductCatalog 스키마 ────────────────────────────────────────────────────
+
+class CatalogOut(BaseModel):
+    id: int
+    normalized_key: str
+    canonical_name: str
+    brand_id: int | None
+    brand_name: str | None
+    brand_slug: str | None
+    gender: str | None
+    subcategory: str | None
+    tags: str | None
+    trend_score: float | None
+    listing_count: int
+    min_price_krw: int | None
+    max_price_krw: int | None
+    is_sale_anywhere: bool | None
+    first_seen_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class CatalogListingOut(BaseModel):
+    channel_id: int
+    channel_name: str
+    channel_url: str
+    product_id: int
+    product_url: str
+    latest_price_krw: int | None
+    is_sale: bool
+    discount_rate: int | None
+
+    model_config = {"from_attributes": True}
+
+
+class CatalogDetailOut(CatalogOut):
+    listings: list[CatalogListingOut]

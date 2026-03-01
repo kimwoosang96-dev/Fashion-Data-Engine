@@ -585,6 +585,7 @@ async def get_multi_channel_products(
     min_channels: int = 2,
     limit: int = 100,
     offset: int = 0,
+    sort: str = "spread",
 ) -> list[dict]:
     """멀티채널에서 판매되는 product_key 집계 목록."""
     latest_sub = (
@@ -624,8 +625,13 @@ async def get_multi_channel_products(
             .having(func.count(func.distinct(Product.channel_id)) >= min_channels)
             .having(func.min(latest_price.c.price_krw).isnot(None))
             .order_by(
-                desc(func.count(func.distinct(Product.channel_id))),
-                desc(func.max(latest_price.c.price_krw) - func.min(latest_price.c.price_krw)),
+                desc(func.max(latest_price.c.price_krw) - func.min(latest_price.c.price_krw))
+                if sort == "spread"
+                else (
+                    desc(func.count(func.distinct(Product.channel_id)))
+                    if sort == "channels"
+                    else func.min(latest_price.c.price_krw)
+                ),
             )
             .limit(limit)
             .offset(offset)

@@ -15,11 +15,19 @@ from urllib.parse import urljoin
 import httpx
 from bs4 import BeautifulSoup
 from slugify import slugify
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception
 
 from fashion_engine.crawler.product_classifier import classify_gender_and_subcategory
 
 logger = logging.getLogger(__name__)
+
+
+def _is_retryable(exc: BaseException) -> bool:
+    """429/503은 재시도 대상; 일반 HTTPError도 재시도."""
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code in (429, 503)
+    return isinstance(exc, httpx.HTTPError)
+
 
 # 국가 코드 → 통화 코드 매핑
 COUNTRY_CURRENCY: dict[str, str] = {
@@ -145,13 +153,18 @@ class ProductCrawler:
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=5),
-        retry=retry_if_exception_type(httpx.HTTPError),
+        retry=retry_if_exception(_is_retryable),
         reraise=True,
     )
     async def _fetch_with_retry(self, url: str, timeout: float | None = None) -> httpx.Response:
         assert self._client is not None
         headers = {"User-Agent": random.choice(USER_AGENTS)}
         response = await self._client.get(url, headers=headers, timeout=timeout)
+        # 429 Rate Limit — Retry-After 헤더 준수
+        if response.status_code == 429:
+            retry_after = float(response.headers.get("Retry-After", "5"))
+            logger.warning("Rate limited by %s — waiting %.1fs", url, retry_after)
+            await asyncio.sleep(retry_after)
         response.raise_for_status()
         return response
 

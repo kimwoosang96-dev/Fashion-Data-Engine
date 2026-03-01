@@ -364,6 +364,26 @@ class CrawlRunDetail(CrawlRunOut):
     logs: list[CrawlChannelLogOut]
 
 
+# ── ChannelNote 스키마 ────────────────────────────────────────────────────────
+
+
+class ChannelNoteOut(BaseModel):
+    id: int
+    channel_id: int
+    channel_name: str
+    note_type: str
+    body: str
+    operator: str
+    created_at: datetime
+    resolved_at: datetime | None
+
+
+class ChannelNoteCreate(BaseModel):
+    note_type: str = "observation"
+    body: str
+    operator: str = "admin"
+
+
 # ── ProductCatalog 스키마 ────────────────────────────────────────────────────
 
 class CatalogOut(BaseModel):

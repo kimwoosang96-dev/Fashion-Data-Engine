@@ -162,6 +162,7 @@ async def get_multi_channel_products(
     min_channels: int = Query(2, ge=2, le=20),
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
+    sort: str = Query("spread", description="정렬 기준: spread(가격 차이↓) / channels(채널 수↓) / min_price(최저가↑)"),
     db: AsyncSession = Depends(get_db),
 ):
     """동일 product_key가 여러 채널에 존재하는 경쟁 제품 목록."""
@@ -170,6 +171,7 @@ async def get_multi_channel_products(
         min_channels=min_channels,
         limit=limit,
         offset=offset,
+        sort=sort,
     )
 
 

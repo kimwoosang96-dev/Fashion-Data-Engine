@@ -23,7 +23,8 @@ from fashion_engine.models.exchange_rate import ExchangeRate
 from fashion_engine.models.price_history import PriceHistory
 from fashion_engine.models.product import Product
 from fashion_engine.models.crawl_run import CrawlRun, CrawlChannelLog
-from fashion_engine.api.schemas import CrawlRunOut, CrawlRunDetail, CrawlChannelLogOut
+from fashion_engine.models.channel_note import ChannelNote
+from fashion_engine.api.schemas import CrawlRunOut, CrawlRunDetail, CrawlChannelLogOut, ChannelNoteOut, ChannelNoteCreate
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -471,6 +472,71 @@ async def admin_brand_channel_audit(
             }
         )
 
+    # ── edit_shop_as_brand: 편집샵과 동명 브랜드 감지 ────────────────────────
+    edit_shop_channels = {
+        row.name.lower(): row for row in rows if (row.channel_type or "").lower() in {"edit-shop", "multi-brand"}
+    }
+    brand_name_rows = (
+        await db.execute(select(Brand.id, Brand.name, Brand.slug))
+    ).all()
+    for b_id, b_name, b_slug in brand_name_rows:
+        if not b_name:
+            continue
+        ch = edit_shop_channels.get(b_name.lower())
+        if ch:
+            key = ("edit_shop_as_brand", b_id)
+            if key not in seen:
+                seen.add(key)
+                suspicious.append(
+                    {
+                        "audit_type": "edit_shop_as_brand",
+                        "channel_id": ch.id,
+                        "channel_name": ch.name,
+                        "channel_type": ch.channel_type,
+                        "channel_url": ch.url,
+                        "brand_count": 0,
+                        "linked_brands": [b_slug],
+                        "reason": f"편집샵과 동일한 이름의 브랜드 존재(brand_id={b_id}, slug={b_slug})",
+                        "suggestion": f"brands 테이블에서 해당 브랜드(id={b_id})를 삭제하거나 편집샵 채널로 재분류하세요.",
+                    }
+                )
+
+    # ── high_archive_rate: 품절률 70% 초과 채널 감지 ─────────────────────────
+    archive_rows = (
+        await db.execute(
+            select(
+                Product.channel_id,
+                func.count(Product.id).label("total"),
+                func.sum(case((Product.is_active == False, 1), else_=0)).label("inactive"),  # noqa: E712
+            )
+            .group_by(Product.channel_id)
+            .having(func.count(Product.id) >= 10)  # 10개 미만 채널은 제외
+        )
+    ).all()
+    channel_map = {row.id: row for row in rows}
+    for arc_row in archive_rows:
+        total = int(arc_row.total or 0)
+        inactive = int(arc_row.inactive or 0)
+        if total > 0 and inactive / total >= 0.7:
+            ch = channel_map.get(arc_row.channel_id)
+            if ch:
+                key = ("high_archive_rate", arc_row.channel_id)
+                if key not in seen:
+                    seen.add(key)
+                    suspicious.append(
+                        {
+                            "audit_type": "high_archive_rate",
+                            "channel_id": arc_row.channel_id,
+                            "channel_name": ch.name,
+                            "channel_type": ch.channel_type,
+                            "channel_url": ch.url,
+                            "brand_count": len(brand_names_by_channel.get(arc_row.channel_id, [])),
+                            "linked_brands": brand_names_by_channel.get(arc_row.channel_id, [])[:8],
+                            "reason": f"품절 비율 {round(inactive/total*100)}% ({inactive}/{total}개) — 채널 폐점 의심",
+                            "suggestion": "채널 실제 운영 여부를 확인하고 필요시 is_active=False 처리하세요.",
+                        }
+                    )
+
     suspicious.sort(key=lambda x: (x["audit_type"], x["channel_name"]))
     return {"total": len(suspicious), "items": suspicious[:limit]}
 
@@ -733,3 +799,91 @@ async def stream_crawl_run(
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+# ── 채널 노트 (운영자 피드백) ─────────────────────────────────────────────────
+
+
+@router.get("/channels/{channel_id}/notes", response_model=list[ChannelNoteOut])
+async def list_channel_notes(
+    channel_id: int,
+    include_resolved: bool = Query(False, description="해결된 노트 포함"),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """채널별 운영자 노트 목록."""
+    query = (
+        select(ChannelNote, Channel.name)
+        .join(Channel, Channel.id == ChannelNote.channel_id)
+        .where(ChannelNote.channel_id == channel_id)
+        .order_by(ChannelNote.created_at.desc())
+    )
+    if not include_resolved:
+        query = query.where(ChannelNote.resolved_at.is_(None))
+    rows = (await db.execute(query)).all()
+    return [
+        ChannelNoteOut(
+            id=note.id,
+            channel_id=note.channel_id,
+            channel_name=channel_name,
+            note_type=note.note_type,
+            body=note.body,
+            operator=note.operator,
+            created_at=note.created_at,
+            resolved_at=note.resolved_at,
+        )
+        for note, channel_name in rows
+    ]
+
+
+@router.post("/channels/{channel_id}/notes", response_model=ChannelNoteOut)
+async def create_channel_note(
+    channel_id: int,
+    payload: ChannelNoteCreate,
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """채널 노트 생성."""
+    channel = (await db.execute(select(Channel).where(Channel.id == channel_id))).scalar_one_or_none()
+    if not channel:
+        raise HTTPException(status_code=404, detail="channel not found")
+    note = ChannelNote(
+        channel_id=channel_id,
+        note_type=payload.note_type,
+        body=payload.body,
+        operator=payload.operator,
+    )
+    db.add(note)
+    await db.commit()
+    await db.refresh(note)
+    return ChannelNoteOut(
+        id=note.id,
+        channel_id=note.channel_id,
+        channel_name=channel.name,
+        note_type=note.note_type,
+        body=note.body,
+        operator=note.operator,
+        created_at=note.created_at,
+        resolved_at=note.resolved_at,
+    )
+
+
+@router.patch("/channels/{channel_id}/notes/{note_id}/resolve")
+async def resolve_channel_note(
+    channel_id: int,
+    note_id: int,
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """채널 노트 해결 처리."""
+    note = (
+        await db.execute(
+            select(ChannelNote)
+            .where(ChannelNote.id == note_id, ChannelNote.channel_id == channel_id)
+        )
+    ).scalar_one_or_none()
+    if not note:
+        raise HTTPException(status_code=404, detail="note not found")
+    note.resolved_at = datetime.utcnow()
+    await db.commit()
+    return {"ok": True, "resolved_at": note.resolved_at.isoformat()}

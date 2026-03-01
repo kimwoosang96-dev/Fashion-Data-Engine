@@ -351,3 +351,14 @@ export interface CrawlRunOut {
 export interface CrawlRunDetail extends CrawlRunOut {
   logs: CrawlChannelLog[];
 }
+
+export interface ChannelNoteOut {
+  id: number;
+  channel_id: number;
+  channel_name: string;
+  note_type: string;
+  body: string;
+  operator: string;
+  created_at: string;
+  resolved_at: string | null;
+}

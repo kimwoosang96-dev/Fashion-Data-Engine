@@ -21,6 +21,9 @@ import {
   getCrawlRuns,
   getCrawlRunDetail,
   getCrawlRunStream,
+  getChannelNotes,
+  createChannelNote,
+  resolveChannelNote,
 } from "@/lib/api";
 import type {
   AdminAuditItem,
@@ -31,14 +34,24 @@ import type {
   Brand,
   BrandDirector,
   Channel,
+  ChannelNoteOut,
   CrawlRunOut,
   CrawlRunDetail,
   CrawlChannelLog,
 } from "@/lib/types";
 import { Input } from "@/components/ui/input";
 
+type TabKey = "db" | "crawler" | "channels";
+
+const TAB_LABELS: Record<TabKey, string> = {
+  db: "DB 상태",
+  crawler: "크롤러",
+  channels: "채널 관리",
+};
+
 export default function AdminPage() {
   const [token, setToken] = useState("");
+  const [activeTab, setActiveTab] = useState<TabKey>("db");
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [health, setHealth] = useState<AdminChannelHealth[]>([]);
   const [crawlStatus, setCrawlStatus] = useState<AdminCrawlStatus[]>([]);
@@ -53,6 +66,9 @@ export default function AdminPage() {
   const [crawlRuns, setCrawlRuns] = useState<CrawlRunOut[]>([]);
   const [selectedRun, setSelectedRun] = useState<CrawlRunDetail | null>(null);
   const [streamLogs, setStreamLogs] = useState<CrawlChannelLog[]>([]);
+  const [expandedNoteChannel, setExpandedNoteChannel] = useState<number | null>(null);
+  const [channelNotes, setChannelNotes] = useState<Record<number, ChannelNoteOut[]>>({});
+  const [noteForm, setNoteForm] = useState({ note_type: "observation", body: "" });
   const [directorForm, setDirectorForm] = useState({
     brand_slug: "",
     name: "",
@@ -277,6 +293,54 @@ export default function AdminPage() {
     }
   };
 
+  const toggleNotePanel = async (channelId: number) => {
+    if (expandedNoteChannel === channelId) {
+      setExpandedNoteChannel(null);
+      return;
+    }
+    setExpandedNoteChannel(channelId);
+    if (!channelNotes[channelId]) {
+      try {
+        const notes = await getChannelNotes(token.trim(), channelId);
+        setChannelNotes((prev) => ({ ...prev, [channelId]: notes }));
+      } catch {
+        setChannelNotes((prev) => ({ ...prev, [channelId]: [] }));
+      }
+    }
+  };
+
+  const submitChannelNote = async (channelId: number) => {
+    if (!token.trim() || !noteForm.body.trim()) return;
+    try {
+      const note = await createChannelNote(token.trim(), channelId, {
+        note_type: noteForm.note_type,
+        body: noteForm.body.trim(),
+      });
+      setChannelNotes((prev) => ({
+        ...prev,
+        [channelId]: [...(prev[channelId] ?? []), note],
+      }));
+      setNoteForm({ note_type: "observation", body: "" });
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "노트 등록 실패");
+    }
+  };
+
+  const resolveNote = async (channelId: number, noteId: number) => {
+    if (!token.trim()) return;
+    try {
+      await resolveChannelNote(token.trim(), channelId, noteId);
+      setChannelNotes((prev) => ({
+        ...prev,
+        [channelId]: (prev[channelId] ?? []).map((n) =>
+          n.id === noteId ? { ...n, resolved_at: new Date().toISOString() } : n
+        ),
+      }));
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "노트 해결 처리 실패");
+    }
+  };
+
   const filteredCrawlStatus =
     crawlFilter === "all"
       ? crawlStatus
@@ -288,6 +352,8 @@ export default function AdminPage() {
         <h1 className="text-2xl font-bold">운영관리</h1>
         <p className="text-sm text-gray-500 mt-1">DB 현황, 채널 헬스, 크롤 제어, 환율</p>
       </div>
+
+      {/* 토큰 입력 (항상 표시) */}
       <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
         <div className="flex gap-2">
           <Input
@@ -304,459 +370,579 @@ export default function AdminPage() {
             조회
           </button>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => void runJob("brands")} className="px-3 h-9 rounded-md border text-sm">
-            브랜드 크롤 실행
-          </button>
-          <button type="button" onClick={() => void runJob("products")} className="px-3 h-9 rounded-md border text-sm">
-            제품 크롤 실행
-          </button>
-          <button type="button" onClick={() => void runJob("drops")} className="px-3 h-9 rounded-md border text-sm">
-            드롭 크롤 실행
-          </button>
-        </div>
         {msg && <p className="text-xs text-gray-600">{msg}</p>}
       </div>
 
       {loading && <p className="text-sm text-gray-400">로딩 중...</p>}
 
-      {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Stat label="채널" value={stats.counts.channels} />
-          <Stat label="채널-브랜드 링크" value={stats.counts.channel_brands} />
-          <Stat label="제품" value={stats.counts.products} />
-          <Stat label="가격 이력" value={stats.counts.price_history} />
-        </div>
-      )}
-
-      {stats && (
-        <div className="bg-white border border-gray-200 rounded-xl p-4">
-          <h2 className="text-sm font-semibold mb-2">환율 (→ KRW)</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
-            {stats.exchange_rates.slice(0, 8).map((r) => (
-              <div key={`${r.from_currency}-${r.fetched_at}`} className="border rounded-md px-3 py-2">
-                <p className="font-medium">{r.from_currency}</p>
-                <p className="text-gray-600">{r.rate.toLocaleString("ko-KR")}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <section className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
-        <h2 className="text-sm font-semibold">크리에이티브 디렉터 관리</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-          <Input
-            placeholder="brand slug (예: nike)"
-            value={directorForm.brand_slug}
-            onChange={(e) => setDirectorForm((p) => ({ ...p, brand_slug: e.target.value }))}
-          />
-          <Input
-            placeholder="디렉터 이름"
-            value={directorForm.name}
-            onChange={(e) => setDirectorForm((p) => ({ ...p, name: e.target.value }))}
-          />
-          <Input
-            placeholder="역할 (기본 Creative Director)"
-            value={directorForm.role}
-            onChange={(e) => setDirectorForm((p) => ({ ...p, role: e.target.value }))}
-          />
-          <Input
-            placeholder="시작 연도"
-            value={directorForm.start_year}
-            onChange={(e) => setDirectorForm((p) => ({ ...p, start_year: e.target.value }))}
-          />
-          <Input
-            placeholder="종료 연도"
-            value={directorForm.end_year}
-            onChange={(e) => setDirectorForm((p) => ({ ...p, end_year: e.target.value }))}
-          />
-          <Input
-            placeholder="메모"
-            value={directorForm.note}
-            onChange={(e) => setDirectorForm((p) => ({ ...p, note: e.target.value }))}
-          />
-        </div>
-        <button type="button" onClick={() => void submitDirector()} className="px-3 h-9 rounded-md bg-gray-900 text-white text-sm">
-          디렉터 등록
-        </button>
-        <div className="space-y-1 max-h-56 overflow-auto">
-          {directors.map((d) => (
-            <div key={d.id} className="flex items-center justify-between border rounded-md px-3 py-2">
-              <p className="text-sm">
-                <span className="font-medium">{d.name}</span> · {d.brand_name ?? d.brand_slug} ({d.start_year ?? "?"}~{d.end_year ?? "현재"})
-              </p>
-              <button
-                type="button"
-                onClick={() => void removeDirector(d.id)}
-                className="text-xs px-2 py-1 rounded border text-red-600 border-red-200"
-              >
-                삭제
-              </button>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="bg-white border border-gray-200 rounded-xl p-4 space-y-4">
-        <h2 className="text-sm font-semibold">인스타그램 URL 관리</h2>
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_2fr_auto] gap-2 items-center">
-          <select
-            className="h-10 px-3 rounded-md border border-gray-200 bg-white text-sm"
-            value={brandIdForInsta}
-            onChange={(e) => setBrandIdForInsta(e.target.value ? Number(e.target.value) : "")}
-          >
-            <option value="">브랜드 선택</option>
-            {brands.map((b) => (
-              <option key={b.id} value={b.id}>{b.name} ({b.slug})</option>
-            ))}
-          </select>
-          <Input placeholder="브랜드 인스타그램 URL" value={brandInsta} onChange={(e) => setBrandInsta(e.target.value)} />
-          <button type="button" onClick={() => void saveBrandInstagram()} className="px-3 h-10 rounded-md border text-sm">저장</button>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_2fr_auto] gap-2 items-center">
-          <select
-            className="h-10 px-3 rounded-md border border-gray-200 bg-white text-sm"
-            value={channelIdForInsta}
-            onChange={(e) => setChannelIdForInsta(e.target.value ? Number(e.target.value) : "")}
-          >
-            <option value="">채널 선택</option>
-            {channels.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-          <Input placeholder="채널 인스타그램 URL" value={channelInsta} onChange={(e) => setChannelInsta(e.target.value)} />
-          <button type="button" onClick={() => void saveChannelInstagram()} className="px-3 h-10 rounded-md border text-sm">저장</button>
-        </div>
-      </section>
-
-      <section className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
-        <h2 className="text-sm font-semibold">협업 관리</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-          <Input
-            placeholder="brand_a slug (예: nike)"
-            value={collabForm.brand_a_slug}
-            onChange={(e) => setCollabForm((p) => ({ ...p, brand_a_slug: e.target.value }))}
-          />
-          <Input
-            placeholder="brand_b slug (예: stussy)"
-            value={collabForm.brand_b_slug}
-            onChange={(e) => setCollabForm((p) => ({ ...p, brand_b_slug: e.target.value }))}
-          />
-          <Input
-            placeholder="협업명"
-            value={collabForm.collab_name}
-            onChange={(e) => setCollabForm((p) => ({ ...p, collab_name: e.target.value }))}
-          />
-          <Input
-            placeholder="카테고리 (footwear/apparel...)"
-            value={collabForm.collab_category}
-            onChange={(e) => setCollabForm((p) => ({ ...p, collab_category: e.target.value }))}
-          />
-          <Input
-            placeholder="출시연도"
-            value={collabForm.release_year}
-            onChange={(e) => setCollabForm((p) => ({ ...p, release_year: e.target.value }))}
-          />
-          <Input
-            placeholder="하입 점수(미입력 시 자동)"
-            value={collabForm.hype_score}
-            onChange={(e) => setCollabForm((p) => ({ ...p, hype_score: e.target.value }))}
-          />
-          <Input
-            placeholder="출처 URL"
-            value={collabForm.source_url}
-            onChange={(e) => setCollabForm((p) => ({ ...p, source_url: e.target.value }))}
-          />
-          <Input
-            placeholder="메모"
-            value={collabForm.notes}
-            onChange={(e) => setCollabForm((p) => ({ ...p, notes: e.target.value }))}
-          />
-        </div>
-        <button type="button" onClick={() => void submitCollab()} className="px-3 h-9 rounded-md bg-gray-900 text-white text-sm">
-          협업 등록
-        </button>
-        <div className="space-y-1 max-h-64 overflow-auto">
-          {collabs.map((c) => (
-            <div key={c.id} className="flex items-center justify-between border rounded-md px-3 py-2">
-              <p className="text-sm">
-                <span className="font-medium">{c.collab_name}</span> · hype {c.hype_score}
-                {c.collab_category ? ` · ${c.collab_category}` : ""}
-              </p>
-              <button
-                type="button"
-                onClick={() => void removeCollab(c.id)}
-                className="text-xs px-2 py-1 rounded border text-red-600 border-red-200"
-              >
-                삭제
-              </button>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
-        <h2 className="text-sm font-semibold">브랜드-채널 혼재 감사</h2>
-        <p className="text-xs text-gray-500">유형 불일치/브랜드 수 이상치를 탐지한 결과입니다.</p>
-        <div className="space-y-2 max-h-80 overflow-auto">
-          {auditItems.map((item) => (
-            <div key={`${item.audit_type}-${item.channel_id}`} className="border rounded-md p-3">
-              <p className="text-sm font-medium">
-                {item.channel_name} <span className="text-xs text-gray-400">({item.channel_type ?? "-"})</span>
-              </p>
-              <p className="text-xs text-red-600 mt-1">{item.reason}</p>
-              <p className="text-xs text-gray-600 mt-1">제안: {item.suggestion}</p>
-              <p className="text-xs text-gray-500 mt-1">
-                브랜드 수 {item.brand_count} · 연결 브랜드 {item.linked_brands.slice(0, 5).join(", ") || "-"}
-              </p>
-            </div>
-          ))}
-          {auditItems.length === 0 && <p className="text-xs text-gray-400">탐지 항목이 없습니다.</p>}
-        </div>
-      </section>
-
-      {crawlStatus.length > 0 && (
-        <section className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-sm font-semibold">채널 크롤 현황</h2>
-            <div className="flex items-center gap-2">
-              <label className="text-xs text-gray-500">상태 필터</label>
-              <select
-                className="h-8 px-2 rounded-md border border-gray-200 bg-white text-xs"
-                value={crawlFilter}
-                onChange={(e) => setCrawlFilter(e.target.value as "all" | "ok" | "never" | "stale")}
-              >
-                <option value="all">전체</option>
-                <option value="never">never</option>
-                <option value="stale">stale</option>
-                <option value="ok">ok</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="max-h-[28rem] overflow-auto border rounded-md">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-100 sticky top-0">
-                <tr>
-                  <th className="text-left px-4 py-3">채널</th>
-                  <th className="text-left px-4 py-3">타입</th>
-                  <th className="text-right px-4 py-3">제품</th>
-                  <th className="text-right px-4 py-3">활성</th>
-                  <th className="text-right px-4 py-3">품절</th>
-                  <th className="text-left px-4 py-3">마지막 크롤</th>
-                  <th className="text-left px-4 py-3">상태</th>
-                  <th className="text-right px-4 py-3">실행</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {filteredCrawlStatus.map((row) => (
-                  <tr key={row.channel_id}>
-                    <td className="px-4 py-3">
-                      <p className="font-medium">{row.channel_name}</p>
-                      <p className="text-xs text-gray-400">{row.channel_url}</p>
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">{row.channel_type ?? "-"}</td>
-                    <td className="px-4 py-3 text-right">{row.product_count}</td>
-                    <td className="px-4 py-3 text-right">{row.active_count}</td>
-                    <td className="px-4 py-3 text-right">{row.inactive_count}</td>
-                    <td className="px-4 py-3 text-xs text-gray-600">{row.last_crawled_at ?? "never"}</td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`text-xs px-2 py-0.5 rounded-full ${
-                          row.status === "ok"
-                            ? "bg-emerald-100 text-emerald-700"
-                            : row.status === "stale"
-                            ? "bg-amber-100 text-amber-700"
-                            : "bg-rose-100 text-rose-700"
-                        }`}
-                      >
-                        {row.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <button
-                        type="button"
-                        onClick={() => void runChannelCrawl(row.channel_id)}
-                        className="text-xs px-2 py-1 rounded border border-gray-300 hover:bg-gray-50"
-                      >
-                        크롤 실행
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
-
-      {health.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 border-b border-gray-100">
-              <tr>
-                <th className="text-left px-4 py-3">채널</th>
-                <th className="text-left px-4 py-3">국가</th>
-                <th className="text-right px-4 py-3">브랜드</th>
-                <th className="text-right px-4 py-3">제품</th>
-                <th className="text-right px-4 py-3">세일</th>
-                <th className="text-left px-4 py-3">헬스</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {health.map((row) => (
-                <tr key={row.channel_id}>
-                  <td className="px-4 py-3">
-                    <p className="font-medium">{row.name}</p>
-                    <p className="text-xs text-gray-400">{row.channel_type ?? "-"}</p>
-                  </td>
-                  <td className="px-4 py-3 text-gray-500">{row.country ?? "-"}</td>
-                  <td className="px-4 py-3 text-right">{row.brand_count}</td>
-                  <td className="px-4 py-3 text-right">{row.product_count}</td>
-                  <td className="px-4 py-3 text-right">{row.sale_count}</td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`text-xs px-2 py-0.5 rounded-full ${
-                        row.health === "ok" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
-                      }`}
-                    >
-                      {row.health === "ok" ? "정상" : "점검필요"}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* ── 크롤 모니터 ─────────────────────────────────────────── */}
-      <div className="mt-10">
-        <div className="flex items-center gap-3 mb-4">
-          <h2 className="text-lg font-semibold">크롤 모니터</h2>
+      {/* 탭 네비게이션 */}
+      <div className="flex gap-1 border-b border-gray-200">
+        {(Object.keys(TAB_LABELS) as TabKey[]).map((key) => (
           <button
-            onClick={loadCrawlRuns}
-            className="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg"
+            key={key}
+            type="button"
+            onClick={() => setActiveTab(key)}
+            className={`px-4 py-2 text-sm font-medium transition-colors ${
+              activeTab === key
+                ? "border-b-2 border-blue-600 text-blue-600 -mb-px"
+                : "text-gray-500 hover:text-gray-900"
+            }`}
           >
-            실행 목록 새로고침
+            {TAB_LABELS[key]}
           </button>
-        </div>
+        ))}
+      </div>
 
-        {crawlRuns.length > 0 && (
-          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden mb-6">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-xs text-gray-500">
-                <tr>
-                  <th className="px-4 py-2 text-left">ID</th>
-                  <th className="px-4 py-2 text-left">시작</th>
-                  <th className="px-4 py-2 text-left">상태</th>
-                  <th className="px-4 py-2 text-right">진행</th>
-                  <th className="px-4 py-2 text-right">신규</th>
-                  <th className="px-4 py-2 text-right">에러</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {crawlRuns.map((run) => (
-                  <tr
-                    key={run.id}
-                    className="hover:bg-gray-50 cursor-pointer"
-                    onClick={() => selectCrawlRun(run.id, run.status)}
-                  >
-                    <td className="px-4 py-2 text-gray-400">#{run.id}</td>
-                    <td className="px-4 py-2">{new Date(run.started_at).toLocaleString("ko-KR")}</td>
-                    <td className="px-4 py-2">
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${
-                        run.status === "running" ? "bg-blue-100 text-blue-700" :
-                        run.status === "done" ? "bg-emerald-100 text-emerald-700" :
-                        "bg-red-100 text-red-700"
-                      }`}>
-                        {run.status === "running" ? "진행중" : run.status === "done" ? "완료" : "실패"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2 text-right text-gray-600">
-                      {run.done_channels}/{run.total_channels}
-                    </td>
-                    <td className="px-4 py-2 text-right text-emerald-600">+{run.new_products}</td>
-                    <td className="px-4 py-2 text-right text-red-500">{run.error_channels}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {selectedRun && (
-          <div className="bg-white border border-gray-200 rounded-xl p-5">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-medium">실행 #{selectedRun.id} 상세</h3>
-              <span className="text-xs text-gray-400">
-                {selectedRun.done_channels}/{selectedRun.total_channels} 채널
-              </span>
+      {/* ── DB 상태 탭 ─────────────────────────────────────────────────── */}
+      {activeTab === "db" && (
+        <div className="space-y-5">
+          {stats && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <Stat label="채널" value={stats.counts.channels} />
+              <Stat label="채널-브랜드 링크" value={stats.counts.channel_brands} />
+              <Stat label="제품" value={stats.counts.products} />
+              <Stat label="가격 이력" value={stats.counts.price_history} />
             </div>
+          )}
 
-            {/* 진행률 바 */}
-            <div className="w-full bg-gray-100 rounded-full h-2 mb-4">
-              <div
-                className="bg-blue-500 h-2 rounded-full transition-all"
-                style={{
-                  width: selectedRun.total_channels > 0
-                    ? `${Math.round((selectedRun.done_channels / selectedRun.total_channels) * 100)}%`
-                    : "0%",
-                }}
+          {stats && (
+            <div className="bg-white border border-gray-200 rounded-xl p-4">
+              <h2 className="text-sm font-semibold mb-2">환율 (→ KRW)</h2>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+                {stats.exchange_rates.slice(0, 8).map((r) => (
+                  <div key={`${r.from_currency}-${r.fetched_at}`} className="border rounded-md px-3 py-2">
+                    <p className="font-medium">{r.from_currency}</p>
+                    <p className="text-gray-600">{r.rate.toLocaleString("ko-KR")}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <section className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
+            <h2 className="text-sm font-semibold">크리에이티브 디렉터 관리</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+              <Input
+                placeholder="brand slug (예: nike)"
+                value={directorForm.brand_slug}
+                onChange={(e) => setDirectorForm((p) => ({ ...p, brand_slug: e.target.value }))}
+              />
+              <Input
+                placeholder="디렉터 이름"
+                value={directorForm.name}
+                onChange={(e) => setDirectorForm((p) => ({ ...p, name: e.target.value }))}
+              />
+              <Input
+                placeholder="역할 (기본 Creative Director)"
+                value={directorForm.role}
+                onChange={(e) => setDirectorForm((p) => ({ ...p, role: e.target.value }))}
+              />
+              <Input
+                placeholder="시작 연도"
+                value={directorForm.start_year}
+                onChange={(e) => setDirectorForm((p) => ({ ...p, start_year: e.target.value }))}
+              />
+              <Input
+                placeholder="종료 연도"
+                value={directorForm.end_year}
+                onChange={(e) => setDirectorForm((p) => ({ ...p, end_year: e.target.value }))}
+              />
+              <Input
+                placeholder="메모"
+                value={directorForm.note}
+                onChange={(e) => setDirectorForm((p) => ({ ...p, note: e.target.value }))}
               />
             </div>
-            <div className="flex gap-4 text-xs text-gray-500 mb-4">
-              <span>신규 제품 +{selectedRun.new_products}</span>
-              <span>업데이트 {selectedRun.updated_products}</span>
-              <span className="text-red-500">에러 {selectedRun.error_channels}채널</span>
+            <button type="button" onClick={() => void submitDirector()} className="px-3 h-9 rounded-md bg-gray-900 text-white text-sm">
+              디렉터 등록
+            </button>
+            <div className="space-y-1 max-h-56 overflow-auto">
+              {directors.map((d) => (
+                <div key={d.id} className="flex items-center justify-between border rounded-md px-3 py-2">
+                  <p className="text-sm">
+                    <span className="font-medium">{d.name}</span> · {d.brand_name ?? d.brand_slug} ({d.start_year ?? "?"}~{d.end_year ?? "현재"})
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => void removeDirector(d.id)}
+                    className="text-xs px-2 py-1 rounded border text-red-600 border-red-200"
+                  >
+                    삭제
+                  </button>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="bg-white border border-gray-200 rounded-xl p-4 space-y-4">
+            <h2 className="text-sm font-semibold">인스타그램 URL 관리</h2>
+            <div className="grid grid-cols-1 md:grid-cols-[1fr_2fr_auto] gap-2 items-center">
+              <select
+                className="h-10 px-3 rounded-md border border-gray-200 bg-white text-sm"
+                value={brandIdForInsta}
+                onChange={(e) => setBrandIdForInsta(e.target.value ? Number(e.target.value) : "")}
+              >
+                <option value="">브랜드 선택</option>
+                {brands.map((b) => (
+                  <option key={b.id} value={b.id}>{b.name} ({b.slug})</option>
+                ))}
+              </select>
+              <Input placeholder="브랜드 인스타그램 URL" value={brandInsta} onChange={(e) => setBrandInsta(e.target.value)} />
+              <button type="button" onClick={() => void saveBrandInstagram()} className="px-3 h-10 rounded-md border text-sm">저장</button>
             </div>
 
-            {/* 채널별 로그 테이블 */}
-            <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
-              <table className="w-full text-xs">
-                <thead className="bg-gray-50 text-gray-500 sticky top-0">
+            <div className="grid grid-cols-1 md:grid-cols-[1fr_2fr_auto] gap-2 items-center">
+              <select
+                className="h-10 px-3 rounded-md border border-gray-200 bg-white text-sm"
+                value={channelIdForInsta}
+                onChange={(e) => setChannelIdForInsta(e.target.value ? Number(e.target.value) : "")}
+              >
+                <option value="">채널 선택</option>
+                {channels.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+              <Input placeholder="채널 인스타그램 URL" value={channelInsta} onChange={(e) => setChannelInsta(e.target.value)} />
+              <button type="button" onClick={() => void saveChannelInstagram()} className="px-3 h-10 rounded-md border text-sm">저장</button>
+            </div>
+          </section>
+
+          <section className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
+            <h2 className="text-sm font-semibold">협업 관리</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+              <Input
+                placeholder="brand_a slug (예: nike)"
+                value={collabForm.brand_a_slug}
+                onChange={(e) => setCollabForm((p) => ({ ...p, brand_a_slug: e.target.value }))}
+              />
+              <Input
+                placeholder="brand_b slug (예: stussy)"
+                value={collabForm.brand_b_slug}
+                onChange={(e) => setCollabForm((p) => ({ ...p, brand_b_slug: e.target.value }))}
+              />
+              <Input
+                placeholder="협업명"
+                value={collabForm.collab_name}
+                onChange={(e) => setCollabForm((p) => ({ ...p, collab_name: e.target.value }))}
+              />
+              <Input
+                placeholder="카테고리 (footwear/apparel...)"
+                value={collabForm.collab_category}
+                onChange={(e) => setCollabForm((p) => ({ ...p, collab_category: e.target.value }))}
+              />
+              <Input
+                placeholder="출시연도"
+                value={collabForm.release_year}
+                onChange={(e) => setCollabForm((p) => ({ ...p, release_year: e.target.value }))}
+              />
+              <Input
+                placeholder="하입 점수(미입력 시 자동)"
+                value={collabForm.hype_score}
+                onChange={(e) => setCollabForm((p) => ({ ...p, hype_score: e.target.value }))}
+              />
+              <Input
+                placeholder="출처 URL"
+                value={collabForm.source_url}
+                onChange={(e) => setCollabForm((p) => ({ ...p, source_url: e.target.value }))}
+              />
+              <Input
+                placeholder="메모"
+                value={collabForm.notes}
+                onChange={(e) => setCollabForm((p) => ({ ...p, notes: e.target.value }))}
+              />
+            </div>
+            <button type="button" onClick={() => void submitCollab()} className="px-3 h-9 rounded-md bg-gray-900 text-white text-sm">
+              협업 등록
+            </button>
+            <div className="space-y-1 max-h-64 overflow-auto">
+              {collabs.map((c) => (
+                <div key={c.id} className="flex items-center justify-between border rounded-md px-3 py-2">
+                  <p className="text-sm">
+                    <span className="font-medium">{c.collab_name}</span> · hype {c.hype_score}
+                    {c.collab_category ? ` · ${c.collab_category}` : ""}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => void removeCollab(c.id)}
+                    className="text-xs px-2 py-1 rounded border text-red-600 border-red-200"
+                  >
+                    삭제
+                  </button>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
+            <h2 className="text-sm font-semibold">브랜드-채널 혼재 감사</h2>
+            <p className="text-xs text-gray-500">유형 불일치/브랜드 수 이상치를 탐지한 결과입니다.</p>
+            <div className="space-y-2 max-h-80 overflow-auto">
+              {auditItems.map((item) => (
+                <div key={`${item.audit_type}-${item.channel_id}`} className="border rounded-md p-3">
+                  <p className="text-sm font-medium">
+                    {item.channel_name} <span className="text-xs text-gray-400">({item.channel_type ?? "-"})</span>
+                    <span className="ml-2 text-xs bg-gray-100 px-1.5 py-0.5 rounded">{item.audit_type}</span>
+                  </p>
+                  <p className="text-xs text-red-600 mt-1">{item.reason}</p>
+                  <p className="text-xs text-gray-600 mt-1">제안: {item.suggestion}</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    브랜드 수 {item.brand_count} · 연결 브랜드 {item.linked_brands.slice(0, 5).join(", ") || "-"}
+                  </p>
+                </div>
+              ))}
+              {auditItems.length === 0 && <p className="text-xs text-gray-400">탐지 항목이 없습니다.</p>}
+            </div>
+          </section>
+        </div>
+      )}
+
+      {/* ── 크롤러 탭 ─────────────────────────────────────────────────── */}
+      {activeTab === "crawler" && (
+        <div className="space-y-5">
+          <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
+            <h2 className="text-sm font-semibold">크롤 실행</h2>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => void runJob("brands")} className="px-3 h-9 rounded-md border text-sm">
+                브랜드 크롤 실행
+              </button>
+              <button type="button" onClick={() => void runJob("products")} className="px-3 h-9 rounded-md border text-sm">
+                제품 크롤 실행
+              </button>
+              <button type="button" onClick={() => void runJob("drops")} className="px-3 h-9 rounded-md border text-sm">
+                드롭 크롤 실행
+              </button>
+            </div>
+          </div>
+
+          {crawlStatus.length > 0 && (
+            <section className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-sm font-semibold">채널 크롤 현황</h2>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-gray-500">상태 필터</label>
+                  <select
+                    className="h-8 px-2 rounded-md border border-gray-200 bg-white text-xs"
+                    value={crawlFilter}
+                    onChange={(e) => setCrawlFilter(e.target.value as "all" | "ok" | "never" | "stale")}
+                  >
+                    <option value="all">전체</option>
+                    <option value="never">never</option>
+                    <option value="stale">stale</option>
+                    <option value="ok">ok</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="max-h-[28rem] overflow-auto border rounded-md">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b border-gray-100 sticky top-0">
+                    <tr>
+                      <th className="text-left px-4 py-3">채널</th>
+                      <th className="text-left px-4 py-3">타입</th>
+                      <th className="text-right px-4 py-3">제품</th>
+                      <th className="text-right px-4 py-3">활성</th>
+                      <th className="text-right px-4 py-3">품절</th>
+                      <th className="text-left px-4 py-3">마지막 크롤</th>
+                      <th className="text-left px-4 py-3">상태</th>
+                      <th className="text-right px-4 py-3">실행</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {filteredCrawlStatus.map((row) => (
+                      <tr key={row.channel_id}>
+                        <td className="px-4 py-3">
+                          <p className="font-medium">{row.channel_name}</p>
+                          <p className="text-xs text-gray-400">{row.channel_url}</p>
+                        </td>
+                        <td className="px-4 py-3 text-gray-600">{row.channel_type ?? "-"}</td>
+                        <td className="px-4 py-3 text-right">{row.product_count}</td>
+                        <td className="px-4 py-3 text-right">{row.active_count}</td>
+                        <td className="px-4 py-3 text-right">{row.inactive_count}</td>
+                        <td className="px-4 py-3 text-xs text-gray-600">{row.last_crawled_at ?? "never"}</td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`text-xs px-2 py-0.5 rounded-full ${
+                              row.status === "ok"
+                                ? "bg-emerald-100 text-emerald-700"
+                                : row.status === "stale"
+                                ? "bg-amber-100 text-amber-700"
+                                : "bg-rose-100 text-rose-700"
+                            }`}
+                          >
+                            {row.status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => void runChannelCrawl(row.channel_id)}
+                            className="text-xs px-2 py-1 rounded border border-gray-300 hover:bg-gray-50"
+                          >
+                            크롤 실행
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
+
+          {/* 크롤 모니터 */}
+          <div>
+            <div className="flex items-center gap-3 mb-4">
+              <h2 className="text-lg font-semibold">크롤 모니터</h2>
+              <button
+                onClick={loadCrawlRuns}
+                className="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg"
+              >
+                실행 목록 새로고침
+              </button>
+            </div>
+
+            {crawlRuns.length > 0 && (
+              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden mb-6">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 text-xs text-gray-500">
+                    <tr>
+                      <th className="px-4 py-2 text-left">ID</th>
+                      <th className="px-4 py-2 text-left">시작</th>
+                      <th className="px-4 py-2 text-left">상태</th>
+                      <th className="px-4 py-2 text-right">진행</th>
+                      <th className="px-4 py-2 text-right">신규</th>
+                      <th className="px-4 py-2 text-right">에러</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {crawlRuns.map((run) => (
+                      <tr
+                        key={run.id}
+                        className="hover:bg-gray-50 cursor-pointer"
+                        onClick={() => selectCrawlRun(run.id, run.status)}
+                      >
+                        <td className="px-4 py-2 text-gray-400">#{run.id}</td>
+                        <td className="px-4 py-2">{new Date(run.started_at).toLocaleString("ko-KR")}</td>
+                        <td className="px-4 py-2">
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${
+                            run.status === "running" ? "bg-blue-100 text-blue-700" :
+                            run.status === "done" ? "bg-emerald-100 text-emerald-700" :
+                            "bg-red-100 text-red-700"
+                          }`}>
+                            {run.status === "running" ? "진행중" : run.status === "done" ? "완료" : "실패"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2 text-right text-gray-600">
+                          {run.done_channels}/{run.total_channels}
+                        </td>
+                        <td className="px-4 py-2 text-right text-emerald-600">+{run.new_products}</td>
+                        <td className="px-4 py-2 text-right text-red-500">{run.error_channels}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {selectedRun && (
+              <div className="bg-white border border-gray-200 rounded-xl p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-medium">실행 #{selectedRun.id} 상세</h3>
+                  <span className="text-xs text-gray-400">
+                    {selectedRun.done_channels}/{selectedRun.total_channels} 채널
+                  </span>
+                </div>
+
+                {/* 진행률 바 */}
+                <div className="w-full bg-gray-100 rounded-full h-2 mb-4">
+                  <div
+                    className="bg-blue-500 h-2 rounded-full transition-all"
+                    style={{
+                      width: selectedRun.total_channels > 0
+                        ? `${Math.round((selectedRun.done_channels / selectedRun.total_channels) * 100)}%`
+                        : "0%",
+                    }}
+                  />
+                </div>
+                <div className="flex gap-4 text-xs text-gray-500 mb-4">
+                  <span>신규 제품 +{selectedRun.new_products}</span>
+                  <span>업데이트 {selectedRun.updated_products}</span>
+                  <span className="text-red-500">에러 {selectedRun.error_channels}채널</span>
+                </div>
+
+                {/* 채널별 로그 테이블 */}
+                <div className="overflow-x-auto max-h-[500px] overflow-y-auto">
+                  <table className="w-full text-xs">
+                    <thead className="bg-gray-50 text-gray-500 sticky top-0">
+                      <tr>
+                        <th className="px-3 py-2 text-left">채널</th>
+                        <th className="px-3 py-2 text-left">상태</th>
+                        <th className="px-3 py-2 text-right">제품</th>
+                        <th className="px-3 py-2 text-right">신규</th>
+                        <th className="px-3 py-2 text-left">전략</th>
+                        <th className="px-3 py-2 text-right">시간</th>
+                        <th className="px-3 py-2 text-left">에러</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {streamLogs.map((log) => (
+                        <tr key={log.id} className={log.status === "failed" ? "bg-red-50" : ""}>
+                          <td className="px-3 py-2 font-medium">{log.channel_name}</td>
+                          <td className="px-3 py-2">
+                            <span className={`px-1.5 py-0.5 rounded ${
+                              log.status === "success" ? "bg-emerald-100 text-emerald-700" :
+                              log.status === "failed" ? "bg-red-100 text-red-700" :
+                              "bg-gray-100 text-gray-500"
+                            }`}>
+                              {log.status === "success" ? "✅" : log.status === "failed" ? "❌" : "—"}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-right">{log.products_found}</td>
+                          <td className="px-3 py-2 text-right text-emerald-600">+{log.products_new}</td>
+                          <td className="px-3 py-2 text-gray-400">{log.strategy ?? "-"}</td>
+                          <td className="px-3 py-2 text-right text-gray-400">
+                            {log.duration_ms > 1000 ? `${(log.duration_ms / 1000).toFixed(1)}s` : `${log.duration_ms}ms`}
+                          </td>
+                          <td className="px-3 py-2 text-red-500 max-w-xs truncate" title={log.error_msg ?? ""}>
+                            {log.error_msg ?? ""}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── 채널 관리 탭 ─────────────────────────────────────────────── */}
+      {activeTab === "channels" && (
+        <div className="space-y-5">
+          {health.length > 0 ? (
+            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b border-gray-100">
                   <tr>
-                    <th className="px-3 py-2 text-left">채널</th>
-                    <th className="px-3 py-2 text-left">상태</th>
-                    <th className="px-3 py-2 text-right">제품</th>
-                    <th className="px-3 py-2 text-right">신규</th>
-                    <th className="px-3 py-2 text-left">전략</th>
-                    <th className="px-3 py-2 text-right">시간</th>
-                    <th className="px-3 py-2 text-left">에러</th>
+                    <th className="text-left px-4 py-3">채널</th>
+                    <th className="text-left px-4 py-3">국가</th>
+                    <th className="text-right px-4 py-3">브랜드</th>
+                    <th className="text-right px-4 py-3">제품</th>
+                    <th className="text-right px-4 py-3">세일</th>
+                    <th className="text-left px-4 py-3">헬스</th>
+                    <th className="text-right px-4 py-3">노트</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {streamLogs.map((log) => (
-                    <tr key={log.id} className={log.status === "failed" ? "bg-red-50" : ""}>
-                      <td className="px-3 py-2 font-medium">{log.channel_name}</td>
-                      <td className="px-3 py-2">
-                        <span className={`px-1.5 py-0.5 rounded ${
-                          log.status === "success" ? "bg-emerald-100 text-emerald-700" :
-                          log.status === "failed" ? "bg-red-100 text-red-700" :
-                          "bg-gray-100 text-gray-500"
-                        }`}>
-                          {log.status === "success" ? "✅" : log.status === "failed" ? "❌" : "—"}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2 text-right">{log.products_found}</td>
-                      <td className="px-3 py-2 text-right text-emerald-600">+{log.products_new}</td>
-                      <td className="px-3 py-2 text-gray-400">{log.strategy ?? "-"}</td>
-                      <td className="px-3 py-2 text-right text-gray-400">
-                        {log.duration_ms > 1000 ? `${(log.duration_ms / 1000).toFixed(1)}s` : `${log.duration_ms}ms`}
-                      </td>
-                      <td className="px-3 py-2 text-red-500 max-w-xs truncate" title={log.error_msg ?? ""}>
-                        {log.error_msg ?? ""}
-                      </td>
-                    </tr>
+                <tbody>
+                  {health.map((row) => (
+                    <>
+                      <tr key={row.channel_id} className="border-b border-gray-50 hover:bg-gray-50/50">
+                        <td className="px-4 py-3">
+                          <p className="font-medium">{row.name}</p>
+                          <p className="text-xs text-gray-400">{row.channel_type ?? "-"}</p>
+                        </td>
+                        <td className="px-4 py-3 text-gray-500">{row.country ?? "-"}</td>
+                        <td className="px-4 py-3 text-right">{row.brand_count}</td>
+                        <td className="px-4 py-3 text-right">{row.product_count}</td>
+                        <td className="px-4 py-3 text-right">{row.sale_count}</td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`text-xs px-2 py-0.5 rounded-full ${
+                              row.health === "ok" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+                            }`}
+                          >
+                            {row.health === "ok" ? "정상" : "점검필요"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <button
+                            type="button"
+                            onClick={() => void toggleNotePanel(row.channel_id)}
+                            className="text-xs px-2 py-1 rounded border border-gray-300 hover:bg-gray-50"
+                          >
+                            {expandedNoteChannel === row.channel_id ? "닫기" : "노트"}
+                          </button>
+                        </td>
+                      </tr>
+                      {expandedNoteChannel === row.channel_id && (
+                        <tr key={`note-${row.channel_id}`}>
+                          <td colSpan={7} className="px-4 py-3 bg-blue-50/30 border-b border-gray-100">
+                            <div className="space-y-2">
+                              {(channelNotes[row.channel_id] ?? []).map((note) => (
+                                <div
+                                  key={note.id}
+                                  className={`text-xs border rounded-md px-3 py-2 flex items-start justify-between gap-2 ${
+                                    note.resolved_at ? "opacity-50 bg-gray-50" : "bg-white"
+                                  }`}
+                                >
+                                  <div>
+                                    <span className="font-medium mr-2">[{note.note_type}]</span>
+                                    {note.body}
+                                    <span className="text-gray-400 ml-2">— {note.operator}</span>
+                                    {note.resolved_at && (
+                                      <span className="text-emerald-600 ml-2">✓ 해결됨</span>
+                                    )}
+                                  </div>
+                                  {!note.resolved_at && (
+                                    <button
+                                      type="button"
+                                      onClick={() => void resolveNote(row.channel_id, note.id)}
+                                      className="shrink-0 px-2 py-0.5 rounded border text-emerald-700 border-emerald-200 hover:bg-emerald-50"
+                                    >
+                                      해결
+                                    </button>
+                                  )}
+                                </div>
+                              ))}
+                              {(channelNotes[row.channel_id] ?? []).length === 0 && (
+                                <p className="text-xs text-gray-400">노트가 없습니다.</p>
+                              )}
+                              {/* 노트 등록 폼 */}
+                              <div className="flex gap-2 items-center pt-1">
+                                <select
+                                  className="h-8 px-2 rounded-md border border-gray-200 bg-white text-xs"
+                                  value={noteForm.note_type}
+                                  onChange={(e) => setNoteForm((p) => ({ ...p, note_type: e.target.value }))}
+                                >
+                                  <option value="observation">observation</option>
+                                  <option value="crawl-issue">crawl-issue</option>
+                                  <option value="selector-changed">selector-changed</option>
+                                  <option value="price-bug">price-bug</option>
+                                </select>
+                                <input
+                                  className="flex-1 h-8 px-3 rounded-md border border-gray-200 bg-white text-xs"
+                                  placeholder="노트 내용..."
+                                  value={noteForm.body}
+                                  onChange={(e) => setNoteForm((p) => ({ ...p, body: e.target.value }))}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") void submitChannelNote(row.channel_id);
+                                  }}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => void submitChannelNote(row.channel_id)}
+                                  className="h-8 px-3 rounded-md bg-gray-900 text-white text-xs"
+                                >
+                                  등록
+                                </button>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </>
                   ))}
                 </tbody>
               </table>
             </div>
-          </div>
-        )}
-      </div>
+          ) : (
+            <p className="text-sm text-gray-400">
+              {loading ? "로딩 중..." : "데이터가 없습니다. 토큰을 입력하고 조회하세요."}
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

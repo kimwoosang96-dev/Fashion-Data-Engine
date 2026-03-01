@@ -5,7 +5,7 @@ import type {
   SaleFilters,
   AdminStats, AdminChannelHealth, AdminCrawlStatus,
   FashionNews, CollabItem, BrandDirector, DirectorsByBrand, AdminCollabItem, AdminAuditItem, MultiChannelProduct,
-  CrawlRunOut, CrawlRunDetail,
+  CrawlRunOut, CrawlRunDetail, ChannelNoteOut,
 } from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -71,9 +71,14 @@ export const getPriceHistory = (productKey: string, days = 30) =>
   );
 export const getArchivedProducts = (limit = 100, offset = 0) =>
   apiFetch<Product[]>(`/products/archive?limit=${limit}&offset=${offset}`);
-export const getMultiChannelProducts = (limit = 100, offset = 0, minChannels = 2) =>
+export const getMultiChannelProducts = (
+  limit = 100,
+  offset = 0,
+  minChannels = 2,
+  sort: "spread" | "channels" | "min_price" = "spread"
+) =>
   apiFetch<MultiChannelProduct[]>(
-    `/products/multi-channel?limit=${limit}&offset=${offset}&min_channels=${minChannels}`
+    `/products/multi-channel?limit=${limit}&offset=${offset}&min_channels=${minChannels}&sort=${sort}`
   );
 
 // ── Brands ────────────────────────────────────────────────────────────────
@@ -263,3 +268,21 @@ export const getCrawlRunStream = (token: string, runId: number): EventSource => 
   const url = `${BASE}/admin/crawl-runs/${runId}/stream?token=${encodeURIComponent(token)}`;
   return new EventSource(url);
 };
+
+export const getChannelNotes = (token: string, channelId: number) =>
+  adminFetch<ChannelNoteOut[]>(`/admin/channels/${channelId}/notes`, token);
+
+export const createChannelNote = (
+  token: string,
+  channelId: number,
+  payload: { note_type: string; body: string }
+) =>
+  adminFetch<ChannelNoteOut>(`/admin/channels/${channelId}/notes`, token, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
+export const resolveChannelNote = (token: string, channelId: number, noteId: number) =>
+  adminFetch<ChannelNoteOut>(`/admin/channels/${channelId}/notes/${noteId}/resolve`, token, {
+    method: "PATCH",
+  });

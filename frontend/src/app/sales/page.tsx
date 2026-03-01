@@ -171,12 +171,12 @@ export default function SalesPage() {
         <p className="text-sm text-gray-400">로딩 중...</p>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {items.map((item) => (
-            <article key={item.product_id} className="bg-white border border-gray-200 rounded-xl p-4">
+          {[...items].sort((a, b) => (a.is_active === b.is_active ? 0 : a.is_active ? -1 : 1)).map((item) => (
+            <article key={item.product_id} className={`bg-white border border-gray-200 rounded-xl p-4 ${!item.is_active ? "opacity-60" : ""}`}>
               <div className="flex gap-3">
                 <div className="w-20 h-20 rounded-md overflow-hidden bg-gray-100 shrink-0">
                   {item.image_url ? (
-                    <img src={item.image_url} alt={item.product_name} className="w-full h-full object-cover" />
+                    <img src={item.image_url} alt={item.product_name} className={`w-full h-full object-cover ${!item.is_active ? "grayscale" : ""}`} />
                   ) : null}
                 </div>
                 <div className="min-w-0">

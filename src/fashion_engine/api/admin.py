@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy import case, func, select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from sse_starlette.sse import EventSourceResponse
+from fastapi.responses import StreamingResponse
 
 from fashion_engine.config import settings
 from fashion_engine.database import get_db
@@ -674,7 +674,7 @@ async def stream_crawl_run(
                         await sess.execute(select(CrawlRun).where(CrawlRun.id == run_id))
                     ).scalar_one_or_none()
                     if not run:
-                        yield {"event": "error", "data": json.dumps({"detail": "not found"})}
+                        yield f"event: error\ndata: {json.dumps({'detail': 'not found'})}\n\n"
                         return
 
                     # 새 로그만 전송
@@ -690,46 +690,46 @@ async def stream_crawl_run(
 
                 for log in new_logs:
                     sent_log_ids.add(log.id)
-                    yield {
-                        "event": "log",
-                        "data": json.dumps({
-                            "id": log.id,
-                            "channel_id": log.channel_id,
-                            "channel_name": log.channel.name if log.channel else str(log.channel_id),
-                            "status": log.status,
-                            "products_found": log.products_found,
-                            "products_new": log.products_new,
-                            "products_updated": log.products_updated,
-                            "error_msg": log.error_msg,
-                            "strategy": log.strategy,
-                            "duration_ms": log.duration_ms,
-                            "crawled_at": log.crawled_at.isoformat(),
-                        }),
-                    }
+                    payload = json.dumps({
+                        "id": log.id,
+                        "channel_id": log.channel_id,
+                        "channel_name": log.channel.name if log.channel else str(log.channel_id),
+                        "status": log.status,
+                        "products_found": log.products_found,
+                        "products_new": log.products_new,
+                        "products_updated": log.products_updated,
+                        "error_msg": log.error_msg,
+                        "strategy": log.strategy,
+                        "duration_ms": log.duration_ms,
+                        "crawled_at": log.crawled_at.isoformat(),
+                    })
+                    yield f"event: log\ndata: {payload}\n\n"
 
                 # 진행률 업데이트
-                yield {
-                    "event": "progress",
-                    "data": json.dumps({
-                        "run_id": run.id,
-                        "status": run.status,
-                        "total_channels": run.total_channels,
-                        "done_channels": run.done_channels,
-                        "new_products": run.new_products,
-                        "error_channels": run.error_channels,
-                    }),
-                }
+                progress = json.dumps({
+                    "run_id": run.id,
+                    "status": run.status,
+                    "total_channels": run.total_channels,
+                    "done_channels": run.done_channels,
+                    "new_products": run.new_products,
+                    "error_channels": run.error_channels,
+                })
+                yield f"event: progress\ndata: {progress}\n\n"
 
                 is_done = run.status != "running"
 
                 if is_done:
-                    yield {"event": "done", "data": json.dumps({"status": run.status})}
+                    yield f"event: done\ndata: {json.dumps({'status': run.status})}\n\n"
                     return
 
             except Exception as e:
-                yield {"event": "error", "data": json.dumps({"detail": str(e)})}
+                yield f"event: error\ndata: {json.dumps({'detail': str(e)})}\n\n"
                 return
 
             await asyncio.sleep(3)
 
-    return EventSourceResponse(event_generator())
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )

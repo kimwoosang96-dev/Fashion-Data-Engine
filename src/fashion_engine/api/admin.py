@@ -3,11 +3,12 @@ from __future__ import annotations
 import asyncio
 import json
 import sys
+from collections import defaultdict
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
-from sqlalchemy import case, func, select, desc
+from sqlalchemy import case, func, select, desc, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from fastapi.responses import StreamingResponse
@@ -22,9 +23,17 @@ from fashion_engine.models.brand_director import BrandDirector
 from fashion_engine.models.exchange_rate import ExchangeRate
 from fashion_engine.models.price_history import PriceHistory
 from fashion_engine.models.product import Product
+from fashion_engine.models.product_catalog import ProductCatalog
 from fashion_engine.models.crawl_run import CrawlRun, CrawlChannelLog
 from fashion_engine.models.channel_note import ChannelNote
-from fashion_engine.api.schemas import CrawlRunOut, CrawlRunDetail, CrawlChannelLogOut, ChannelNoteOut, ChannelNoteCreate
+from fashion_engine.api.schemas import (
+    CrawlRunOut,
+    CrawlRunDetail,
+    CrawlChannelLogOut,
+    ChannelNoteOut,
+    ChannelNoteCreate,
+    ChannelSignalOut,
+)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -47,6 +56,26 @@ def _auth_bearer(authorization: str | None) -> None:
 
 async def require_admin(authorization: str | None = Header(None)) -> None:
     _auth_bearer(authorization)
+
+
+def _compute_traffic_light(crawl_status: str, recent_logs: list, inactive_rate: float) -> str:
+    if crawl_status == "never":
+        return "red"
+
+    last_3 = recent_logs[:3]
+    if len(last_3) >= 3 and all(log.status == "failed" for log in last_3):
+        return "red"
+    if crawl_status == "stale" and inactive_rate >= 0.8:
+        return "red"
+
+    if crawl_status == "stale":
+        return "yellow"
+    if any(log.status == "failed" for log in recent_logs):
+        return "yellow"
+    if inactive_rate >= 0.5:
+        return "yellow"
+
+    return "green"
 
 
 @router.get("/stats")
@@ -240,6 +269,96 @@ async def get_crawl_status(
             }
         )
 
+    return payload
+
+
+@router.get("/channel-signals", response_model=list[ChannelSignalOut])
+async def get_channel_signals(
+    limit: int = Query(500, ge=1, le=2000),
+    offset: int = Query(0, ge=0),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    rows = (
+        await db.execute(
+            select(
+                Channel.id,
+                Channel.name,
+                Channel.channel_type,
+                Channel.country,
+                func.count(Product.id).label("product_count"),
+                func.count(case((Product.is_active == True, 1), else_=None)).label("active_count"),
+                func.count(case((Product.is_active == False, 1), else_=None)).label("inactive_count"),
+                func.max(Product.created_at).label("last_crawled_at"),
+            )
+            .outerjoin(Product, Product.channel_id == Channel.id)
+            .group_by(Channel.id)
+            .order_by(Channel.name.asc())
+            .limit(limit)
+            .offset(offset)
+        )
+    ).all()
+
+    recent_logs_rows = (
+        await db.execute(
+            text(
+                """
+                SELECT channel_id, status, error_msg, error_type, crawled_at
+                FROM (
+                    SELECT channel_id, status, error_msg, error_type, crawled_at,
+                           ROW_NUMBER() OVER (PARTITION BY channel_id ORDER BY crawled_at DESC) AS rn
+                    FROM crawl_channel_logs
+                ) sub
+                WHERE rn <= 5
+                ORDER BY channel_id ASC, crawled_at DESC
+                """
+            )
+        )
+    ).all()
+
+    logs_by_channel: dict[int, list] = defaultdict(list)
+    for log in recent_logs_rows:
+        logs_by_channel[int(log.channel_id)].append(log)
+
+    stale_cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+    payload: list[dict] = []
+    for row in rows:
+        product_count = int(row.product_count or 0)
+        active_count = int(row.active_count or 0)
+        inactive_count = int(row.inactive_count or 0)
+
+        last = row.last_crawled_at
+        if last is None:
+            crawl_status = "never"
+        else:
+            dt = last if last.tzinfo else last.replace(tzinfo=timezone.utc)
+            crawl_status = "stale" if dt < stale_cutoff else "ok"
+
+        channel_logs = logs_by_channel.get(int(row.id), [])
+        inactive_rate = (inactive_count / product_count) if product_count > 0 else 0.0
+        success_count = sum(1 for log in channel_logs if log.status == "success")
+        recent_success_rate = (success_count / len(channel_logs)) if channel_logs else 0.0
+        last_error = next((log.error_msg for log in channel_logs if log.status == "failed"), None)
+        last_error_type = next((log.error_type for log in channel_logs if log.status == "failed"), None)
+        traffic_light = _compute_traffic_light(crawl_status, channel_logs, inactive_rate)
+
+        payload.append(
+            {
+                "channel_id": row.id,
+                "name": row.name,
+                "channel_type": row.channel_type,
+                "country": row.country,
+                "product_count": product_count,
+                "active_count": active_count,
+                "inactive_count": inactive_count,
+                "last_crawled_at": last.isoformat() if last else None,
+                "crawl_status": crawl_status,
+                "recent_success_rate": round(recent_success_rate, 2),
+                "last_error_msg": (last_error or "")[:200] if last_error else None,
+                "error_type": last_error_type,
+                "traffic_light": traffic_light,
+            }
+        )
     return payload
 
 
@@ -698,6 +817,7 @@ async def get_crawl_run_detail(
             products_new=log.products_new,
             products_updated=log.products_updated,
             error_msg=log.error_msg,
+            error_type=log.error_type,
             strategy=log.strategy,
             duration_ms=log.duration_ms,
             crawled_at=log.crawled_at,
@@ -765,6 +885,7 @@ async def stream_crawl_run(
                         "products_new": log.products_new,
                         "products_updated": log.products_updated,
                         "error_msg": log.error_msg,
+                        "error_type": log.error_type,
                         "strategy": log.strategy,
                         "duration_ms": log.duration_ms,
                         "crawled_at": log.crawled_at.isoformat(),
@@ -799,6 +920,39 @@ async def stream_crawl_run(
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@router.get("/catalog-stats")
+async def get_catalog_stats(
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    total = int((await db.execute(select(func.count(ProductCatalog.id)))).scalar() or 0)
+    with_brand = int(
+        (
+            await db.execute(
+                select(func.count(ProductCatalog.id)).where(ProductCatalog.brand_id.is_not(None))
+            )
+        ).scalar()
+        or 0
+    )
+    multi_channel = int(
+        (
+            await db.execute(
+                select(func.count(ProductCatalog.id)).where(ProductCatalog.listing_count >= 2)
+            )
+        ).scalar()
+        or 0
+    )
+    last_updated = (
+        await db.execute(select(func.max(ProductCatalog.updated_at)))
+    ).scalar_one_or_none()
+    return {
+        "total": total,
+        "with_brand": with_brand,
+        "multi_channel": multi_channel,
+        "last_updated": last_updated.isoformat() if last_updated else None,
+    }
 
 
 # ── 채널 노트 (운영자 피드백) ─────────────────────────────────────────────────

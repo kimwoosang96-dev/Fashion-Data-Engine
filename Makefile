@@ -1,4 +1,4 @@
-.PHONY: setup api web dev crawl crawl-cafe24 crawl-news news update-rates scheduler-dry scheduler data-audit audit audit-railway reclassify brand-mece fix-brands fix-null-brands fix-null-brands-dry fix-null-brands-apply remap-product-brands remap-product-brands-apply seed-directors seed-directors-apply seed-brands-luxury seed-brands-luxury-apply enrich-brands enrich-brands-apply purge-fake-brands purge-fake-brands-apply backfill-normalized-key backfill-normalized-key-apply backfill-normalized-key-force detect-platforms detect-platforms-apply
+.PHONY: setup api web dev crawl crawl-cafe24 crawl-news news update-rates scheduler-dry scheduler data-audit audit audit-railway reclassify brand-mece fix-brands fix-null-brands fix-null-brands-dry fix-null-brands-apply remap-product-brands remap-product-brands-apply seed-directors seed-directors-apply seed-brands-luxury seed-brands-luxury-apply enrich-brands enrich-brands-apply purge-fake-brands purge-fake-brands-apply backfill-normalized-key backfill-normalized-key-apply backfill-normalized-key-force detect-platforms detect-platforms-apply channel-probe catalog-build
 
 setup:
 	uv sync
@@ -105,3 +105,9 @@ detect-platforms:
 
 detect-platforms-apply:
 	uv run python scripts/detect_platforms.py --apply
+
+channel-probe:
+	uv run python scripts/channel_probe.py
+
+catalog-build:
+	uv run python scripts/build_product_catalog.py --apply --since-last-crawl

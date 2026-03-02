@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import {
   createAdminCollab,
   createAdminDirector,
@@ -8,7 +8,7 @@ import {
   deleteAdminDirector,
   getAdminBrandChannelAudit,
   getAdminCrawlStatus,
-  getAdminChannelsHealth,
+  getChannelSignals,
   getAdminCollabs,
   getAdminDirectors,
   getAdminStats,
@@ -28,12 +28,12 @@ import {
 import type {
   AdminAuditItem,
   AdminCrawlStatus,
-  AdminChannelHealth,
   AdminCollabItem,
   AdminStats,
   Brand,
   BrandDirector,
   Channel,
+  ChannelSignalOut,
   ChannelNoteOut,
   CrawlRunOut,
   CrawlRunDetail,
@@ -53,7 +53,7 @@ export default function AdminPage() {
   const [token, setToken] = useState("");
   const [activeTab, setActiveTab] = useState<TabKey>("db");
   const [stats, setStats] = useState<AdminStats | null>(null);
-  const [health, setHealth] = useState<AdminChannelHealth[]>([]);
+  const [channelSignals, setChannelSignals] = useState<ChannelSignalOut[]>([]);
   const [crawlStatus, setCrawlStatus] = useState<AdminCrawlStatus[]>([]);
   const [crawlFilter, setCrawlFilter] = useState<"all" | "ok" | "never" | "stale">("all");
   const [directors, setDirectors] = useState<BrandDirector[]>([]);
@@ -98,10 +98,10 @@ export default function AdminPage() {
     try {
       const [s, h] = await Promise.all([
         getAdminStats(adminToken),
-        getAdminChannelsHealth(adminToken, 250, 0),
+        getChannelSignals(adminToken, 500, 0),
       ]);
       setStats(s);
-      setHealth(h);
+      setChannelSignals(h);
       const [d, b, c, k, audit, crawl] = await Promise.all([
         getAdminDirectors(adminToken),
         getBrands(),
@@ -820,40 +820,86 @@ export default function AdminPage() {
       {/* ── 채널 관리 탭 ─────────────────────────────────────────────── */}
       {activeTab === "channels" && (
         <div className="space-y-5">
-          {health.length > 0 ? (
+          {channelSignals.length > 0 ? (
             <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 border-b border-gray-100">
                   <tr>
                     <th className="text-left px-4 py-3">채널</th>
                     <th className="text-left px-4 py-3">국가</th>
-                    <th className="text-right px-4 py-3">브랜드</th>
                     <th className="text-right px-4 py-3">제품</th>
-                    <th className="text-right px-4 py-3">세일</th>
-                    <th className="text-left px-4 py-3">헬스</th>
+                    <th className="text-right px-4 py-3">활성</th>
+                    <th className="text-right px-4 py-3">비활성</th>
+                    <th className="text-left px-4 py-3">크롤 상태</th>
+                    <th className="text-left px-4 py-3">신호등</th>
+                    <th className="text-right px-4 py-3">성공률</th>
                     <th className="text-right px-4 py-3">노트</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {health.map((row) => (
-                    <>
-                      <tr key={row.channel_id} className="border-b border-gray-50 hover:bg-gray-50/50">
+                  {channelSignals.map((row) => (
+                    <Fragment key={row.channel_id}>
+                      <tr className="border-b border-gray-50 hover:bg-gray-50/50">
                         <td className="px-4 py-3">
                           <p className="font-medium">{row.name}</p>
                           <p className="text-xs text-gray-400">{row.channel_type ?? "-"}</p>
                         </td>
                         <td className="px-4 py-3 text-gray-500">{row.country ?? "-"}</td>
-                        <td className="px-4 py-3 text-right">{row.brand_count}</td>
                         <td className="px-4 py-3 text-right">{row.product_count}</td>
-                        <td className="px-4 py-3 text-right">{row.sale_count}</td>
+                        <td className="px-4 py-3 text-right">{row.active_count}</td>
+                        <td className="px-4 py-3 text-right">{row.inactive_count}</td>
                         <td className="px-4 py-3">
                           <span
                             className={`text-xs px-2 py-0.5 rounded-full ${
-                              row.health === "ok" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+                              row.crawl_status === "ok"
+                                ? "bg-emerald-100 text-emerald-700"
+                                : row.crawl_status === "stale"
+                                ? "bg-amber-100 text-amber-700"
+                                : "bg-gray-100 text-gray-500"
                             }`}
                           >
-                            {row.health === "ok" ? "정상" : "점검필요"}
+                            {row.crawl_status}
                           </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <TrafficLight signal={row.traffic_light} />
+                            <span
+                              className={`text-xs font-medium ${
+                                row.traffic_light === "red"
+                                  ? "text-red-600"
+                                  : row.traffic_light === "yellow"
+                                  ? "text-amber-600"
+                                  : "text-emerald-700"
+                              }`}
+                            >
+                              {row.traffic_light.toUpperCase()}
+                            </span>
+                          </div>
+                          {(row.traffic_light === "red" || row.traffic_light === "yellow") &&
+                            row.last_error_msg && (
+                              <>
+                                {row.error_type && (
+                                  <p className="text-[10px] mt-0.5">
+                                    <span className="inline-block px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
+                                      {row.error_type}
+                                    </span>
+                                  </p>
+                                )}
+                                <p
+                                  className="text-xs text-gray-400 mt-0.5 truncate max-w-[220px]"
+                                  title={row.last_error_msg}
+                                >
+                                  {row.last_error_msg.slice(0, 60)}
+                                  {row.last_error_msg.length > 60 ? "…" : ""}
+                                </p>
+                              </>
+                            )}
+                        </td>
+                        <td className="px-4 py-3 text-right text-gray-600">
+                          {row.crawl_status === "never"
+                            ? "-"
+                            : `${Math.round(row.recent_success_rate * 100)}%`}
                         </td>
                         <td className="px-4 py-3 text-right">
                           <button
@@ -866,8 +912,8 @@ export default function AdminPage() {
                         </td>
                       </tr>
                       {expandedNoteChannel === row.channel_id && (
-                        <tr key={`note-${row.channel_id}`}>
-                          <td colSpan={7} className="px-4 py-3 bg-blue-50/30 border-b border-gray-100">
+                        <tr>
+                          <td colSpan={9} className="px-4 py-3 bg-blue-50/30 border-b border-gray-100">
                             <div className="space-y-2">
                               {(channelNotes[row.channel_id] ?? []).map((note) => (
                                 <div
@@ -931,7 +977,7 @@ export default function AdminPage() {
                           </td>
                         </tr>
                       )}
-                    </>
+                    </Fragment>
                   ))}
                 </tbody>
               </table>
@@ -944,6 +990,20 @@ export default function AdminPage() {
         </div>
       )}
     </div>
+  );
+}
+
+function TrafficLight({ signal }: { signal: "red" | "yellow" | "green" }) {
+  return (
+    <span
+      className={`inline-block w-2.5 h-2.5 rounded-full shrink-0 ${
+        signal === "red"
+          ? "bg-red-500"
+          : signal === "yellow"
+          ? "bg-amber-400"
+          : "bg-emerald-500"
+      }`}
+    />
   );
 }
 

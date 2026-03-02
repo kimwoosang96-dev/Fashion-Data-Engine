@@ -61,6 +61,36 @@ _MODEL_CODE_RE = re.compile(r'\b([A-Z]{1,3}[0-9]{3,}[A-Z0-9]{0,6})\b')
 _SHORT_CODE_RE = re.compile(r'\b([A-Z]{2,4}[0-9]{1,2})\b')
 # 사이즈·시즌 코드 제외 (EU40, FW23 등 오탐 방지)
 _EXCLUDE_PREFIXES = frozenset(["EU", "UK", "US", "JP", "CM", "FW", "SS", "AW", "SP"])
+
+# ── 비패션 제품 거부 목록 ────────────────────────────────────────────────────
+_VENDOR_DENYLIST: frozenset[str] = frozenset({
+    "route",
+    "routeins",
+    "extend",
+    "clyde",
+    "seel",
+})
+
+_TITLE_KEYWORD_DENYLIST: frozenset[str] = frozenset({
+    "shipping protection",
+    "package protection",
+    "gift card",
+    "gift certificate",
+    "e-gift card",
+    "digital gift",
+    "warranty protection",
+    "product protection",
+    "return assurance",
+})
+
+_PRODUCT_TYPE_DENYLIST: frozenset[str] = frozenset({
+    "gift cards",
+    "gift card",
+    "services",
+    "insurance",
+    "warranty",
+})
+
 USER_AGENTS = [
     (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -111,6 +141,7 @@ class ChannelProductResult:
     channel_url: str
     products: list[ProductInfo] = field(default_factory=list)
     error: str | None = None
+    error_type: str | None = None
     crawl_strategy: str = "unknown"
 
 
@@ -234,8 +265,11 @@ class ProductCrawler:
                     result.crawl_strategy = "cafe24-html"
                 else:
                     result.error = "No products found (non-Shopify/Cafe24 or empty store)"
+                    result.error_type = "not_supported"
         except Exception as e:
             result.error = str(e)[:200]
+            http_status = e.response.status_code if isinstance(e, httpx.HTTPStatusError) else None
+            result.error_type = self._classify_error(e, http_status)
             logger.warning(f"제품 크롤 실패 [{channel_url}]: {e}")
 
         return result
@@ -500,8 +534,22 @@ class ProductCrawler:
         title: str = (p.get("title") or "").strip()
         vendor: str = (p.get("vendor") or "").strip()
         handle: str = (p.get("handle") or "").strip()
+        product_type: str | None = (p.get("product_type") or "").strip() or None
 
         if not title or not handle:
+            return None
+
+        # 비패션 제품 거부 목록 체크
+        vendor_lower = vendor.lower().strip()
+        if vendor_lower in _VENDOR_DENYLIST:
+            return None
+
+        product_type_lower = (product_type or "").lower().strip()
+        if product_type_lower and product_type_lower in _PRODUCT_TYPE_DENYLIST:
+            return None
+
+        title_lower = title.lower()
+        if any(kw in title_lower for kw in _TITLE_KEYWORD_DENYLIST):
             return None
 
         # 첫 번째 variant에서 가격 추출
@@ -548,7 +596,7 @@ class ProductCrawler:
         tags_json = json.dumps(tags_list, ensure_ascii=False) if tags_list else None
         tags_text = ", ".join(tags_list)
         gender, subcategory = classify_gender_and_subcategory(
-            product_type=(p.get("product_type") or "").strip() or None,
+            product_type=product_type,
             title=title,
             tags=tags_text,
         )
@@ -563,7 +611,7 @@ class ProductCrawler:
             title=title,
             vendor=vendor,
             handle=handle,
-            product_type=(p.get("product_type") or "").strip() or None,
+            product_type=product_type,
             price=price,
             compare_at_price=compare_at_price,
             currency=currency,
@@ -578,3 +626,18 @@ class ProductCrawler:
             normalized_key=normalized_key,
             match_confidence=match_confidence,
         )
+    @staticmethod
+    def _classify_error(exc: BaseException | None, http_status: int | None = None) -> str:
+        if http_status == 403:
+            return "http_403"
+        if http_status == 404:
+            return "http_404"
+        if http_status == 429:
+            return "http_429"
+        if http_status is not None and http_status >= 500:
+            return "http_5xx"
+        if isinstance(exc, (httpx.TimeoutException, TimeoutError, asyncio.TimeoutError)):
+            return "timeout"
+        if isinstance(exc, (json.JSONDecodeError, ValueError, KeyError)):
+            return "parse_error"
+        return "parse_error"

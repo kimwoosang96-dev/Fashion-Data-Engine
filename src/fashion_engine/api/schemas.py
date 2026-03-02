@@ -339,6 +339,7 @@ class CrawlChannelLogOut(BaseModel):
     products_new: int
     products_updated: int
     error_msg: str | None
+    error_type: str | None
     strategy: str | None
     duration_ms: int
     crawled_at: datetime
@@ -362,6 +363,22 @@ class CrawlRunOut(BaseModel):
 
 class CrawlRunDetail(CrawlRunOut):
     logs: list[CrawlChannelLogOut]
+
+
+class ChannelSignalOut(BaseModel):
+    channel_id: int
+    name: str
+    channel_type: str | None
+    country: str | None
+    product_count: int
+    active_count: int
+    inactive_count: int
+    last_crawled_at: str | None
+    crawl_status: str
+    recent_success_rate: float
+    last_error_msg: str | None
+    error_type: str | None = None
+    traffic_light: str
 
 
 # ── ChannelNote 스키마 ────────────────────────────────────────────────────────

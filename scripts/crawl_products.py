@@ -41,6 +41,7 @@ from fashion_engine.services.product_service import (
     record_price,
 )
 from fashion_engine.services.channel_service import update_platform
+from fashion_engine.services.catalog_service import build_catalog_incremental
 from fashion_engine.services.alert_service import (
     AlertPayload,
     new_product_alert,
@@ -218,6 +219,11 @@ async def _crawl_one_channel(
                         products_new=new_count,
                         products_updated=updated_count,
                         error_msg=(result.error or "")[:500] if result.error else None,
+                        error_type=(
+                            result.error_type
+                            if result.error
+                            else ("zero_products" if log_status == "skipped" else None)
+                        ),
                         strategy=result.crawl_strategy,
                         duration_ms=duration_ms,
                     )
@@ -266,6 +272,7 @@ def main(
     ),
     channel_id: int = typer.Option(0, help="특정 채널 ID만 크롤링 (0=비활성)"),
     no_alerts: bool = typer.Option(False, "--no-alerts", help="Discord 알림 비활성화"),
+    skip_catalog: bool = typer.Option(False, "--skip-catalog", help="크롤 완료 후 catalog 증분 빌드 생략"),
     concurrency: int = typer.Option(
         5, help="동시 처리 채널 수 (기본 5, Shopify API 기준 안전한 상한)"
     ),
@@ -276,6 +283,7 @@ def main(
             channel_type or None,
             channel_id if channel_id > 0 else None,
             no_alerts,
+            skip_catalog,
             concurrency,
         )
     )
@@ -286,6 +294,7 @@ async def run(
     channel_type: str | None,
     channel_id: int | None,
     no_alerts: bool,
+    skip_catalog: bool,
     concurrency: int = 5,
 ) -> None:
     console.print("[bold blue]Fashion Data Engine — 제품 가격 크롤링[/bold blue]\n")
@@ -323,6 +332,7 @@ async def run(
         await db.commit()
         await db.refresh(crawl_run)
         run_id = crawl_run.id
+        run_started_at = crawl_run.started_at
 
     console.print(f"[bold]CrawlRun #{run_id} 시작[/bold]\n")
 
@@ -373,6 +383,11 @@ async def run(
 
     console.print(results_table)
     console.print(f"\n[bold green]CrawlRun #{run_id} 완료[/bold green]")
+
+    if not skip_catalog:
+        console.print("[cyan]▶ ProductCatalog 증분 빌드 시작[/cyan]")
+        updated = await build_catalog_incremental(since=run_started_at)
+        console.print(f"[green]✅ ProductCatalog 증분 빌드 완료[/green] (updated={updated})")
 
 
 if __name__ == "__main__":

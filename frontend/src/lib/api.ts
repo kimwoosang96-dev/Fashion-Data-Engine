@@ -3,7 +3,7 @@ import type {
   Score, PurchaseStats, WatchListItem, Drop, Channel,
   SaleHighlight, ChannelHighlight, BrandHighlight, ChannelPriceHistory,
   SaleFilters,
-  AdminStats, AdminChannelHealth, AdminCrawlStatus,
+  AdminStats, AdminChannelHealth, AdminCrawlStatus, ChannelSignalOut,
   FashionNews, CollabItem, BrandDirector, DirectorsByBrand, AdminCollabItem, AdminAuditItem, MultiChannelProduct,
   CrawlRunOut, CrawlRunDetail, ChannelNoteOut,
 } from "./types";
@@ -162,6 +162,11 @@ export const triggerChannelCrawl = (token: string, channelId: number, dryRun = f
 export const getAdminCrawlStatus = (token: string, limit = 500, offset = 0) =>
   adminFetch<AdminCrawlStatus[]>(
     `/admin/crawl-status?limit=${limit}&offset=${offset}`,
+    token
+  );
+export const getChannelSignals = (token: string, limit = 500, offset = 0) =>
+  adminFetch<ChannelSignalOut[]>(
+    `/admin/channel-signals?limit=${limit}&offset=${offset}`,
     token
   );
 export const getAdminDirectors = (token: string, brandId?: number) =>

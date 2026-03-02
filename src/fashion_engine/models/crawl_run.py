@@ -43,6 +43,7 @@ class CrawlChannelLog(Base):
     products_new: Mapped[int] = mapped_column(Integer, default=0)
     products_updated: Mapped[int] = mapped_column(Integer, default=0)
     error_msg: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    error_type: Mapped[str | None] = mapped_column(String(30), nullable=True)
     strategy: Mapped[str | None] = mapped_column(String(50), nullable=True)
     duration_ms: Mapped[int] = mapped_column(Integer, default=0)
     crawled_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

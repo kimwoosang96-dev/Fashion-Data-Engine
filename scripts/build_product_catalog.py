@@ -1,24 +1,14 @@
 """
-기존 products 테이블을 product_catalog로 집계.
+ProductCatalog 빌드 스크립트.
 
-전략:
-- normalized_key 기준으로 GROUP BY → ProductCatalog 행 생성
-- normalized_key가 NULL인 제품은 product_key → normalized_key 대체 사용
-- canonical_name: 해당 normalized_key의 가장 긴 제품명 (대표값)
-- brand_id: 해당 그룹에서 가장 빈번한 brand_id
-- listing_count: 채널 수 (distinct channel_id)
-- min/max_price, is_sale_anywhere: 최신 PriceHistory 기준 집계
-
-사용법:
-    uv run python scripts/build_product_catalog.py --dry-run
-    DATABASE_URL=postgresql+asyncpg://... uv run python scripts/build_product_catalog.py --apply
+기본은 dry-run이며, --apply 시 실제 upsert를 수행한다.
 """
-
 from __future__ import annotations
 
 import argparse
 import asyncio
 import sys
+from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -26,163 +16,119 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from sqlalchemy import text  # noqa: E402
 
-from fashion_engine.database import AsyncSessionLocal, engine, init_db  # noqa: E402
+from fashion_engine.database import AsyncSessionLocal, init_db  # noqa: E402
+from fashion_engine.services.catalog_service import (  # noqa: E402
+    build_catalog_full,
+    build_catalog_incremental,
+    get_last_done_crawl_finished_at,
+)
 
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="product_catalog 백필")
-    p.add_argument("--apply", action="store_true", help="실제 INSERT 실행")
-    p.add_argument("--dry-run", action="store_true", help="미리보기 (기본)")
-    p.add_argument("--batch-size", type=int, default=1000, help="배치 크기 (기본 1000)")
+    p = argparse.ArgumentParser(description="product_catalog 빌드")
+    p.add_argument("--apply", action="store_true", help="실제 INSERT/UPDATE 수행")
+    p.add_argument("--dry-run", action="store_true", help="미리보기만 수행")
+    p.add_argument("--batch-size", type=int, default=1000, help="호환 옵션 (현재 내부 일괄 처리)")
+    p.add_argument("--since", type=str, default="", help="증분 기준 시각 (ISO8601)")
+    p.add_argument(
+        "--since-last-crawl",
+        action="store_true",
+        help="마지막 완료 CrawlRun.finished_at 이후 변경분만 증분 빌드",
+    )
     return p.parse_args()
 
 
-async def run(*, apply: bool, batch_size: int) -> int:
+def _parse_since(raw: str) -> datetime | None:
+    if not raw.strip():
+        return None
+    return datetime.fromisoformat(raw.strip())
+
+
+async def run(*, apply: bool, batch_size: int, since: datetime | None, since_last_crawl: bool) -> int:
     await init_db()
 
-    # SQLite vs PostgreSQL 분기
-    dialect = engine.dialect.name
-    is_sqlite = dialect == "sqlite"
-    now_expr = "CURRENT_TIMESTAMP" if is_sqlite else "NOW()"
-
     async with AsyncSessionLocal() as db:
-        # ── 0. 현재 catalog 상태 ──────────────────────────────────────────
-        existing_cnt = (await db.execute(text(
-            "SELECT COUNT(*) FROM product_catalog"
-        ))).scalar()
-        print(f"현재 product_catalog: {existing_cnt:,}개 (dialect={dialect})")
+        current = int((await db.execute(text("SELECT COUNT(*) FROM product_catalog"))).scalar() or 0)
+        print(f"현재 product_catalog: {current:,}개")
 
-        # ── 1. normalized_key별 집계 ──────────────────────────────────────
-        # normalized_key가 NULL인 경우 product_key를 대체 사용
-        print("▶ normalized_key별 집계 중...")
-
-        if is_sqlite:
-            # SQLite: MODE() 미지원 → CTE + ROW_NUMBER 윈도우 함수로 최빈 brand_id 추출
-            rows = (await db.execute(text("""
-                WITH keyed AS (
-                    SELECT
-                        COALESCE(normalized_key, product_key) AS nkey,
-                        brand_id, name, gender, subcategory, channel_id, created_at
-                    FROM products
-                    WHERE COALESCE(normalized_key, product_key) IS NOT NULL
-                ),
-                brand_freq AS (
-                    SELECT nkey, brand_id, COUNT(*) AS cnt
-                    FROM keyed
-                    WHERE brand_id IS NOT NULL
-                    GROUP BY nkey, brand_id
-                ),
-                brand_ranked AS (
-                    SELECT nkey, brand_id,
-                           ROW_NUMBER() OVER (PARTITION BY nkey ORDER BY cnt DESC, brand_id) AS rn
-                    FROM brand_freq
-                ),
-                top_brand AS (
-                    SELECT nkey, brand_id FROM brand_ranked WHERE rn = 1
-                ),
-                agg AS (
-                    SELECT
-                        nkey,
-                        MAX(name) AS canonical_name,
-                        MAX(gender) AS gender,
-                        MAX(subcategory) AS subcategory,
-                        COUNT(DISTINCT channel_id) AS listing_count,
-                        MIN(created_at) AS first_seen_at
-                    FROM keyed
-                    GROUP BY nkey
-                )
-                SELECT a.nkey, a.canonical_name, t.brand_id,
-                       a.gender, a.subcategory, a.listing_count, a.first_seen_at
-                FROM agg a
-                LEFT JOIN top_brand t ON t.nkey = a.nkey
-            """))).all()
-        else:
-            # PostgreSQL: MODE() 집계함수 사용
-            rows = (await db.execute(text("""
-                SELECT
-                    COALESCE(p.normalized_key, p.product_key) AS nkey,
-                    MAX(p.name) AS canonical_name,
-                    MODE() WITHIN GROUP (ORDER BY p.brand_id) AS brand_id,
-                    MAX(p.gender) AS gender,
-                    MAX(p.subcategory) AS subcategory,
-                    COUNT(DISTINCT p.channel_id) AS listing_count,
-                    MIN(p.created_at) AS first_seen_at
-                FROM products p
-                WHERE COALESCE(p.normalized_key, p.product_key) IS NOT NULL
-                GROUP BY COALESCE(p.normalized_key, p.product_key)
-            """))).all()
-
-        total_keys = len(rows)
-        print(f"  고유 normalized_key: {total_keys:,}개")
+        if since_last_crawl and since is None:
+            since = await get_last_done_crawl_finished_at(db)
+            if since:
+                print(f"증분 기준(last-crawl): {since.isoformat()}")
+            else:
+                print("완료된 CrawlRun이 없어 전체 빌드로 전환합니다.")
 
         if not apply:
-            # 샘플 출력
-            print("\n[샘플 20개]")
-            for row in rows[:20]:
-                print(f"  key={row[0][:50]} name={row[1][:40]} brand={row[2]} ch={row[5]}")
-            print(f"\n[DRY-RUN] --apply 플래그 없이는 실제 변경 없음")
+            if since is None:
+                total = int(
+                    (
+                        await db.execute(
+                            text(
+                                """
+                                SELECT COUNT(*)
+                                FROM (
+                                  SELECT DISTINCT COALESCE(normalized_key, product_key) AS nkey
+                                  FROM products
+                                  WHERE COALESCE(normalized_key, product_key) IS NOT NULL
+                                ) t
+                                """
+                            )
+                        )
+                    ).scalar()
+                    or 0
+                )
+                print(f"[DRY-RUN] 전체 대상 key: {total:,}개")
+            else:
+                changed = int(
+                    (
+                        await db.execute(
+                            text(
+                                """
+                                SELECT COUNT(*)
+                                FROM (
+                                  SELECT DISTINCT COALESCE(normalized_key, product_key) AS nkey
+                                  FROM products
+                                  WHERE updated_at > :since
+                                    AND COALESCE(normalized_key, product_key) IS NOT NULL
+                                ) t
+                                """
+                            ),
+                            {"since": since},
+                        )
+                    ).scalar()
+                    or 0
+                )
+                print(f"[DRY-RUN] 증분 대상 key: {changed:,}개 (since={since.isoformat()})")
+            print("변경 없음. --apply를 추가하면 실제 반영합니다.")
             return 0
 
-        # ── 2. 기존 catalog key 셋 (이미 있는 건 SKIP) ──────────────────
-        existing_keys: set[str] = {
-            row[0]
-            for row in (await db.execute(text(
-                "SELECT normalized_key FROM product_catalog"
-            ))).all()
-        }
-        print(f"  이미 catalog에 있는 key: {len(existing_keys):,}개 (SKIP)")
+    if since is None:
+        async with AsyncSessionLocal() as db:
+            affected = await build_catalog_full(db, batch_size=batch_size)
+    else:
+        affected = await build_catalog_incremental(since=since, batch_size=batch_size)
 
-        new_rows = [r for r in rows if r[0] not in existing_keys]
-        print(f"  신규 INSERT 대상: {len(new_rows):,}개")
+    async with AsyncSessionLocal() as db:
+        final = int((await db.execute(text("SELECT COUNT(*) FROM product_catalog"))).scalar() or 0)
 
-        # ── 3. 배치 INSERT ────────────────────────────────────────────────
-        print("▶ product_catalog INSERT 중...")
-        inserted = 0
-        for i in range(0, len(new_rows), batch_size):
-            batch = new_rows[i : i + batch_size]
-            values = [
-                {
-                    "nkey": row[0],
-                    "name": row[1] or row[0],
-                    "brand_id": row[2],
-                    "gender": row[3],
-                    "subcategory": row[4],
-                    "listing_count": int(row[5]) if row[5] else 1,
-                    "first_seen": row[6],
-                }
-                for row in batch
-            ]
-            await db.execute(
-                text("""
-                    INSERT INTO product_catalog
-                        (normalized_key, canonical_name, brand_id, gender, subcategory,
-                         listing_count, first_seen_at, updated_at)
-                    VALUES
-                        (:nkey, :name, :brand_id, :gender, :subcategory,
-                         :listing_count, :first_seen, CURRENT_TIMESTAMP)
-                    ON CONFLICT (normalized_key) DO UPDATE SET
-                        canonical_name = EXCLUDED.canonical_name,
-                        listing_count  = EXCLUDED.listing_count,
-                        updated_at     = CURRENT_TIMESTAMP
-                """),
-                values,
-            )
-            await db.commit()
-            inserted += len(batch)
-            print(f"  {inserted:,}/{len(new_rows):,}", end="\r")
-
-        print(f"\n  INSERT 완료: {inserted:,}개")
-
-        # ── 4. 결과 요약 ──────────────────────────────────────────────────
-        final_cnt = (await db.execute(text("SELECT COUNT(*) FROM product_catalog"))).scalar()
-        print(f"\n✅ product_catalog 완료!")
-        print(f"   총 레코드: {final_cnt:,}개")
-        print(f"   products 대비 집약률: {len(rows)/80348*100:.1f}%")
-
+    mode = "증분" if since is not None else "전체"
+    print(f"✅ ProductCatalog {mode} 빌드 완료")
+    print(f"   처리 key: {affected:,}개")
+    print(f"   최종 catalog: {final:,}개")
     return 0
 
 
 if __name__ == "__main__":
     args = parse_args()
+    since_dt = _parse_since(args.since)
     apply = bool(args.apply and not args.dry_run)
-    raise SystemExit(asyncio.run(run(apply=apply, batch_size=args.batch_size)))
+    raise SystemExit(
+        asyncio.run(
+            run(
+                apply=apply,
+                batch_size=args.batch_size,
+                since=since_dt,
+                since_last_crawl=bool(args.since_last_crawl),
+            )
+        )
+    )

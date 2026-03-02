@@ -295,6 +295,22 @@ export interface AdminCrawlStatus {
   status: "ok" | "never" | "stale";
 }
 
+export interface ChannelSignalOut {
+  channel_id: number;
+  name: string;
+  channel_type: string | null;
+  country: string | null;
+  product_count: number;
+  active_count: number;
+  inactive_count: number;
+  last_crawled_at: string | null;
+  crawl_status: "ok" | "stale" | "never";
+  recent_success_rate: number;
+  last_error_msg: string | null;
+  error_type: string | null;
+  traffic_light: "red" | "yellow" | "green";
+}
+
 export interface AdminCollabItem {
   id: number;
   brand_a_id: number;
@@ -331,6 +347,7 @@ export interface CrawlChannelLog {
   products_new: number;
   products_updated: number;
   error_msg: string | null;
+  error_type: string | null;
   strategy: string | null;
   duration_ms: number;
   crawled_at: string;

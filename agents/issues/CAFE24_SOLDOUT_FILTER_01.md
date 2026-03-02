@@ -105,10 +105,10 @@ for card in cards:
 
 ## DoD (완료 기준)
 
-- [ ] `_TITLE_KEYWORD_DENYLIST`에 `"sold out"`, `"품절"` 추가
-- [ ] `is_available` 검출: 배지 셀렉터 우선 → 제목 텍스트 폴백
+- [x] `_TITLE_KEYWORD_DENYLIST`에 `"sold out"`, `"품절"` 추가
+- [x] `is_available` 검출: 배지 셀렉터 우선 → 제목 텍스트 폴백
 - [ ] 연속 품절 50개 이상 시 cate_no 조기 중단 로직 추가
-- [ ] THEXSHOP 재크롤 시 0개 또는 실제 재고 제품만 수집
+- [ ] THEXSHOP 재크롤 시 0개 또는 실제 재고 제품만 수집 (다음 크롤 후 검증)
 
 ## 검증
 

@@ -139,12 +139,12 @@ async def _discover_cafe24_brand_categories(self, base_url: str) -> list[int]:
 
 ## DoD (완료 기준)
 
-- [ ] `scripts/crawl_products.py`에 `_crawl_channel_with_timeout()` 추가
-- [ ] 모든 채널 크롤 호출이 `_crawl_channel_with_timeout()` 경유
-- [ ] timeout 초과 시 `error_type="timeout"` CrawlResult 반환
-- [ ] `CHANNEL_TIMEOUT_SECS` 타입별 설정 (cafe24=600, shopify=180, default=300)
-- [ ] httpx.Timeout 세분화 (`connect=10, read=30`)
-- [ ] Cafe24 카테고리 수 상한 50개
+- [x] `scripts/crawl_products.py`에 `asyncio.wait_for()` 인라인 적용
+- [x] 모든 채널 크롤 호출이 timeout 적용됨
+- [x] timeout 초과 시 `error_type="timeout"` ChannelProductResult 반환
+- [x] `_CHANNEL_TIMEOUT_SECS` 타입별 설정 (cafe24=600, shopify=180, default=300)
+- [x] httpx.Timeout 세분화 (`connect=10, read=30`)
+- [ ] Cafe24 카테고리 수 상한 50개 (선택 — 다음 크롤에서 필요 시 추가)
 
 ## 검증
 

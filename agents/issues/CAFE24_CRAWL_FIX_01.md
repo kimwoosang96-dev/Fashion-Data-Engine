@@ -13,11 +13,26 @@
 
 | 항목 | 값 |
 |------|-----|
-| 확인된 Cafe24 채널 | **1개** (THEXSHOP, `platform='cafe24'`) |
+| DB 등록 Cafe24 채널 | **1개** (THEXSHOP, `platform='cafe24'`) |
+| HTTP 탐색으로 추가 확인된 Cafe24 채널 | **7개** — platform=NULL이나 Cafe24 신호 확인 |
+| **실질 Cafe24 채널 합계** | **8개** (THEXSHOP + 아래 7개) |
 | `channel_brands.cate_no` 등록 수 | **0개** (매번 HTML 자동 발견) |
 | CrawlRun #2 THEXSHOP 결과 | **TIMEOUT** (정확히 600초, T-061 guard 동작) |
 | CrawlRun #1 THEXSHOP 결과 | 45,242개 수집 성공 (단, T-060으로 SOLD OUT 필터 적용됨) |
-| NULL platform 채널 중 Cafe24 후보 | **미파악** — 조사 필요 |
+
+#### platform=NULL이나 HTTP 탐색으로 Cafe24 확인된 7개 채널
+
+```
+8DIVISION     https://www.8division.com
+empty         https://www.empty.seoul.kr
+grds          https://www.grds.com
+NOCLAIM       https://www.noclaim.co.kr
+PARLOUR       https://www.parlour.kr
+SCULP STORE   https://www.sculpstore.com
+Unipair       https://www.unipair.com
+```
+
+→ T-067 Step 1 `channel_probe.py --apply` 실행 후 이 채널들의 `platform='cafe24'`가 자동 업데이트된다.
 
 ### 근본 원인 분석
 
@@ -133,34 +148,24 @@ for path in ["/product/maker.html", "/product/brand.html", "/brands2.html"]:
 
 ## 요구사항
 
-### Step 1: Cafe24 채널 자동 감지 스크립트 (`scripts/probe_cafe24_channels.py`)
+### Step 1: Cafe24 채널 플랫폼 태깅 — T-067 `channel_probe.py` 위임 (별도 스크립트 불필요)
 
-NULL platform 채널을 HTTP 탐색하여 Cafe24 여부를 판별하고 DB를 업데이트한다.
+> ⚠️ **중복 제거**: 기존 계획의 `probe_cafe24_channels.py`는 T-067 Step 1이 확장하는
+> `channel_probe.py`와 Cafe24 감지 로직이 동일하다. 별도 스크립트를 만들지 않는다.
 
-```python
-"""
-NULL platform 채널에 대해 Cafe24 여부 자동 감지.
+T-067 Step 1의 `channel_probe.py --apply` 실행이 완료되면, 위 7개 채널의 `platform='cafe24'`가
+자동으로 업데이트된다. T-066 Step 2 이후 작업의 전제 조건이다.
 
-감지 신호 (신뢰도 순):
-  1. Response header: `X-Powered-By` 또는 Set-Cookie에 'cafe24'/'echosting' 포함
-  2. HTML: <meta name="generator" content="Cafe24"> 또는 echosting 스크립트 로드
-  3. URL 패턴: *.cafe24.com 도메인 또는 echosting.com 리다이렉트
-  4. 브랜드 페이지: /product/maker.html 200 응답 + cate_no 링크 1개 이상 존재
-
-출력:
-  - 채널별 감지 신호 및 신뢰도 출력
-  - --apply 시 channels.platform='cafe24' 업데이트
-"""
-```
-
-인터페이스:
 ```bash
-# 탐색만 (dry-run)
-uv run python scripts/probe_cafe24_channels.py
-
-# DB 반영
-uv run python scripts/probe_cafe24_channels.py --apply
+# T-067 Step 1 완료 후 platform 업데이트 확인
+sqlite3 data/fashion.db "
+SELECT name, platform FROM channels
+WHERE name IN ('8DIVISION', 'empty', 'grds', 'NOCLAIM', 'PARLOUR', 'SCULP STORE', 'Unipair');
+"
+# 예상: platform='cafe24'
 ```
+
+**T-067과의 실행 순서**: T-067 Step 1 → (T-066 Step 2~5 실행 가능)
 
 ### Step 2: Cafe24 카테고리 DB 사전 등록 (`scripts/seed_cafe24_categories.py`)
 
@@ -173,13 +178,25 @@ Cafe24 채널의 브랜드 카테고리를 DB에 사전 등록 (channel_brands.c
 동작:
   1. platform='cafe24' 채널에 대해 _discover_cafe24_brand_categories() 실행
   2. 발견된 (brand_name, cate_no)를 channel_brands 테이블에 저장
-     - brand_name으로 brands 테이블 조회 → brand_id 연결
+     - brand_name 매칭 전략 (아래 설명):
+         a. slug 변환 후 brands.slug 정확 일치
+         b. LOWER(brands.name) = LOWER(brand_name)
+         c. 일치 없으면 brand_id=NULL로 저장 (cate_no는 보존)
      - 기존 레코드가 있으면 cate_no 업데이트 (upsert)
   3. 등록 후 crawl_products.py가 DB에서 로드하여 자동 발견 스킵
+
+brand_name 매칭 전략 (세부):
+  - slug 변환: brand_name → 소문자, 공백→'-', 특수문자 제거
+    예: "New Balance" → "new-balance"
+  - brands 테이블에서 slug 정확 일치 먼저 시도
+  - 실패 시 brands.name ILIKE brand_name 시도
+  - 여전히 없으면 brand_id=NULL로 channel_brands 레코드 저장
+    (brand_id 없어도 cate_no는 사용 가능 — crawl_products.py에서 cate_no만 활용)
 
 안전장치:
   - dry-run 기본 (--apply 명시 필요)
   - 발견된 카테고리가 0개이면 DB 업데이트 스킵 + 경고 출력
+  - brand_id=NULL로 저장된 항목은 WARNING 로그로 표시
 
 인터페이스:
   uv run python scripts/seed_cafe24_categories.py                # 전체 Cafe24 채널
@@ -299,27 +316,31 @@ return list(all_found.items())
 | 파일 | 역할 |
 |------|------|
 | `src/fashion_engine/crawler/product_crawler.py` | 병렬 처리, 재시도, URL 패턴 확장 (Step 3~5) |
-| `scripts/probe_cafe24_channels.py` | 신규 — Cafe24 채널 자동 감지 (Step 1) |
-| `scripts/seed_cafe24_categories.py` | 신규 — 카테고리 DB 사전 등록 (Step 2) |
+| `scripts/channel_probe.py` | T-067에서 확장 — Cafe24 포함 전체 플랫폼 감지 (Step 1 대체) |
+| `scripts/seed_cafe24_categories.py` | 신규 — 카테고리 DB 사전 등록 + brand_name 매칭 (Step 2) |
 | `scripts/crawl_products.py` | `_CHANNEL_TIMEOUT_SECS["cafe24"]` 조정 가능 |
 
 ---
 
 ## DoD (완료 기준)
 
-- [ ] `scripts/probe_cafe24_channels.py` — NULL platform 채널 Cafe24 감지, --apply 시 platform 업데이트
-- [ ] `scripts/seed_cafe24_categories.py` — THEXSHOP 카테고리 DB 등록 (cate_no 사전 캐싱)
+- [ ] T-067 Step 1 완료 후 Cafe24 8개 채널 모두 `platform='cafe24'` 업데이트 확인 (7개 추가)
+- [ ] `scripts/seed_cafe24_categories.py` — THEXSHOP + 8개 Cafe24 채널 카테고리 DB 등록 (brand_name slug 매칭 포함)
 - [ ] `crawl_channel()` Cafe24 카테고리 병렬 처리 (`asyncio.gather`, 동시 최대 5개)
 - [ ] `_try_cafe24_products()` 429/503 재시도 로직 추가 (최대 3회)
 - [ ] `_discover_cafe24_brand_categories()` URL 패턴 5개 이상으로 확장 + 전체 합산 방식 전환
 - [ ] THEXSHOP 단독 크롤 600초 타임아웃 없이 완료 (목표: 300초 이내)
-- [ ] NULL platform 채널 중 Cafe24 추가 감지 결과 보고 (0개여도 분석 결과 명시)
+- [ ] 8개 Cafe24 채널 중 크롤 성공 채널 수 보고
 
 ## 검증
 
 ```bash
-# Step 1: Cafe24 채널 탐색 (dry-run)
-uv run python scripts/probe_cafe24_channels.py
+# Step 1 전제조건: T-067 Step 1이 완료되어야 함
+# T-067 channel_probe.py --apply 실행 후 Cafe24 platform 업데이트 확인
+sqlite3 data/fashion.db "
+SELECT name, platform FROM channels
+WHERE name IN ('8DIVISION','empty','grds','NOCLAIM','PARLOUR','SCULP STORE','Unipair');
+"
 
 # Step 2: 카테고리 DB 등록 (dry-run)
 uv run python scripts/seed_cafe24_categories.py

@@ -176,12 +176,23 @@ async def _try_makeshop_products(
     MakeShop (shop-pro.jp) 제품 목록 수집.
 
     우선순위:
-      1. 공개 API가 있으면 → API 호출
-      2. 없으면 → HTML 제품 목록 페이지 파싱
-         - 일반 패턴: /shop/g/gXXXX/ (리서치 결과로 확정)
-         - 또는: /category/ 페이지 순회
+      1. 공개 REST API가 있으면 → API 호출 (리서치 결과 기반)
+      2. 없으면 → HTML 제품 목록 페이지 파싱 (폴백 전략):
+
+         폴백 전략 (리서치로 확인 후 구현):
+           a. 카테고리 목록 페이지 탐색:
+              후보 URL: /shop/list.cgi, /shop/g/g0/, /products/, /item/list.html
+              → <a href*="cate_no=" or href*="gid="> 링크 추출
+           b. 각 카테고리 페이지에서 제품 카드 파싱:
+              후보 선택자: .item_list li, .product_list .item, div[class*="item"]
+              → 제품명: .item_name, .product_name, h2, h3
+              → 가격: .price, .item_price, span[class*="price"]
+              → 이미지: img.main_image, .thumb img
+           c. 페이지네이션: ?page=N 또는 ?start=N×100 패턴 순회
     """
-    # 리서치 결과 구현
+    # 리서치 결과 반영하여 구현
+    # 단계: (1) 공개 API 시도 → (2) 폴백 HTML 파싱
+    ...
 ```
 
 `crawl_channel()` fallback 체인에 추가:
@@ -212,38 +223,61 @@ async def _try_stores_jp_products(
     STORES.jp 패밀리 (stores.jp / buyshop.jp / theshop.jp) 제품 목록 수집.
 
     우선순위:
-      1. JSON API 엔드포인트 확인 (리서치 결과 기반)
-      2. 없으면 → HTML 파싱
+      1. JSON API 엔드포인트 시도 (리서치 결과 기반):
+         - 후보: /api/v1/items, /items.json, /products.json
+         - 응답이 JSON 배열이면 파싱
+      2. 없으면 → HTML 파싱 (폴백 전략):
+
+         폴백 전략 (리서치로 선택자 확인 후 구현):
+           a. 제품 목록 페이지 탐색:
+              후보 URL: /items, /products, / (루트가 제품 목록인 경우)
+           b. 제품 카드 파싱:
+              STORES.jp 공통 선택자 (리서치로 확인):
+              - 제품 카드: .item-list__item, [class*="item-card"], .storeItem
+              - 제품명: .item-list__item-name, .item__name, h2
+              - 가격: .item-list__item-price, .item__price
+              - 이미지: .item-list__item-image img, .item__image img
+              buyshop.jp / theshop.jp는 HTML 구조 동일하나 선택자 일부 차이
+              → 리서치로 확인 후 플랫폼별 분기 처리
+           c. 페이지네이션: ?page=N 패턴 순회, max 50페이지
+           d. SOMEIT (stores.jp) 403 대응:
+              User-Agent + Referer 헤더 추가 후 재시도, 실패 시 skip
     """
-    # 리서치 결과 구현
+    # 리서치 결과 반영하여 구현
+    # 단계: (1) JSON API 시도 → (2) 폴백 HTML 파싱
+    ...
 ```
 
-### Step 4: 접근 불가 채널 비활성화 (`scripts/deactivate_inaccessible_channels.py`)
+### Step 4: 접근 불가 채널 비활성화 (`scripts/deactivate_dead_channels.py` 확장)
 
-**파일**: `scripts/deactivate_inaccessible_channels.py`
+> ⚠️ **중복 제거**: T-063에서 이미 `scripts/deactivate_dead_channels.py`가 구현되어 있다.
+> 별도 스크립트를 만들지 않고, 기존 스크립트에 `--inaccessible-only` 모드를 추가한다.
+
+**파일**: `scripts/deactivate_dead_channels.py` (기존 파일 확장)
 
 ```python
 """
-SSL/DNS 오류, 무한 리다이렉트 등 물리적으로 접근 불가능한 채널 비활성화.
+기존 deactivate_dead_channels.py에 --inaccessible-only 모드 추가.
 
-비활성화 기준 (중 하나라도 해당):
+추가 비활성화 기준 (--inaccessible-only 시):
   - DNS 해석 실패 (NXDOMAIN, socket.gaierror)
-  - SSL 인증서 오류 (httpx.ConnectError)
-  - 무한 리다이렉트 (TooManyRedirects)
+  - SSL 인증서 오류 (httpx.ConnectError with SSL 관련 메시지)
+  - 무한 리다이렉트 (TooManyRedirects, 10회 초과)
   - HTTP 404/410 (사이트 완전 삭제됨)
+
+비활성화 사유 기록:
+  - channels 모델에 deactivation_reason 컬럼 없음 → 별도 로그 파일에 기록
+  - 로그 파일: logs/deactivate_inaccessible_YYYYMMDD.json
+  - 형식: {"channel_id": N, "name": "...", "url": "...", "reason": "dns_error", "checked_at": "..."}
 
 안전장치:
   - dry-run 기본 (--apply 명시 시 적용)
   - brand-store 채널은 기본 skip (--include-brand-stores로 포함 가능)
-  - 비활성화 사유를 channels.notes 또는 별도 로그에 기록
-
-채널별 비활성화 사유:
-  is_active=False, deactivation_reason = "dns_error" | "ssl_error" | "redirect_loop" | "not_found"
 
 인터페이스:
-  uv run python scripts/deactivate_inaccessible_channels.py          # dry-run
-  uv run python scripts/deactivate_inaccessible_channels.py --apply  # 적용
-  uv run python scripts/deactivate_inaccessible_channels.py --apply --yes  # 확인 없이 적용
+  uv run python scripts/deactivate_dead_channels.py --inaccessible-only           # dry-run
+  uv run python scripts/deactivate_dead_channels.py --inaccessible-only --apply   # 적용
+  uv run python scripts/deactivate_dead_channels.py --inaccessible-only --apply --yes  # 확인 없이
 """
 ```
 
@@ -275,10 +309,10 @@ uv run python scripts/channel_probe.py > reports/channel_probe_$(date +%Y%m%d).c
 ```
 
 결과 분류 기준:
-1. 신규 감지된 Cafe24 → T-066 probe_cafe24_channels로 처리
+1. 신규 감지된 Cafe24 → T-066 `seed_cafe24_categories.py` 후 크롤 실행
 2. MakeShop/STORES.jp/OceanNet → Step 2~3으로 처리
 3. HTTP 200이지만 수집 불가 → HTML 구조 분석 후 다음 과업 수립
-4. 403 반복 채널 → `is_active=False` 비활성화 후보로 보고
+4. 403 반복 채널 → Step 4 `deactivate_dead_channels.py --inaccessible-only` 후보로 보고
 
 ---
 
@@ -286,26 +320,27 @@ uv run python scripts/channel_probe.py > reports/channel_probe_$(date +%Y%m%d).c
 
 | 파일 | 역할 |
 |------|------|
-| `src/fashion_engine/crawler/product_crawler.py` | MakeShop/STORES.jp/OceanNet 크롤러 추가 |
-| `scripts/channel_probe.py` | 일본 SaaS URL 패턴 + HTTP 신호 감지 추가 |
-| `scripts/deactivate_inaccessible_channels.py` | 신규 — SSL/DNS 오류 채널 비활성화 |
+| `src/fashion_engine/crawler/product_crawler.py` | MakeShop/STORES.jp/OceanNet 크롤러 추가 (Step 2~3 + OceanNet) |
+| `scripts/channel_probe.py` | 일본 SaaS URL 패턴 + HTTP 신호 감지 추가 (Step 1) |
+| `scripts/deactivate_dead_channels.py` | 기존 T-063 스크립트 확장 — `--inaccessible-only` 모드 추가 (Step 4) |
 
 ---
 
 ## DoD (완료 기준)
 
-- [ ] `channel_probe.py` — MakeShop/STORES.jp/OceanNet URL 패턴 + HTTP 신호 감지 추가
-- [ ] 전체 0개 채널 HTTP 탐색 실행 + 플랫폼별 분류 보고서 출력
-- [ ] MakeShop 크롤러 `_try_makeshop_products()` 구현 (리서치 기반)
-- [ ] STORES.jp 크롤러 `_try_stores_jp_products()` 구현 (리서치 기반)
-- [ ] `scripts/deactivate_inaccessible_channels.py` — SSL/DNS 오류 채널 6+개 비활성화
-- [ ] 크롤 가능한 신규 채널 ≥ 3개 추가 달성 (MakeShop/STORES.jp 중 성공 채널)
+- [ ] `channel_probe.py` — MakeShop/STORES.jp/OceanNet/Cafe24 URL 패턴 + HTTP 신호 감지 추가, 전체 0개 채널 탐색 실행
+- [ ] 전체 0개 채널 플랫폼별 분류 보고서 출력
+- [ ] MakeShop 크롤러 `_try_makeshop_products()` 구현 (공개 API 또는 HTML 파싱 폴백)
+- [ ] STORES.jp 크롤러 `_try_stores_jp_products()` 구현 (JSON API 또는 HTML 파싱 폴백)
+- [ ] OceanNet 크롤러 `_try_ochanoko_products()` 구현 (TITY/ocnk.net 대상, 리서치 기반)
+- [ ] `scripts/deactivate_dead_channels.py --inaccessible-only` — SSL/DNS 오류 채널 6+개 비활성화, 사유를 JSON 로그로 기록
+- [ ] 크롤 가능한 신규 채널 ≥ 3개 추가 달성 (MakeShop/STORES.jp/OceanNet 중 성공 채널)
 - [ ] 탐색 보고서: 나머지 Custom 채널 현황 정리 (다음 과업 수립용)
 
 ## 검증
 
 ```bash
-# Step 1: 전체 0개 채널 탐색
+# Step 1: 전체 0개 채널 탐색 (platform 자동 업데이트)
 uv run python scripts/channel_probe.py --apply
 
 # 플랫폼 분류 현황
@@ -315,15 +350,16 @@ FROM channels WHERE is_active=1
 GROUP BY platform ORDER BY n DESC;
 "
 
-# Step 2~3: MakeShop/STORES.jp 크롤 테스트
+# Step 2~3: MakeShop/STORES.jp/OceanNet 크롤 테스트
 uv run python scripts/crawl_products.py --channel-name 'Laid back'
 uv run python scripts/crawl_products.py --channel-name 'elephant TRIBAL fabrics'
+uv run python scripts/crawl_products.py --channel-name 'TITY'
 
-# Step 4: 비활성화 dry-run
-uv run python scripts/deactivate_inaccessible_channels.py
+# Step 4: 비활성화 dry-run (기존 스크립트의 --inaccessible-only 모드)
+uv run python scripts/deactivate_dead_channels.py --inaccessible-only
 
 # Step 4 적용
-uv run python scripts/deactivate_inaccessible_channels.py --apply
+uv run python scripts/deactivate_dead_channels.py --inaccessible-only --apply
 
 # 비활성화 결과 확인
 sqlite3 data/fashion.db "
@@ -333,6 +369,9 @@ WHERE name IN ('CLESSTE', 'Kerouac', 'TUNE.KR', 'The Real McCoy''s', 'Pherrow''s
 ORDER BY name;
 "
 # 예상: is_active=0
+
+# 비활성화 사유 로그 확인
+cat logs/deactivate_inaccessible_*.json
 
 # 전체 수집 성과 확인
 sqlite3 data/fashion.db "

@@ -548,14 +548,16 @@ class ProductCrawler:
             )
             price_text = price_node.get_text(" ", strip=True) if price_node else ""
             nums = re.findall(r"\d[\d,]*", price_text.replace(".", ""))
-            if not nums:
-                continue
-            try:
-                price = float(nums[0].replace(",", ""))
-            except ValueError:
-                continue
-            if price <= 0:
-                continue
+            if nums:
+                try:
+                    price = float(nums[0].replace(",", ""))
+                except ValueError:
+                    continue
+                if price <= 0:
+                    continue
+            else:
+                # 가격 없는 listing (룩북·문의 스타일) — 제품 존재는 기록, price=0
+                price = 0.0
 
             img = card.select_one("img")
             image_url = img.get("src") if img else None

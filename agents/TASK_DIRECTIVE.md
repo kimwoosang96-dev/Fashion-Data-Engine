@@ -11,6 +11,7 @@ PM/개발 작업 통제를 위한 단일 기준 문서입니다.
 
 ## 진행 중 작업
 <!-- ACTIVE_TASKS_START -->
+- [ ] T-20260302-067 | ZERO_PRODUCT_CHANNEL_STRATEGY_01: 제품 0개 채널 플랫폼별 맞춤 수집 전략 (MakeShop/STORES.jp/비활성화) | owner:codex-dev | priority:P1 | created:2026-03-02
 - [ ] T-20260302-066 | CAFE24_CRAWL_FIX_01: Cafe24 수집 실패 원인 조사 + 개선 | owner:codex-dev | priority:P1 | created:2026-03-02
 <!-- ACTIVE_TASKS_END -->
 

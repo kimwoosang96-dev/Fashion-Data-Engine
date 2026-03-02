@@ -11,6 +11,10 @@ PM/개발 작업 통제를 위한 단일 기준 문서입니다.
 
 ## 진행 중 작업
 <!-- ACTIVE_TASKS_START -->
+- [ ] T-20260303-075 | INTEL_HUB_DERIVED_EVENTS_01: Intel Hub 파생 이벤트 (sale_start/sold_out/restock/sales_spike) + 운영 대시보드 | owner:codex-dev | priority:P2 | status:pending | created:2026-03-03 | details:`intel_service.py`에 파생 이벤트 4종 추가. `upsert_product()` sale_just_started 후크로 sale_start 이벤트 생성, archived_at 전환으로 sold_out/restock 이벤트 생성. `ingest_intel_events.py --job derived_spike`로 48h 롤링 윈도우 sales_spike 배치 잡 구현. 스케줄러 intel_ingest_0730 잡 활성화. `GET /admin/intel-status` freshness 대시보드 + Admin UI 섹션 추가.
+- [ ] T-20260303-074 | INTEL_HUB_FRONTEND_01: Intel Hub 프론트엔드 — 레이어 토글 + Maplibre 지도 + 가상 스크롤 피드 + 타임라인 | owner:codex-dev | priority:P1 | status:pending | created:2026-03-03 | details:`/intel` 페이지 구현. Maplibre GL JS 기반 지도(country precision 핀, 클러스터링), 레이어 토글(drop/collab/news/sale_start), 피드(react-virtual 가상 스크롤), 타임라인 stacked bar, 이벤트 상세 드로어(브랜드/채널/제품 연결 + watchlist 버튼), URL deep link. Nav에 "Intel" 메뉴 추가.
+- [ ] T-20260303-073 | INTEL_HUB_DATA_MODEL_01: Intel Hub 데이터 모델 + 백엔드 API + drops/collabs/news ingest | owner:codex-dev | priority:P1 | status:pending | created:2026-03-03 | details:Alembic 마이그레이션(`f1a2b3c4d5e6_add_intel_hub_tables`)으로 `intel_events`, `intel_event_sources`, `intel_ingest_runs`, `intel_ingest_logs` 4개 테이블 생성. `scripts/ingest_intel_events.py`로 drops/collabs/news 미러링 ingest 구현. `/intel/events`, `/intel/map-points`, `/intel/timeline`, `/intel/highlights`, `/intel/events/{id}` API 구현(cursor 페이지네이션, bbox 필터, granularity). Makefile `ingest-intel` 타깃 추가.
+- [ ] T-20260303-072 | INTEL_HUB_SPRINT0_01: Intel Hub Sprint 0 선행 조건 — 지도 라이브러리 확정 + 환경변수 + 스케줄러 스텁 | owner:codex-dev | priority:P1 | status:pending | created:2026-03-03 | details:Maplibre GL JS + pmtiles npm 설치, `IntelMap.tsx` 스텁, `NEXT_PUBLIC_MAP_STYLE_URL` 환경변수. `scheduler.py`에 Intel ingest 크론 잡 주석 추가(T-075 완료 후 활성화). `.env.example`에 Intel 환경변수 4개 추가. `src/fashion_engine/api/intel.py` 스텁 라우터 생성 + `main.py` 등록. `GET /intel/events` 200 응답 확인.
 <!-- ACTIVE_TASKS_END -->
 
 ## 최근 완료 작업

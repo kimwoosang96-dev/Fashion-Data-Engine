@@ -26,7 +26,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from sqlalchemy import text  # noqa: E402
 
-from fashion_engine.database import AsyncSessionLocal, init_db  # noqa: E402
+from fashion_engine.database import AsyncSessionLocal, engine, init_db  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
@@ -40,30 +40,77 @@ def parse_args() -> argparse.Namespace:
 async def run(*, apply: bool, batch_size: int) -> int:
     await init_db()
 
+    # SQLite vs PostgreSQL 분기
+    dialect = engine.dialect.name
+    is_sqlite = dialect == "sqlite"
+    now_expr = "CURRENT_TIMESTAMP" if is_sqlite else "NOW()"
+
     async with AsyncSessionLocal() as db:
         # ── 0. 현재 catalog 상태 ──────────────────────────────────────────
         existing_cnt = (await db.execute(text(
             "SELECT COUNT(*) FROM product_catalog"
         ))).scalar()
-        print(f"현재 product_catalog: {existing_cnt:,}개")
+        print(f"현재 product_catalog: {existing_cnt:,}개 (dialect={dialect})")
 
         # ── 1. normalized_key별 집계 ──────────────────────────────────────
         # normalized_key가 NULL인 경우 product_key를 대체 사용
         print("▶ normalized_key별 집계 중...")
-        # 1단계: products만 집계 (가격 제외) — 빠름
-        rows = (await db.execute(text("""
-            SELECT
-                COALESCE(p.normalized_key, p.product_key) AS nkey,
-                MAX(p.name) AS canonical_name,
-                MODE() WITHIN GROUP (ORDER BY p.brand_id) AS brand_id,
-                MAX(p.gender) AS gender,
-                MAX(p.subcategory) AS subcategory,
-                COUNT(DISTINCT p.channel_id) AS listing_count,
-                MIN(p.created_at) AS first_seen_at
-            FROM products p
-            WHERE COALESCE(p.normalized_key, p.product_key) IS NOT NULL
-            GROUP BY COALESCE(p.normalized_key, p.product_key)
-        """))).all()
+
+        if is_sqlite:
+            # SQLite: MODE() 미지원 → CTE + ROW_NUMBER 윈도우 함수로 최빈 brand_id 추출
+            rows = (await db.execute(text("""
+                WITH keyed AS (
+                    SELECT
+                        COALESCE(normalized_key, product_key) AS nkey,
+                        brand_id, name, gender, subcategory, channel_id, created_at
+                    FROM products
+                    WHERE COALESCE(normalized_key, product_key) IS NOT NULL
+                ),
+                brand_freq AS (
+                    SELECT nkey, brand_id, COUNT(*) AS cnt
+                    FROM keyed
+                    WHERE brand_id IS NOT NULL
+                    GROUP BY nkey, brand_id
+                ),
+                brand_ranked AS (
+                    SELECT nkey, brand_id,
+                           ROW_NUMBER() OVER (PARTITION BY nkey ORDER BY cnt DESC, brand_id) AS rn
+                    FROM brand_freq
+                ),
+                top_brand AS (
+                    SELECT nkey, brand_id FROM brand_ranked WHERE rn = 1
+                ),
+                agg AS (
+                    SELECT
+                        nkey,
+                        MAX(name) AS canonical_name,
+                        MAX(gender) AS gender,
+                        MAX(subcategory) AS subcategory,
+                        COUNT(DISTINCT channel_id) AS listing_count,
+                        MIN(created_at) AS first_seen_at
+                    FROM keyed
+                    GROUP BY nkey
+                )
+                SELECT a.nkey, a.canonical_name, t.brand_id,
+                       a.gender, a.subcategory, a.listing_count, a.first_seen_at
+                FROM agg a
+                LEFT JOIN top_brand t ON t.nkey = a.nkey
+            """))).all()
+        else:
+            # PostgreSQL: MODE() 집계함수 사용
+            rows = (await db.execute(text("""
+                SELECT
+                    COALESCE(p.normalized_key, p.product_key) AS nkey,
+                    MAX(p.name) AS canonical_name,
+                    MODE() WITHIN GROUP (ORDER BY p.brand_id) AS brand_id,
+                    MAX(p.gender) AS gender,
+                    MAX(p.subcategory) AS subcategory,
+                    COUNT(DISTINCT p.channel_id) AS listing_count,
+                    MIN(p.created_at) AS first_seen_at
+                FROM products p
+                WHERE COALESCE(p.normalized_key, p.product_key) IS NOT NULL
+                GROUP BY COALESCE(p.normalized_key, p.product_key)
+            """))).all()
 
         total_keys = len(rows)
         print(f"  고유 normalized_key: {total_keys:,}개")
@@ -112,11 +159,11 @@ async def run(*, apply: bool, batch_size: int) -> int:
                          listing_count, first_seen_at, updated_at)
                     VALUES
                         (:nkey, :name, :brand_id, :gender, :subcategory,
-                         :listing_count, :first_seen, NOW())
+                         :listing_count, :first_seen, CURRENT_TIMESTAMP)
                     ON CONFLICT (normalized_key) DO UPDATE SET
                         canonical_name = EXCLUDED.canonical_name,
                         listing_count  = EXCLUDED.listing_count,
-                        updated_at     = NOW()
+                        updated_at     = CURRENT_TIMESTAMP
                 """),
                 values,
             )

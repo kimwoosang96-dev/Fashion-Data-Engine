@@ -11,6 +11,10 @@ PM/개발 작업 통제를 위한 단일 기준 문서입니다.
 
 ## 진행 중 작업
 <!-- ACTIVE_TASKS_START -->
+- [ ] T-20260302-063 | CHANNEL_HEALTH_CLEANUP_01: 크롤 불가 채널 자동 감지 + 비활성화 스크립트 | owner:codex-dev | priority:P2 | status:pending | created:2026-03-02 | details:see `agents/issues/CHANNEL_HEALTH_CLEANUP_01.md`
+- [ ] T-20260302-062 | CRAWL_WOOCOMMERCE_01: WooCommerce REST API 크롤러 추가 | owner:codex-dev | priority:P2 | status:pending | created:2026-03-02 | details:see `agents/issues/CRAWL_WOOCOMMERCE_01.md`
+- [ ] T-20260302-061 | CRAWL_TIMEOUT_GUARD_01: 채널별 asyncio timeout으로 deadlock 방지 | owner:codex-dev | priority:P1 | status:pending | created:2026-03-02 | details:see `agents/issues/CRAWL_TIMEOUT_GUARD_01.md`
+- [ ] T-20260302-060 | CAFE24_SOLDOUT_FILTER_01: Cafe24 SOLD OUT 플레이스홀더 제품 필터링 강화 | owner:codex-dev | priority:P1 | status:pending | created:2026-03-02 | details:see `agents/issues/CAFE24_SOLDOUT_FILTER_01.md`
 <!-- ACTIVE_TASKS_END -->
 
 ## 최근 완료 작업

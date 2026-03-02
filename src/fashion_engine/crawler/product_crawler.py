@@ -10,7 +10,7 @@ import logging
 import random
 import re
 from dataclasses import dataclass, field
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 import httpx
 from bs4 import BeautifulSoup
@@ -206,7 +206,6 @@ class ProductCrawler:
         """URL 서브도메인 + 국가 코드에서 통화 추론.
         Shopify 다국어 스토어는 kr., jp. 등의 서브도메인을 사용함.
         """
-        from urllib.parse import urlparse
         host = urlparse(channel_url).netloc.lower()
         # 서브도메인 기반 통화 매핑
         SUBDOMAIN_CURRENCY = {
@@ -266,8 +265,17 @@ class ProductCrawler:
                     result.products = list(dedup.values())
                     result.crawl_strategy = "cafe24-html"
                 else:
-                    result.error = "No products found (non-Shopify/Cafe24 or empty store)"
-                    result.error_type = "not_supported"
+                    if await self._try_woocommerce_detect(channel_url):
+                        wc_products = await self._try_woocommerce_products(channel_url, currency)
+                        if wc_products:
+                            result.products = wc_products
+                            result.crawl_strategy = "woocommerce-api"
+                        else:
+                            result.error = "No products found (non-Shopify/Cafe24/WooCommerce or empty store)"
+                            result.error_type = "not_supported"
+                    else:
+                        result.error = "No products found (non-Shopify/Cafe24/WooCommerce or empty store)"
+                        result.error_type = "not_supported"
         except Exception as e:
             result.error = str(e)[:200]
             http_status = e.response.status_code if isinstance(e, httpx.HTTPStatusError) else None
@@ -479,6 +487,64 @@ class ProductCrawler:
 
         return products
 
+    # ── WooCommerce 전략 ─────────────────────────────────────────────────
+
+    async def _try_woocommerce_detect(self, base_url: str) -> bool:
+        """WooCommerce REST API 엔드포인트 존재 확인."""
+        assert self._client is not None
+        url = f"{base_url.rstrip('/')}/wp-json/wc/v3/"
+        try:
+            resp = await self._client.get(url, timeout=8)
+            return resp.status_code in (200, 401)
+        except Exception:
+            return False
+
+    async def _try_woocommerce_products(
+        self,
+        channel_url: str,
+        currency: str,
+    ) -> list[ProductInfo]:
+        """WooCommerce /wp-json/wc/v3/products 페이지네이션 수집."""
+        assert self._client is not None
+        base_url = channel_url.rstrip("/")
+        api_base = f"{base_url}/wp-json/wc/v3/products"
+        products: list[ProductInfo] = []
+        page = 1
+        per_page = 100
+        while True:
+            url = f"{api_base}?per_page={per_page}&page={page}&status=publish"
+            try:
+                resp = await self._client.get(url, timeout=self._timeout)
+            except httpx.HTTPError:
+                break
+
+            if resp.status_code == 401:
+                return []
+            if resp.status_code != 200:
+                break
+
+            try:
+                data = resp.json()
+            except Exception:
+                break
+            if not isinstance(data, list) or not data:
+                break
+
+            for item in data:
+                info = self._parse_woocommerce_product(item, channel_url, currency)
+                if info:
+                    products.append(info)
+
+            try:
+                total_pages = int(resp.headers.get("X-WP-TotalPages", "1"))
+            except Exception:
+                total_pages = 1
+            if page >= total_pages:
+                break
+            page += 1
+            await asyncio.sleep(self._delay)
+        return products
+
     # ── normalized_key 생성 ───────────────────────────────────────────────
 
     @staticmethod
@@ -563,8 +629,7 @@ class ProductCrawler:
         if product_type_lower and product_type_lower in _PRODUCT_TYPE_DENYLIST:
             return None
 
-        title_lower = title.lower()
-        if any(kw in title_lower for kw in _TITLE_KEYWORD_DENYLIST):
+        if self._is_title_denied(title):
             return None
 
         # 첫 번째 variant에서 가격 추출
@@ -641,6 +706,104 @@ class ProductCrawler:
             normalized_key=normalized_key,
             match_confidence=match_confidence,
         )
+
+    def _parse_woocommerce_product(
+        self,
+        item: dict,
+        channel_url: str,
+        currency: str,
+    ) -> ProductInfo | None:
+        wc_id = item.get("id")
+        title = (item.get("name") or "").strip()
+        if not wc_id or not title:
+            return None
+        if self._is_title_denied(title):
+            return None
+
+        product_type: str | None = (item.get("type") or "").strip() or None
+        if self._is_product_type_denied(product_type):
+            return None
+
+        sale_price_str = str(item.get("sale_price") or "").strip()
+        regular_price_str = str(item.get("regular_price") or "").strip()
+        price_str = str(item.get("price") or "").strip() or regular_price_str
+        try:
+            price = float(price_str) if price_str else 0.0
+        except Exception:
+            return None
+        if price <= 0:
+            return None
+
+        compare_at_price: float | None = None
+        if regular_price_str:
+            try:
+                regular = float(regular_price_str)
+                if regular > price:
+                    compare_at_price = regular
+            except Exception:
+                pass
+
+        images = item.get("images") or []
+        image_url = images[0].get("src") if isinstance(images, list) and images else None
+        product_url = (item.get("permalink") or "").strip() or f"{channel_url.rstrip('/')}/?p={wc_id}"
+        handle = str(wc_id)
+        host = urlparse(channel_url).netloc.lower() or "unknown"
+        channel_slug = host.replace("www.", "")
+        product_key = f"wc:{channel_slug}:{wc_id}"
+        vendor = (item.get("brand") or "").strip() or "unknown"
+        sku = (item.get("sku") or "").strip() or None
+        tags = item.get("tags") or []
+        tags_list = []
+        if isinstance(tags, list):
+            for t in tags:
+                if isinstance(t, dict):
+                    name = str(t.get("name") or "").strip()
+                    if name:
+                        tags_list.append(name)
+        tags_json = json.dumps(tags_list, ensure_ascii=False) if tags_list else None
+        tags_text = ", ".join(tags_list)
+        is_available = str(item.get("stock_status") or "").lower() != "outofstock"
+        brand_slug = slugify(vendor) if vendor and vendor != "unknown" else "unknown"
+        normalized_key, match_confidence = self._build_normalized_key(
+            brand_slug=brand_slug,
+            sku=sku,
+            title=title,
+            tags=tags_list,
+        )
+        gender, subcategory = classify_gender_and_subcategory(
+            product_type=product_type,
+            title=title,
+            tags=tags_text,
+        )
+        return ProductInfo(
+            title=title,
+            vendor=vendor,
+            handle=handle,
+            product_type=product_type,
+            price=price,
+            compare_at_price=compare_at_price,
+            currency=currency,
+            sku=sku,
+            image_url=image_url,
+            tags=tags_json,
+            product_url=product_url,
+            product_key=product_key,
+            is_available=is_available,
+            gender=gender,
+            subcategory=subcategory,
+            normalized_key=normalized_key,
+            match_confidence=match_confidence,
+        )
+
+    @staticmethod
+    def _is_title_denied(title: str) -> bool:
+        title_lower = title.lower()
+        return any(kw in title_lower for kw in _TITLE_KEYWORD_DENYLIST)
+
+    @staticmethod
+    def _is_product_type_denied(product_type: str | None) -> bool:
+        val = (product_type or "").lower().strip()
+        return bool(val and val in _PRODUCT_TYPE_DENYLIST)
     @staticmethod
     def _classify_error(exc: BaseException | None, http_status: int | None = None) -> str:
         if http_status == 403:

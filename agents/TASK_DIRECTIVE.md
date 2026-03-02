@@ -11,12 +11,12 @@ PM/개발 작업 통제를 위한 단일 기준 문서입니다.
 
 ## 진행 중 작업
 <!-- ACTIVE_TASKS_START -->
-- [ ] T-20260302-063 | CHANNEL_HEALTH_CLEANUP_01: 크롤 불가 채널 자동 감지 + 비활성화 스크립트 | owner:codex-dev | priority:P2 | status:pending | created:2026-03-02 | details:see `agents/issues/CHANNEL_HEALTH_CLEANUP_01.md`
-- [ ] T-20260302-062 | CRAWL_WOOCOMMERCE_01: WooCommerce REST API 크롤러 추가 | owner:codex-dev | priority:P2 | status:pending | created:2026-03-02 | details:see `agents/issues/CRAWL_WOOCOMMERCE_01.md`
 <!-- ACTIVE_TASKS_END -->
 
 ## 최근 완료 작업
 <!-- COMPLETED_TASKS_START -->
+- [x] T-20260302-063 | CHANNEL_HEALTH_CLEANUP_01: 크롤 불가 채널 자동 감지 + 비활성화 스크립트 | owner:codex-dev | priority:P2 | status:done | created:2026-03-02 | completed:2026-03-02 | details:`scripts/deactivate_dead_channels.py` 신규 추가. 기준(연속 실패 / dead HTTP 404·410 / NULL platform+제품0+노후) 기반 후보 수집, brand-store 제외, dry-run 기본/`--apply` 반영, `--criteria` 선택, `--probe-http`, `--yes` 지원. 안전장치로 apply는 후보 2개 이상일 때만 실행.
+- [x] T-20260302-062 | CRAWL_WOOCOMMERCE_01: WooCommerce REST API 크롤러 추가 | owner:codex-dev | priority:P2 | status:done | created:2026-03-02 | completed:2026-03-02 | details:`product_crawler.py`에 WooCommerce 감지/수집/파싱(`_try_woocommerce_detect`, `_try_woocommerce_products`, `_parse_woocommerce_product`) 추가 후 fallback 체인을 Shopify→Cafe24→WooCommerce로 확장. `crawl_products.py`에서 `crawl_strategy='woocommerce-api'` 시 `channel.platform='woocommerce'` 자동 갱신 반영.
 - [x] T-20260302-061 | CRAWL_TIMEOUT_GUARD_01: 채널별 asyncio timeout deadlock 방지 | owner:claude-pm | priority:P1 | status:done | created:2026-03-02 | completed:2026-03-02 | details:`_CHANNEL_TIMEOUT_SECS` 설정(cafe24=600s/shopify=180s/default=300s), `asyncio.wait_for()` 채널별 래핑, TimeoutError 시 `error_type='timeout'` graceful 반환, `httpx.Timeout(connect=10,read=30)` 세분화.
 - [x] T-20260302-060 | CAFE24_SOLDOUT_FILTER_01: Cafe24 SOLD OUT 플레이스홀더 필터링 | owner:claude-pm | priority:P1 | status:done | created:2026-03-02 | completed:2026-03-02 | details:`_TITLE_KEYWORD_DENYLIST`에 `"sold out"`, `"품절"` 추가. `is_available` 검출 개선: 품절 배지 CSS 셀렉터 우선 탐색 → 제목 텍스트 폴백(카드 전체 텍스트 사용 BUG 수정). 슈피겐(id=154) `channel_type='non-fashion'` 확인 후 `is_active=False` 비활성화.
 - [x] T-20260302-059 | CRAWL_ERROR_TYPE_01: CrawlChannelLog error_type 필드 추가 (에러 분류 표준화) | owner:codex-dev | priority:P2 | status:done | created:2026-03-02 | completed:2026-03-02 | details:`crawl_channel_logs.error_type` 컬럼 모델/마이그레이션(`e5f6a7b8c9d0`) 추가. `ProductCrawler`에서 실패 유형 분류(`http_403/404/429/5xx/timeout/parse_error`, 미지원은 `not_supported`) 및 `crawl_products.py` 로그 저장 시 반영. `/admin/channel-signals` 응답에 `error_type` 포함, 어드민 채널 탭에 `error_type` 배지 표시.

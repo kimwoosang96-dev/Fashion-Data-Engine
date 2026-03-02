@@ -151,6 +151,8 @@ async def _crawl_one_channel(
                     await update_platform(db, channel.id, "shopify")
                 elif result.crawl_strategy == "cafe24-html":
                     await update_platform(db, channel.id, "cafe24")
+                elif result.crawl_strategy == "woocommerce-api":
+                    await update_platform(db, channel.id, "woocommerce")
 
                 currency = result.products[0].currency if result.products else "KRW"
                 rate = await get_rate_to_krw(db, currency)

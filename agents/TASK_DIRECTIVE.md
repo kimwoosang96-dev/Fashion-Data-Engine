@@ -11,12 +11,13 @@ PM/개발 작업 통제를 위한 단일 기준 문서입니다.
 
 ## 진행 중 작업
 <!-- ACTIVE_TASKS_START -->
-- [ ] T-20260302-065 | PRICE_CATALOG_AUDIT_01: 가격 오염 데이터 정비 + 재발 방지 | owner:codex-dev | priority:P1 | created:2026-03-02 | issue:`agents/issues/PRICE_CATALOG_AUDIT_01.md` | details:`get_rate_to_krw()` 1.0 fallback 제거·하드코딩 근사치 대체, `record_price()` 비현실적 가격 저장 거부, `scripts/audit_price_data.py` + `scripts/cleanup_price_data.py` 신규 작성, ProductCatalog 재빌드 → 격차 300%+ 제품 0개 달성
-- [ ] T-20260302-064 | CRAWL_RATE_LIMIT_FIX_01: Shopify IP rate-limit 대응 + 크롤 성공률 개선 | owner:codex-dev | priority:P1 | created:2026-03-02 | issue:`agents/issues/CRAWL_RATE_LIMIT_FIX_01.md` | details:concurrency 5→2, 전역 Shopify throttle(semaphore/token-bucket), 요청 헤더 강화(Accept/Accept-Language), limit 250→100, stagger delay 0~3s, CrawlChannelLog 예외 보호(5채널 누락 버그 수정) → Shopify 성공 채널 ≥50개 목표
+- [ ] T-20260302-066 | CAFE24_CRAWL_FIX_01: Cafe24 수집 실패 원인 조사 + 개선 | owner:codex-dev | priority:P1 | created:2026-03-02
 <!-- ACTIVE_TASKS_END -->
 
 ## 최근 완료 작업
 <!-- COMPLETED_TASKS_START -->
+- [x] T-20260302-065 | PRICE_CATALOG_AUDIT_01: 가격 오염 데이터 정비 + 재발 방지 | owner:codex-dev | priority:P1 | status:done | created:2026-03-02 | completed:2026-03-02 | details:`get_rate_to_krw()`의 비-KRW `1.0` fallback 제거 및 통화별 fallback 환율 도입, 미확인 환율(None) 저장 차단. `record_price()`에 비현실 값(100원 미만/5천만원 초과) guard 추가. `scripts/audit_price_data.py`/`scripts/cleanup_price_data.py` 신규 추가 및 Makefile 타깃(`audit-price-data`, `cleanup-price-data`) 등록, dry-run 검증 완료.
+- [x] T-20260302-064 | CRAWL_RATE_LIMIT_FIX_01: Shopify IP rate-limit 대응 + 크롤 성공률 개선 | owner:codex-dev | priority:P1 | status:done | created:2026-03-02 | completed:2026-03-02 | details:Shopify 요청 안정화 적용(concurrency 기본값 2, 전역 semaphore throttle, page limit 250→100, 최대 페이지 40, 채널 시작 stagger delay 0~3s, 브라우저형 헤더 보강). `crawl_products.py`에 저장 단계 예외 보호 및 크롤 로그 fallback 보강으로 실패 시 누락 없이 `error_type` 기록되도록 수정.
 - [x] T-20260302-063 | CHANNEL_HEALTH_CLEANUP_01: 크롤 불가 채널 자동 감지 + 비활성화 스크립트 | owner:codex-dev | priority:P2 | status:done | created:2026-03-02 | completed:2026-03-02 | details:`scripts/deactivate_dead_channels.py` 신규 추가. 기준(연속 실패 / dead HTTP 404·410 / NULL platform+제품0+노후) 기반 후보 수집, brand-store 제외, dry-run 기본/`--apply` 반영, `--criteria` 선택, `--probe-http`, `--yes` 지원. 안전장치로 apply는 후보 2개 이상일 때만 실행.
 - [x] T-20260302-062 | CRAWL_WOOCOMMERCE_01: WooCommerce REST API 크롤러 추가 | owner:codex-dev | priority:P2 | status:done | created:2026-03-02 | completed:2026-03-02 | details:`product_crawler.py`에 WooCommerce 감지/수집/파싱(`_try_woocommerce_detect`, `_try_woocommerce_products`, `_parse_woocommerce_product`) 추가 후 fallback 체인을 Shopify→Cafe24→WooCommerce로 확장. `crawl_products.py`에서 `crawl_strategy='woocommerce-api'` 시 `channel.platform='woocommerce'` 자동 갱신 반영.
 - [x] T-20260302-061 | CRAWL_TIMEOUT_GUARD_01: 채널별 asyncio timeout deadlock 방지 | owner:claude-pm | priority:P1 | status:done | created:2026-03-02 | completed:2026-03-02 | details:`_CHANNEL_TIMEOUT_SECS` 설정(cafe24=600s/shopify=180s/default=300s), `asyncio.wait_for()` 채널별 래핑, TimeoutError 시 `error_type='timeout'` graceful 반환, `httpx.Timeout(connect=10,read=30)` 세분화.

@@ -18,8 +18,24 @@ logger = logging.getLogger(__name__)
 
 # ── 환율 조회 ────────────────────────────────────────────────────────────
 
-async def get_rate_to_krw(db: AsyncSession, currency: str) -> float:
-    """currency → KRW 환율. KRW면 1.0, 없으면 1.0 fallback."""
+_FALLBACK_RATES: dict[str, float] = {
+    "USD": 1400.0,
+    "EUR": 1680.0,
+    "GBP": 1930.0,
+    "JPY": 9.0,
+    "HKD": 182.0,
+    "SGD": 1130.0,
+    "CNY": 207.0,
+    "AUD": 1020.0,
+    "CAD": 1050.0,
+    "TWD": 45.0,
+    "DKK": 228.0,
+    "SEK": 159.0,
+}
+
+
+async def get_rate_to_krw(db: AsyncSession, currency: str) -> float | None:
+    """currency → KRW 환율. 미등록 시 하드코딩 fallback, 알 수 없는 통화는 None."""
     if currency == "KRW":
         return 1.0
     row = (
@@ -32,8 +48,16 @@ async def get_rate_to_krw(db: AsyncSession, currency: str) -> float:
     ).scalar_one_or_none()
     if row:
         return row.rate
-    logger.warning("환율 미등록: %s, fallback 1.0 적용", currency)
-    return 1.0
+    fallback = _FALLBACK_RATES.get(currency.upper())
+    if fallback:
+        logger.warning(
+            "환율 DB 미등록: %s → 하드코딩 fallback %.1f 적용 (정확도 낮음)",
+            currency,
+            fallback,
+        )
+        return fallback
+    logger.error("알 수 없는 통화: %s — 가격 저장 스킵", currency)
+    return None
 
 
 # ── 브랜드 조회 (vendor명으로) ────────────────────────────────────────────
@@ -115,18 +139,36 @@ async def record_price(
     db: AsyncSession,
     product_id: int,
     info: ProductInfo,
-    rate_to_krw: float,
-) -> PriceHistory:
+    rate_to_krw: float | None,
+) -> PriceHistory | None:
     """
     가격 이력 INSERT (항상 새 레코드 — 시계열 추적).
     price, original_price는 KRW 환산값으로 저장.
     """
+    if rate_to_krw is None:
+        logger.warning("rate=None → 가격 저장 스킵 (product_id=%d)", product_id)
+        return None
+
     is_sale = info.compare_at_price is not None and info.compare_at_price > info.price
     discount_rate: int | None = None
     if is_sale and info.compare_at_price:
         discount_rate = round((1 - info.price / info.compare_at_price) * 100)
 
-    price_krw = Decimal(str(round(info.price * rate_to_krw)))
+    price_krw_int = round(float(info.price) * rate_to_krw)
+    MIN_KRW = 100
+    MAX_KRW = 50_000_000
+    if price_krw_int < MIN_KRW or price_krw_int > MAX_KRW:
+        logger.warning(
+            "비현실적 가격 감지: product_id=%d, price=%s %s (rate=%.2f) → %d KRW, 저장 스킵",
+            product_id,
+            info.price,
+            info.currency,
+            rate_to_krw,
+            price_krw_int,
+        )
+        return None
+
+    price_krw = Decimal(str(price_krw_int))
     original_krw = (
         Decimal(str(round(info.compare_at_price * rate_to_krw)))
         if info.compare_at_price

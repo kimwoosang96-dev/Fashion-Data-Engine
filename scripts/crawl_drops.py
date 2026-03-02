@@ -92,6 +92,9 @@ async def run(limit: int, all_types: bool, no_alerts: bool) -> None:
             async with AsyncSessionLocal() as db:
                 rate = await get_rate_to_krw(db, "USD")  # 글로벌 채널은 USD 기본
                 brand_id = await _get_brand_id(db, channel.id)
+            if rate is None:
+                results_table.add_row(channel.name, "0", "0", "Missing FX rate for USD")
+                continue
 
             # 1) 신제품 (created-at-desc)
             new_result = await crawler.crawl_new_arrivals(

@@ -78,6 +78,7 @@ async def _find_consecutive_failure_channels(min_failures: int) -> list[DeadChan
             SELECT
                 ccl.channel_id,
                 ccl.status,
+                ccl.error_type,
                 ROW_NUMBER() OVER (
                     PARTITION BY ccl.channel_id
                     ORDER BY ccl.crawled_at DESC, ccl.id DESC
@@ -85,7 +86,7 @@ async def _find_consecutive_failure_channels(min_failures: int) -> list[DeadChan
             FROM crawl_channel_logs ccl
         ),
         recent AS (
-            SELECT channel_id, status
+            SELECT channel_id, status, error_type
             FROM ranked
             WHERE rn <= :min_failures
         )
@@ -95,14 +96,24 @@ async def _find_consecutive_failure_channels(min_failures: int) -> list[DeadChan
             c.url AS url,
             c.channel_type AS channel_type,
             COUNT(*) AS total_logs,
-            SUM(CASE WHEN r.status = 'failed' THEN 1 ELSE 0 END) AS failed_logs
+            SUM(
+                CASE
+                    WHEN r.status = 'failed' AND r.error_type = 'not_supported' THEN 1
+                    ELSE 0
+                END
+            ) AS failed_logs
         FROM channels c
         JOIN recent r ON r.channel_id = c.id
         WHERE c.is_active = 1
           AND (c.channel_type IS NULL OR c.channel_type NOT IN ('brand-store'))
         GROUP BY c.id, c.name, c.url, c.channel_type
         HAVING COUNT(*) >= :min_failures
-           AND SUM(CASE WHEN r.status = 'failed' THEN 1 ELSE 0 END) = COUNT(*)
+           AND SUM(
+                CASE
+                    WHEN r.status = 'failed' AND r.error_type = 'not_supported' THEN 1
+                    ELSE 0
+                END
+           ) = COUNT(*)
         ORDER BY c.name ASC
         """
     )

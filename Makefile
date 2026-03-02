@@ -1,4 +1,4 @@
-.PHONY: setup api web dev crawl crawl-cafe24 crawl-news news update-rates scheduler-dry scheduler data-audit audit audit-railway reclassify brand-mece fix-brands fix-null-brands fix-null-brands-dry fix-null-brands-apply remap-product-brands remap-product-brands-apply seed-directors seed-directors-apply seed-brands-luxury seed-brands-luxury-apply enrich-brands enrich-brands-apply purge-fake-brands purge-fake-brands-apply backfill-normalized-key backfill-normalized-key-apply backfill-normalized-key-force detect-platforms detect-platforms-apply channel-probe catalog-build deactivate-dead-channels
+.PHONY: setup api web dev crawl crawl-cafe24 crawl-news news update-rates scheduler-dry scheduler data-audit audit audit-railway reclassify brand-mece fix-brands fix-null-brands fix-null-brands-dry fix-null-brands-apply remap-product-brands remap-product-brands-apply seed-directors seed-directors-apply seed-brands-luxury seed-brands-luxury-apply enrich-brands enrich-brands-apply purge-fake-brands purge-fake-brands-apply backfill-normalized-key backfill-normalized-key-apply backfill-normalized-key-force detect-platforms detect-platforms-apply channel-probe catalog-build deactivate-dead-channels audit-price-data cleanup-price-data probe-cafe24 seed-cafe24-categories deactivate-inaccessible-channels
 
 setup:
 	uv sync
@@ -114,3 +114,18 @@ catalog-build:
 
 deactivate-dead-channels:
 	uv run python scripts/deactivate_dead_channels.py --dry-run
+
+audit-price-data:
+	uv run python scripts/audit_price_data.py
+
+cleanup-price-data:
+	uv run python scripts/cleanup_price_data.py
+
+probe-cafe24:
+	uv run python scripts/probe_cafe24_channels.py
+
+seed-cafe24-categories:
+	uv run python scripts/seed_cafe24_categories.py
+
+deactivate-inaccessible-channels:
+	uv run python scripts/deactivate_inaccessible_channels.py

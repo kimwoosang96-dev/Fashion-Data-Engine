@@ -52,7 +52,44 @@ COUNTRY_CURRENCY: dict[str, str] = {
 }
 
 # Shopify 제품 크롤 시 최대 페이지 수 (250개/페이지 × 16 = 최대 4000개)
-SHOPIFY_MAX_PAGES = 16
+SHOPIFY_MAX_PAGES = 40
+
+_BROWSER_HEADERS: dict[str, str] = {
+    "Accept": "application/json, text/html, */*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9,ko;q=0.8",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache",
+}
+
+_SHOPIFY_GLOBAL_SEM: asyncio.Semaphore | None = None
+_CAFE24_CATEGORY_SEM: asyncio.Semaphore | None = None
+
+_URL_PLATFORM_MAP: dict[str, str] = {
+    "shop-pro.jp": "makeshop",
+    "buyshop.jp": "stores-jp",
+    "theshop.jp": "stores-jp",
+    "stores.jp": "stores-jp",
+    "ocnk.net": "ochanoko",
+    "cafe24.com": "cafe24",
+    "echosting.com": "cafe24",
+    "base.shop": "base-jp",
+    "thebase.in": "base-jp",
+}
+
+
+def _get_shopify_sem() -> asyncio.Semaphore:
+    global _SHOPIFY_GLOBAL_SEM
+    if _SHOPIFY_GLOBAL_SEM is None:
+        _SHOPIFY_GLOBAL_SEM = asyncio.Semaphore(2)
+    return _SHOPIFY_GLOBAL_SEM
+
+
+def _get_cafe24_category_sem() -> asyncio.Semaphore:
+    global _CAFE24_CATEGORY_SEM
+    if _CAFE24_CATEGORY_SEM is None:
+        _CAFE24_CATEGORY_SEM = asyncio.Semaphore(5)
+    return _CAFE24_CATEGORY_SEM
 
 # ── 모델코드 추출용 정규식 ──────────────────────────────────────────────
 # 3자리 이상 숫자 포함 (M2002R, DD9336, GZ6094, NMD_R1 등)
@@ -191,7 +228,7 @@ class ProductCrawler:
     )
     async def _fetch_with_retry(self, url: str, timeout: float | None = None) -> httpx.Response:
         assert self._client is not None
-        headers = {"User-Agent": random.choice(USER_AGENTS)}
+        headers = {"User-Agent": random.choice(USER_AGENTS), **_BROWSER_HEADERS}
         response = await self._client.get(url, headers=headers, timeout=timeout)
         # 429 Rate Limit — Retry-After 헤더 준수
         if response.status_code == 429:
@@ -229,6 +266,14 @@ class ProductCrawler:
         )
         return "USD"
 
+    @staticmethod
+    def _detect_platform_from_url(channel_url: str) -> str | None:
+        host = urlparse(channel_url).netloc.lower()
+        for pattern, platform in _URL_PLATFORM_MAP.items():
+            if pattern in host:
+                return platform
+        return None
+
     async def crawl_channel(
         self,
         channel_url: str,
@@ -236,6 +281,7 @@ class ProductCrawler:
         cafe24_brand_categories: list[tuple[str, str]] | None = None,
     ) -> ChannelProductResult:
         """채널 URL에서 전체 제품 목록 수집."""
+        await asyncio.sleep(random.uniform(0, 3))
         currency = self._infer_currency(channel_url, country)
         result = ChannelProductResult(channel_url=channel_url)
 
@@ -249,15 +295,25 @@ class ProductCrawler:
                 if not categories:
                     categories = await self._discover_cafe24_brand_categories(channel_url)
                 cafe24_products: list[ProductInfo] = []
-                for brand_name, cate_no in categories:
-                    cafe24_products.extend(
-                        await self._try_cafe24_products(
-                            channel_url=channel_url,
-                            cate_no=cate_no,
-                            brand_name=brand_name,
-                            currency=currency,
-                        )
+                if categories:
+                    sem = _get_cafe24_category_sem()
+
+                    async def _fetch_one(brand_name: str, cate_no: str) -> list[ProductInfo]:
+                        async with sem:
+                            return await self._try_cafe24_products(
+                                channel_url=channel_url,
+                                cate_no=cate_no,
+                                brand_name=brand_name,
+                                currency=currency,
+                            )
+
+                    gathered = await asyncio.gather(
+                        *[_fetch_one(name, cate_no) for name, cate_no in categories],
+                        return_exceptions=True,
                     )
+                    for row in gathered:
+                        if isinstance(row, list):
+                            cafe24_products.extend(row)
                 if cafe24_products:
                     dedup: dict[str, ProductInfo] = {}
                     for p in cafe24_products:
@@ -265,17 +321,48 @@ class ProductCrawler:
                     result.products = list(dedup.values())
                     result.crawl_strategy = "cafe24-html"
                 else:
+                    detected_platform = self._detect_platform_from_url(channel_url)
+                    single_brand_products = await self._try_cafe24_single_brand(
+                        channel_url=channel_url,
+                        currency=currency,
+                    )
+                    if single_brand_products:
+                        result.products = single_brand_products
+                        result.crawl_strategy = "cafe24-single-brand"
+                        return result
                     if await self._try_woocommerce_detect(channel_url):
                         wc_products = await self._try_woocommerce_products(channel_url, currency)
                         if wc_products:
                             result.products = wc_products
                             result.crawl_strategy = "woocommerce-api"
                         else:
-                            result.error = "No products found (non-Shopify/Cafe24/WooCommerce or empty store)"
+                            result.error = (
+                                "No products found "
+                                "(non-Shopify/Cafe24/WooCommerce/MakeShop/STORES.jp or empty store)"
+                            )
                             result.error_type = "not_supported"
                     else:
-                        result.error = "No products found (non-Shopify/Cafe24/WooCommerce or empty store)"
-                        result.error_type = "not_supported"
+                        extra_products: list[ProductInfo] = []
+                        extra_strategy = "unknown"
+                        if detected_platform == "makeshop":
+                            extra_products = await self._try_makeshop_products(channel_url, currency)
+                            extra_strategy = "makeshop-html"
+                        elif detected_platform == "stores-jp":
+                            extra_products = await self._try_stores_jp_products(channel_url, currency)
+                            extra_strategy = "stores-jp-html"
+                        elif detected_platform == "ochanoko":
+                            extra_products = await self._try_ochanoko_products(channel_url, currency)
+                            extra_strategy = "ochanoko-html"
+
+                        if extra_products:
+                            result.products = extra_products
+                            result.crawl_strategy = extra_strategy
+                        else:
+                            result.error = (
+                                "No products found "
+                                "(non-Shopify/Cafe24/WooCommerce/MakeShop/STORES.jp or empty store)"
+                            )
+                            result.error_type = "not_supported"
         except Exception as e:
             result.error = str(e)[:200]
             http_status = e.response.status_code if isinstance(e, httpx.HTTPStatusError) else None
@@ -290,18 +377,20 @@ class ProductCrawler:
         self, channel_url: str, currency: str
     ) -> list[ProductInfo]:
         """
-        Shopify /products.json?limit=250&page=N 순회.
+        Shopify /products.json?limit=100&page=N 순회.
         최대 SHOPIFY_MAX_PAGES 페이지.
         """
         assert self._client is not None
         base = channel_url.rstrip("/")
         products: list[ProductInfo] = []
+        shopify_sem = _get_shopify_sem()
 
         for page in range(1, SHOPIFY_MAX_PAGES + 1):
-            url = f"{base}/products.json?limit=250&page={page}"
+            url = f"{base}/products.json?limit=100&page={page}"
             try:
-                resp = await self._fetch_with_retry(url)
-                data = resp.json()
+                async with shopify_sem:
+                    resp = await self._fetch_with_retry(url)
+                    data = resp.json()
             except Exception:
                 break
 
@@ -316,7 +405,7 @@ class ProductCrawler:
 
             await asyncio.sleep(self._delay)
 
-            if len(page_products) < 250:
+            if len(page_products) < 100:
                 break
 
         return products
@@ -332,9 +421,11 @@ class ProductCrawler:
             f"{base}/product/maker.html",
             f"{base}/product/brand.html",
             f"{base}/brands2.html",
+            f"{base}/product/list-brand.html",
+            f"{base}/product/list.html?cate_no=1",
+            f"{base}/category/brand/42/",
         ]
-        found: list[tuple[str, str]] = []
-        seen: set[str] = set()
+        found_by_cate: dict[str, str] = {}
         for url in candidates:
             try:
                 resp = await self._client.get(url, timeout=self._timeout)
@@ -349,16 +440,11 @@ class ProductCrawler:
                 if not m:
                     continue
                 cate_no = m.group(1)
-                if cate_no in seen:
-                    continue
                 name = a.get_text(" ", strip=True)
                 if not name:
                     continue
-                seen.add(cate_no)
-                found.append((name, cate_no))
-            if found:
-                break
-        return found
+                found_by_cate[cate_no] = name
+        return [(name, cate_no) for cate_no, name in found_by_cate.items()]
 
     async def _try_cafe24_products(
         self,
@@ -377,114 +463,205 @@ class ProductCrawler:
         for page in range(1, 80):
             list_url = f"{base}/product/list.html?cate_no={cate_no}&page={page}"
             try:
-                resp = await self._client.get(list_url, timeout=self._timeout)
-                if resp.status_code != 200:
+                resp: httpx.Response | None = None
+                for attempt in range(3):
+                    resp = await self._client.get(list_url, timeout=self._timeout)
+                    if resp.status_code == 429:
+                        retry_after = int(resp.headers.get("Retry-After", "10"))
+                        logger.warning("Cafe24 429: %s, retry after %ss", list_url, retry_after)
+                        await asyncio.sleep(retry_after)
+                        continue
+                    if resp.status_code == 503:
+                        wait = 5 * (attempt + 1)
+                        logger.warning("Cafe24 503: %s, retry after %ss", list_url, wait)
+                        await asyncio.sleep(wait)
+                        continue
+                    break
+                if resp is None or resp.status_code != 200:
                     break
             except Exception:
                 break
 
-            soup = BeautifulSoup(resp.text, "html.parser")
-            cards = soup.select(
-                "li[id^='anchorBoxId_'], ul.prdList > li, .xans-product-listnormal li"
+            page_products = self._parse_cafe24_product_list(
+                html=resp.text,
+                channel_url=channel_url,
+                currency=currency,
+                brand_name=brand_name,
+                seen_product_nos=seen,
             )
-            if not cards:
-                break
-
-            page_count = 0
-            for card in cards:
-                a = card.select_one(
-                    "a[href*='product_no='], .name a, .description .name a, p.name a"
-                )
-                if not a:
-                    continue
-                href = (a.get("href") or "").strip()
-                m = re.search(r"product_no=(\d+)", href)
-                if not m:
-                    continue
-                product_no = m.group(1)
-                if product_no in seen:
-                    continue
-                seen.add(product_no)
-
-                title = a.get_text(" ", strip=True)
-                if not title:
-                    continue
-
-                price_node = card.select_one(
-                    ".price, .spec li span, li[class*='price'], strong[class*='price']"
-                )
-                price_text = price_node.get_text(" ", strip=True) if price_node else ""
-                nums = re.findall(r"\d[\d,]*", price_text.replace(".", ""))
-                if not nums:
-                    continue
-                try:
-                    price = float(nums[0].replace(",", ""))
-                except ValueError:
-                    continue
-                if price <= 0:
-                    continue
-
-                img = card.select_one("img")
-                image_url = img.get("src") if img else None
-                if image_url:
-                    image_url = urljoin(base + "/", image_url)
-
-                product_url = urljoin(base + "/", href)
-                # 품절 배지 셀렉터 우선 — 카드 전체 텍스트 오탐 방지
-                sold_out_badge = card.select_one(
-                    ".icon-soldout, .soldout, [class*='soldout'], "
-                    ".sold-out-label, .btn-soldout, [class*='sold-out']"
-                )
-                if sold_out_badge:
-                    is_available = False
-                else:
-                    # 폴백: 제목 엘리먼트 텍스트만 체크 (카드 전체 텍스트 X)
-                    title_lower = title.lower()
-                    is_available = not (
-                        "품절" in title_lower
-                        or "sold out" in title_lower
-                        or "soldout" in title_lower
-                    )
-
-                normalized_key, match_confidence = self._build_normalized_key(
-                    brand_slug=brand_slug,
-                    sku=None,
-                    title=title,
-                    tags=[],
-                )
-                gender, subcategory = classify_gender_and_subcategory(
-                    product_type=None,
-                    title=title,
-                    tags="",
-                )
-
-                products.append(
-                    ProductInfo(
-                        title=title,
-                        vendor=brand_name,
-                        handle=product_no,
-                        product_type=None,
-                        price=price,
-                        compare_at_price=None,
-                        currency=currency,
-                        sku=None,
-                        image_url=image_url,
-                        tags=None,
-                        product_url=product_url,
-                        product_key=f"{brand_slug}:{product_no}",
-                        is_available=is_available,
-                        gender=gender,
-                        subcategory=subcategory,
-                        normalized_key=normalized_key,
-                        match_confidence=match_confidence,
-                    )
-                )
-                page_count += 1
+            page_count = len(page_products)
+            if page_count:
+                products.extend(page_products)
 
             if page_count == 0:
                 break
             await asyncio.sleep(self._delay)
 
+        return products
+
+    def _parse_cafe24_product_list(
+        self,
+        *,
+        html: str,
+        channel_url: str,
+        currency: str,
+        brand_name: str | None,
+        seen_product_nos: set[str] | None = None,
+    ) -> list[ProductInfo]:
+        """Cafe24 목록 페이지 HTML 공통 파서."""
+        base = channel_url.rstrip("/")
+        vendor = (brand_name or urlparse(channel_url).netloc.replace("www.", "")).strip() or "unknown"
+        brand_slug = slugify(vendor) if vendor else "unknown"
+        seen = seen_product_nos if seen_product_nos is not None else set()
+
+        soup = BeautifulSoup(html, "html.parser")
+        cards = soup.select(
+            "li[id^='anchorBoxId_'], ul.prdList > li, .xans-product-listnormal li, "
+            ".xans-product-listitem li, .prdList.grid4 > li"
+        )
+        if not cards:
+            return []
+
+        out: list[ProductInfo] = []
+        for card in cards:
+            a = card.select_one(
+                "a[href*='product_no='], .name a, .description .name a, p.name a"
+            )
+            if not a:
+                continue
+            href = (a.get("href") or "").strip()
+            m = re.search(r"product_no=(\d+)", href)
+            if not m:
+                continue
+            product_no = m.group(1)
+            if product_no in seen:
+                continue
+            seen.add(product_no)
+
+            title = a.get_text(" ", strip=True)
+            if not title:
+                continue
+
+            price_node = card.select_one(
+                ".price, .spec li span, li[class*='price'], strong[class*='price']"
+            )
+            price_text = price_node.get_text(" ", strip=True) if price_node else ""
+            nums = re.findall(r"\d[\d,]*", price_text.replace(".", ""))
+            if not nums:
+                continue
+            try:
+                price = float(nums[0].replace(",", ""))
+            except ValueError:
+                continue
+            if price <= 0:
+                continue
+
+            img = card.select_one("img")
+            image_url = img.get("src") if img else None
+            if image_url:
+                image_url = urljoin(base + "/", image_url)
+
+            product_url = urljoin(base + "/", href)
+            sold_out_badge = card.select_one(
+                ".icon-soldout, .soldout, [class*='soldout'], "
+                ".sold-out-label, .btn-soldout, [class*='sold-out']"
+            )
+            if sold_out_badge:
+                is_available = False
+            else:
+                title_lower = title.lower()
+                is_available = not (
+                    "품절" in title_lower
+                    or "sold out" in title_lower
+                    or "soldout" in title_lower
+                )
+
+            normalized_key, match_confidence = self._build_normalized_key(
+                brand_slug=brand_slug,
+                sku=None,
+                title=title,
+                tags=[],
+            )
+            gender, subcategory = classify_gender_and_subcategory(
+                product_type=None,
+                title=title,
+                tags="",
+            )
+
+            out.append(
+                ProductInfo(
+                    title=title,
+                    vendor=vendor,
+                    handle=product_no,
+                    product_type=None,
+                    price=price,
+                    compare_at_price=None,
+                    currency=currency,
+                    sku=None,
+                    image_url=image_url,
+                    tags=None,
+                    product_url=product_url,
+                    product_key=f"{brand_slug}:{product_no}",
+                    is_available=is_available,
+                    gender=gender,
+                    subcategory=subcategory,
+                    normalized_key=normalized_key,
+                    match_confidence=match_confidence,
+                )
+            )
+        return out
+
+    async def _try_cafe24_single_brand(
+        self,
+        channel_url: str,
+        currency: str,
+    ) -> list[ProductInfo]:
+        """Cafe24 단일 브랜드 스토어 목록(/product/list.html) 전략."""
+        assert self._client is not None
+        base = channel_url.rstrip("/")
+        candidates = [
+            f"{base}/product/list.html?cate_no=all",
+            f"{base}/product/list.html",
+            f"{base}/category/main/",
+        ]
+
+        working_base: str | None = None
+        for candidate in candidates:
+            page1 = f"{candidate}&page=1" if "?" in candidate else f"{candidate}?page=1"
+            try:
+                resp = await self._client.get(page1, timeout=self._timeout)
+            except Exception:
+                continue
+            if resp.status_code != 200:
+                continue
+            body = resp.text.lower()
+            if "xans-product" in body or "cafe24" in body:
+                working_base = candidate
+                break
+        if not working_base:
+            return []
+
+        seen: set[str] = set()
+        products: list[ProductInfo] = []
+        for page in range(1, 101):
+            page_url = f"{working_base}&page={page}" if "?" in working_base else f"{working_base}?page={page}"
+            try:
+                resp = await self._client.get(page_url, timeout=self._timeout)
+            except Exception:
+                break
+            if resp.status_code != 200:
+                break
+            page_products = self._parse_cafe24_product_list(
+                html=resp.text,
+                channel_url=channel_url,
+                currency=currency,
+                brand_name=None,
+                seen_product_nos=seen,
+            )
+            if not page_products:
+                break
+            products.extend(page_products)
+            await asyncio.sleep(self._delay)
         return products
 
     # ── WooCommerce 전략 ─────────────────────────────────────────────────
@@ -544,6 +721,288 @@ class ProductCrawler:
             page += 1
             await asyncio.sleep(self._delay)
         return products
+
+    # ── MakeShop / STORES.jp / Ochanoko 전략 ─────────────────────────────
+
+    @staticmethod
+    def _extract_price_from_text(text: str) -> float | None:
+        nums = re.findall(r"\d[\d,]*", text.replace(".", ""))
+        if not nums:
+            return None
+        try:
+            val = float(nums[0].replace(",", ""))
+            return val if val > 0 else None
+        except Exception:
+            return None
+
+    @staticmethod
+    def _collect_jsonld_products(node: object, out: list[dict]) -> None:
+        if isinstance(node, dict):
+            ntype = str(node.get("@type") or "").lower()
+            if ntype == "product":
+                out.append(node)
+            for v in node.values():
+                ProductCrawler._collect_jsonld_products(v, out)
+        elif isinstance(node, list):
+            for v in node:
+                ProductCrawler._collect_jsonld_products(v, out)
+
+    async def _crawl_generic_product_cards(
+        self,
+        channel_url: str,
+        currency: str,
+        *,
+        platform_prefix: str,
+        item_selector: str,
+        link_selector: str,
+        title_selector: str,
+        price_selector: str,
+        entry_paths: list[str] | None = None,
+        max_pages: int = 8,
+    ) -> list[ProductInfo]:
+        assert self._client is not None
+        base = channel_url.rstrip("/")
+        host_slug = urlparse(base).netloc.lower().replace("www.", "") or "unknown"
+        products: list[ProductInfo] = []
+        seen_urls: set[str] = set()
+
+        paths = entry_paths or ["/"]
+        for entry in paths:
+            entry_url = urljoin(base + "/", entry.lstrip("/"))
+            for page in range(1, max_pages + 1):
+                page_url = f"{entry_url}?page={page}" if page > 1 else entry_url
+                try:
+                    resp = await self._client.get(page_url, timeout=self._timeout)
+                except Exception:
+                    break
+                if resp.status_code != 200:
+                    break
+                soup = BeautifulSoup(resp.text, "html.parser")
+                cards = soup.select(item_selector)
+                if not cards:
+                # 카드 구조가 없는 스킨은 JSON-LD Product 메타데이터를 사용한다.
+                    jsonld_products: list[dict] = []
+                    for script in soup.select("script[type='application/ld+json']"):
+                        raw = (script.string or script.get_text() or "").strip()
+                        if not raw:
+                            continue
+                        try:
+                            parsed = json.loads(raw)
+                        except Exception:
+                            continue
+                        self._collect_jsonld_products(parsed, jsonld_products)
+
+                    if not jsonld_products:
+                        break
+
+                    page_count = 0
+                    for obj in jsonld_products:
+                        title = str(obj.get("name") or "").strip()
+                        if not title or self._is_title_denied(title):
+                            continue
+                        offers = obj.get("offers") or {}
+                        if isinstance(offers, list):
+                            offers = offers[0] if offers else {}
+                        price = self._extract_price_from_text(str(offers.get("price") or ""))
+                        if price is None:
+                            continue
+                        raw_url = str(obj.get("url") or "").strip()
+                        product_url = urljoin(base + "/", raw_url) if raw_url else page_url
+                        if product_url in seen_urls:
+                            continue
+                        seen_urls.add(product_url)
+
+                        image = obj.get("image")
+                        image_url: str | None = None
+                        if isinstance(image, list) and image:
+                            image_url = str(image[0])
+                        elif isinstance(image, str):
+                            image_url = image
+                        if image_url:
+                            image_url = urljoin(base + "/", image_url)
+
+                        fallback_handle = slugify(urlparse(product_url).path, max_length=70)
+                        handle = slugify(title, max_length=70) or fallback_handle or "item"
+                        vendor_obj = obj.get("brand") or {}
+                        vendor = (
+                            str(vendor_obj.get("name") or "").strip()
+                            if isinstance(vendor_obj, dict)
+                            else str(vendor_obj or "").strip()
+                        ) or host_slug
+                        brand_slug = slugify(vendor) if vendor else "unknown"
+                        normalized_key, match_confidence = self._build_normalized_key(
+                            brand_slug=brand_slug,
+                            sku=None,
+                            title=title,
+                            tags=[],
+                        )
+                        gender, subcategory = classify_gender_and_subcategory(
+                            product_type=None,
+                            title=title,
+                            tags="",
+                        )
+                        products.append(
+                            ProductInfo(
+                                title=title,
+                                vendor=vendor,
+                                handle=handle,
+                                product_type=None,
+                                price=price,
+                                compare_at_price=None,
+                                currency=currency,
+                                sku=None,
+                                image_url=image_url,
+                                tags=None,
+                                product_url=product_url,
+                                product_key=f"{platform_prefix}:{host_slug}:{handle}",
+                                is_available=True,
+                                gender=gender,
+                                subcategory=subcategory,
+                                normalized_key=normalized_key,
+                                match_confidence=match_confidence,
+                            )
+                        )
+                        page_count += 1
+
+                    if page_count == 0:
+                        break
+                    await asyncio.sleep(self._delay)
+                    continue
+
+                page_count = 0
+                for card in cards:
+                    a = card.select_one(link_selector) or card.select_one("a[href]")
+                    if not a:
+                        continue
+                    href = (a.get("href") or "").strip()
+                    if not href:
+                        continue
+                    product_url = urljoin(base + "/", href)
+                    if product_url in seen_urls:
+                        continue
+                    seen_urls.add(product_url)
+
+                    title_node = card.select_one(title_selector)
+                    title = (
+                        title_node.get_text(" ", strip=True)
+                        if title_node
+                        else a.get_text(" ", strip=True)
+                    )
+                    if not title or self._is_title_denied(title):
+                        continue
+
+                    price_node = card.select_one(price_selector)
+                    price_text = (
+                        price_node.get_text(" ", strip=True)
+                        if price_node
+                        else card.get_text(" ", strip=True)
+                    )
+                    price = self._extract_price_from_text(price_text)
+                    if price is None:
+                        continue
+
+                    image = card.select_one("img")
+                    image_url = image.get("src") if image else None
+                    if image_url:
+                        image_url = urljoin(base + "/", image_url)
+
+                    fallback_handle = slugify(urlparse(product_url).path, max_length=70)
+                    handle = slugify(title, max_length=70) or fallback_handle or "item"
+                    vendor = host_slug
+                    brand_slug = slugify(vendor) if vendor else "unknown"
+                    normalized_key, match_confidence = self._build_normalized_key(
+                        brand_slug=brand_slug,
+                        sku=None,
+                        title=title,
+                        tags=[],
+                    )
+                    gender, subcategory = classify_gender_and_subcategory(
+                        product_type=None,
+                        title=title,
+                        tags="",
+                    )
+                    products.append(
+                        ProductInfo(
+                            title=title,
+                            vendor=vendor,
+                            handle=handle,
+                            product_type=None,
+                            price=price,
+                            compare_at_price=None,
+                            currency=currency,
+                            sku=None,
+                            image_url=image_url,
+                            tags=None,
+                            product_url=product_url,
+                            product_key=f"{platform_prefix}:{host_slug}:{handle}",
+                            is_available=True,
+                            gender=gender,
+                            subcategory=subcategory,
+                            normalized_key=normalized_key,
+                            match_confidence=match_confidence,
+                        )
+                    )
+                    page_count += 1
+
+                if page_count == 0:
+                    break
+                await asyncio.sleep(self._delay)
+
+        return products
+
+    async def _try_makeshop_products(self, channel_url: str, currency: str) -> list[ProductInfo]:
+        return await self._crawl_generic_product_cards(
+            channel_url,
+            currency,
+            platform_prefix="makeshop",
+            item_selector=".item-list li, .product-list li, .prd-list li, li.item",
+            link_selector="a[href*='/view/item/'], a[href*='/shopdetail/'], a[href*='/shop/g/']",
+            title_selector=".item_name, .name, .ttl, .product_name",
+            price_selector=".price, .item_price, .price_wrap, .money",
+            entry_paths=[
+                "/",
+                "/shop/goods/search.aspx",
+                "/shop/goods/search.aspx?sort=popular",
+                "/shop/g/gALL/",
+                "/shop/g/g01/",
+            ],
+        )
+
+    async def _try_stores_jp_products(self, channel_url: str, currency: str) -> list[ProductInfo]:
+        return await self._crawl_generic_product_cards(
+            channel_url,
+            currency,
+            platform_prefix="storesjp",
+            item_selector=".item-list li, .products li, .product-list li, [data-item-id]",
+            link_selector="a[href*='/items/'], a[href*='/products/']",
+            title_selector=".item-name, .name, .product-name, .title",
+            price_selector=".item-price, .price, .money, [class*='price']",
+            entry_paths=[
+                "/",
+                "/items/all",
+                "/items",
+                "/collections/all",
+                "/products",
+            ],
+        )
+
+    async def _try_ochanoko_products(self, channel_url: str, currency: str) -> list[ProductInfo]:
+        return await self._crawl_generic_product_cards(
+            channel_url,
+            currency,
+            platform_prefix="ochanoko",
+            item_selector=".item-list li, .product-list li, .goods-list li, li.item",
+            link_selector="a[href*='/product/'], a[href*='/shopdetail/'], a[href*='/goods/']",
+            title_selector=".item_name, .name, .title, .goods-name",
+            price_selector=".price, .item_price, .money, [class*='price']",
+            entry_paths=[
+                "/",
+                "/item-list",
+                "/category",
+                "/new",
+                "/recommend",
+            ],
+        )
 
     # ── normalized_key 생성 ───────────────────────────────────────────────
 

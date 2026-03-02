@@ -11,6 +11,10 @@
     uv run python scripts/crawl_products.py --limit 3    # 처음 3개 채널만 (테스트)
     uv run python scripts/crawl_products.py --channel-type edit-shop
     uv run python scripts/crawl_products.py --concurrency 3  # 동시 처리 채널 수
+
+주의:
+    크롤 직전에 `channel_probe.py --all --force-retag`를 실행하면 Shopify IP rate-limit
+    (429)이 발생할 수 있습니다. probe는 별도 시간대(권장: 크롤 30분 이상 전)에 실행하세요.
 """
 import asyncio
 import sys
@@ -146,133 +150,180 @@ async def _crawl_one_channel(
 
         # ── 3. DB 저장 ───────────────────────────────────────────────────
         if result.products and not result.error:
-            async with AsyncSessionLocal() as db:
-                if result.crawl_strategy == "shopify-api":
-                    await update_platform(db, channel.id, "shopify")
-                elif result.crawl_strategy == "cafe24-html":
-                    await update_platform(db, channel.id, "cafe24")
-                elif result.crawl_strategy == "woocommerce-api":
-                    await update_platform(db, channel.id, "woocommerce")
+            try:
+                async with AsyncSessionLocal() as db:
+                    if result.crawl_strategy == "shopify-api":
+                        await update_platform(db, channel.id, "shopify")
+                    elif result.crawl_strategy == "cafe24-html":
+                        await update_platform(db, channel.id, "cafe24")
+                    elif result.crawl_strategy == "woocommerce-api":
+                        await update_platform(db, channel.id, "woocommerce")
 
-                currency = result.products[0].currency if result.products else "KRW"
-                rate = await get_rate_to_krw(db, currency)
-
-                for info in result.products:
-                    brand = await find_brand_by_vendor(db, info.vendor)
-                    brand_id = brand.id if brand else None
-
-                    existing_row = (
-                        await db.execute(
-                            select(Product).where(Product.url == info.product_url)
+                    currency = result.products[0].currency if result.products else "KRW"
+                    rate = await get_rate_to_krw(db, currency)
+                    if rate is None:
+                        console.print(
+                            f"[yellow]환율 없음[/yellow] {currency} → 채널 {channel.name} 가격 저장 스킵"
                         )
-                    ).scalar_one_or_none()
-                    prev_price_krw = None
-                    if existing_row:
-                        prev_price_krw = await _get_prev_price_krw(db, existing_row.id)
-
-                    product, is_new, sale_just_started = await upsert_product(
-                        db, channel.id, info, brand_id=brand_id
-                    )
-                    await record_price(db, product.id, info, rate_to_krw=rate)
-
-                    is_sale = (
-                        info.compare_at_price is not None
-                        and info.compare_at_price > info.price
-                    )
-                    if is_sale:
-                        sale_count += 1
-                    if is_new:
-                        new_count += 1
+                        await db.commit()
+                        result.error = f"Missing FX rate for {currency}"
+                        result.error_type = "parse_error"
+                        result.products = []
+                        new_count = 0
+                        updated_count = 0
+                        sale_count = 0
                     else:
-                        updated_count += 1
+                        for info in result.products:
+                            brand = await find_brand_by_vendor(db, info.vendor)
+                            brand_id = brand.id if brand else None
 
-                    # ── 알림 트리거 ───────────────────────────────────────
-                    brand_slug = brand.slug if brand else None
-                    if not no_alerts and settings.discord_webhook_url and await should_alert(
-                        db,
-                        brand_slug=brand_slug,
-                        channel_url=channel.url,
-                        product_key=info.product_key,
-                    ):
-                        current_krw = int(info.price * rate)
-                        discount_rate: int | None = None
-                        if is_sale and info.compare_at_price:
-                            discount_rate = round(
-                                (1 - info.price / info.compare_at_price) * 100
+                            existing_row = (
+                                await db.execute(
+                                    select(Product).where(Product.url == info.product_url)
+                                )
+                            ).scalar_one_or_none()
+                            prev_price_krw = None
+                            if existing_row:
+                                prev_price_krw = await _get_prev_price_krw(db, existing_row.id)
+
+                            product, is_new, sale_just_started = await upsert_product(
+                                db, channel.id, info, brand_id=brand_id
                             )
-                        original_krw = (
-                            int(info.compare_at_price * rate)
-                            if info.compare_at_price
-                            else None
-                        )
-                        payload = AlertPayload(
-                            product_name=info.title,
-                            product_key=info.product_key,
-                            channel_name=channel.name,
-                            product_url=info.product_url,
-                            image_url=info.image_url,
-                            price_krw=current_krw,
-                            original_price_krw=original_krw,
-                            discount_rate=discount_rate,
-                            prev_price_krw=prev_price_krw,
-                        )
+                            await record_price(db, product.id, info, rate_to_krw=rate)
 
-                        if is_new:
-                            await new_product_alert(payload)
-                        elif sale_just_started:
-                            await sale_alert(payload)
-                        elif (
-                            prev_price_krw
-                            and prev_price_krw > 0
-                            and current_krw < prev_price_krw * (1 - threshold)
-                        ):
-                            await price_drop_alert(payload)
+                            is_sale = (
+                                info.compare_at_price is not None
+                                and info.compare_at_price > info.price
+                            )
+                            if is_sale:
+                                sale_count += 1
+                            if is_new:
+                                new_count += 1
+                            else:
+                                updated_count += 1
 
-                await db.commit()
+                            # ── 알림 트리거 ───────────────────────────────────────
+                            brand_slug = brand.slug if brand else None
+                            if not no_alerts and settings.discord_webhook_url and await should_alert(
+                                db,
+                                brand_slug=brand_slug,
+                                channel_url=channel.url,
+                                product_key=info.product_key,
+                            ):
+                                current_krw = int(info.price * rate)
+                                discount_rate: int | None = None
+                                if is_sale and info.compare_at_price:
+                                    discount_rate = round(
+                                        (1 - info.price / info.compare_at_price) * 100
+                                    )
+                                original_krw = (
+                                    int(info.compare_at_price * rate)
+                                    if info.compare_at_price
+                                    else None
+                                )
+                                payload = AlertPayload(
+                                    product_name=info.title,
+                                    product_key=info.product_key,
+                                    channel_name=channel.name,
+                                    product_url=info.product_url,
+                                    image_url=info.image_url,
+                                    price_krw=current_krw,
+                                    original_price_krw=original_krw,
+                                    discount_rate=discount_rate,
+                                    prev_price_krw=prev_price_krw,
+                                )
+
+                                if is_new:
+                                    await new_product_alert(payload)
+                                elif sale_just_started:
+                                    await sale_alert(payload)
+                                elif (
+                                    prev_price_krw
+                                    and prev_price_krw > 0
+                                    and current_krw < prev_price_krw * (1 - threshold)
+                                ):
+                                    await price_drop_alert(payload)
+
+                    await db.commit()
+            except Exception as save_exc:
+                result.error = f"save_error: {str(save_exc)[:180]}"
+                result.error_type = "internal_error"
+                result.products = []
 
         # ── 4. CrawlChannelLog + CrawlRun 업데이트 (Lock으로 동시성 보호) ──
         log_status = "success" if not result.error else "failed"
         if not result.products and not result.error:
             log_status = "skipped"
 
-        async with run_lock:
-            async with AsyncSessionLocal() as db:
-                db.add(
-                    CrawlChannelLog(
-                        run_id=run_id,
-                        channel_id=channel.id,
-                        status=log_status,
-                        products_found=len(result.products),
-                        products_new=new_count,
-                        products_updated=updated_count,
-                        error_msg=(result.error or "")[:500] if result.error else None,
-                        error_type=(
-                            result.error_type
-                            if result.error
-                            else ("zero_products" if log_status == "skipped" else None)
-                        ),
-                        strategy=result.crawl_strategy,
-                        duration_ms=duration_ms,
+        try:
+            async with run_lock:
+                async with AsyncSessionLocal() as db:
+                    db.add(
+                        CrawlChannelLog(
+                            run_id=run_id,
+                            channel_id=channel.id,
+                            status=log_status,
+                            products_found=len(result.products),
+                            products_new=new_count,
+                            products_updated=updated_count,
+                            error_msg=(result.error or "")[:500] if result.error else None,
+                            error_type=(
+                                result.error_type
+                                if result.error
+                                else ("zero_products" if log_status == "skipped" else None)
+                            ),
+                            strategy=result.crawl_strategy,
+                            duration_ms=duration_ms,
+                        )
                     )
+                    # 원자적 카운터 업데이트 (READ-MODIFY-WRITE 경쟁 방지)
+                    await db.execute(
+                        text(
+                            "UPDATE crawl_runs SET"
+                            "  done_channels    = done_channels + 1,"
+                            "  new_products     = new_products + :new_p,"
+                            "  updated_products = updated_products + :upd_p,"
+                            "  error_channels   = error_channels + :err"
+                            " WHERE id = :run_id"
+                        ),
+                        {
+                            "new_p": new_count,
+                            "upd_p": updated_count,
+                            "err": 1 if result.error else 0,
+                            "run_id": run_id,
+                        },
+                    )
+                    await db.commit()
+        except Exception as log_exc:
+            console.print(f"[red]CrawlChannelLog 기록 실패[/red] {channel.name}: {log_exc}")
+            try:
+                async with AsyncSessionLocal() as db2:
+                    db2.add(
+                        CrawlChannelLog(
+                            run_id=run_id,
+                            channel_id=channel.id,
+                            status="failed",
+                            products_found=0,
+                            products_new=0,
+                            products_updated=0,
+                            error_msg=f"Internal log error: {str(log_exc)[:200]}",
+                            error_type="internal_error",
+                            strategy=result.crawl_strategy,
+                            duration_ms=duration_ms,
+                        )
+                    )
+                    await db2.execute(
+                        text(
+                            "UPDATE crawl_runs SET done_channels = done_channels + 1,"
+                            " error_channels = error_channels + 1 WHERE id = :run_id"
+                        ),
+                        {"run_id": run_id},
+                    )
+                    await db2.commit()
+            except Exception as log_retry_exc:
+                console.print(
+                    f"[bold red]CrawlChannelLog 재시도도 실패[/bold red] {channel.name}: {log_retry_exc}"
                 )
-                # 원자적 카운터 업데이트 (READ-MODIFY-WRITE 경쟁 방지)
-                await db.execute(
-                    text(
-                        "UPDATE crawl_runs SET"
-                        "  done_channels    = done_channels + 1,"
-                        "  new_products     = new_products + :new_p,"
-                        "  updated_products = updated_products + :upd_p,"
-                        "  error_channels   = error_channels + :err"
-                        " WHERE id = :run_id"
-                    ),
-                    {
-                        "new_p": new_count,
-                        "upd_p": updated_count,
-                        "err": 1 if result.error else 0,
-                        "run_id": run_id,
-                    },
-                )
-                await db.commit()
 
         status_icon = "✅" if not result.error else "❌"
         console.print(
@@ -298,10 +349,11 @@ def main(
         "", help="채널 타입 필터 (edit-shop / brand-store / 빈 문자열=전체)"
     ),
     channel_id: int = typer.Option(0, help="특정 채널 ID만 크롤링 (0=비활성)"),
+    channel_name: str = typer.Option("", help="특정 채널명만 크롤링 (부분 일치)"),
     no_alerts: bool = typer.Option(False, "--no-alerts", help="Discord 알림 비활성화"),
     skip_catalog: bool = typer.Option(False, "--skip-catalog", help="크롤 완료 후 catalog 증분 빌드 생략"),
     concurrency: int = typer.Option(
-        5, help="동시 처리 채널 수 (기본 5, Shopify API 기준 안전한 상한)"
+        2, help="동시 처리 채널 수 (기본 2, Shopify rate-limit 방지)"
     ),
 ):
     asyncio.run(
@@ -309,6 +361,7 @@ def main(
             limit,
             channel_type or None,
             channel_id if channel_id > 0 else None,
+            channel_name.strip() or None,
             no_alerts,
             skip_catalog,
             concurrency,
@@ -320,6 +373,7 @@ async def run(
     limit: int,
     channel_type: str | None,
     channel_id: int | None,
+    channel_name: str | None,
     no_alerts: bool,
     skip_catalog: bool,
     concurrency: int = 5,
@@ -338,6 +392,8 @@ async def run(
         query = select(Channel).where(Channel.is_active == True)  # noqa: E712
         if channel_id:
             query = query.filter(Channel.id == channel_id)
+        if channel_name:
+            query = query.filter(Channel.name.ilike(f"%{channel_name}%"))
         if channel_type:
             query = query.filter(Channel.channel_type == channel_type)
         channels = list((await db.execute(query)).scalars().all())

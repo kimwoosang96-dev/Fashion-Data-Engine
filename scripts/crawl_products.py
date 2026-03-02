@@ -33,7 +33,7 @@ from fashion_engine.models.brand import Brand
 from fashion_engine.models.price_history import PriceHistory
 from fashion_engine.models.product import Product
 from fashion_engine.models.crawl_run import CrawlRun, CrawlChannelLog
-from fashion_engine.crawler.product_crawler import ProductCrawler
+from fashion_engine.crawler.product_crawler import ProductCrawler, ChannelProductResult
 from fashion_engine.services.product_service import (
     get_rate_to_krw,
     find_brand_by_vendor,
@@ -57,6 +57,13 @@ SKIP_TYPES = {"secondhand-marketplace", "non-fashion"}
 
 # 채널 타입별 크롤 우선순위 (낮을수록 먼저)
 _CHANNEL_PRIORITY = {"brand-store": 0, "edit-shop": 1}
+
+# 채널 platform별 최대 크롤 시간 (초) — asyncio.wait_for 상한
+_CHANNEL_TIMEOUT_SECS: dict[str, int] = {
+    "cafe24": 600,   # 카테고리 수십~수백 개 가능
+    "shopify": 180,
+    "default": 300,
+}
 
 
 async def _get_prev_price_krw(db, product_id: int) -> int | None:
@@ -107,12 +114,30 @@ async def _crawl_one_channel(
                 ]
 
         # ── 2. 크롤 (채널별 독립 크롤러 인스턴스) ───────────────────────
+        chan_timeout = _CHANNEL_TIMEOUT_SECS.get(
+            channel.platform or "default",
+            _CHANNEL_TIMEOUT_SECS["default"],
+        )
         async with ProductCrawler(request_delay=0.5) as crawler:
-            result = await crawler.crawl_channel(
-                channel.url,
-                country=channel.country,
-                cafe24_brand_categories=cafe24_categories,
-            )
+            try:
+                result = await asyncio.wait_for(
+                    crawler.crawl_channel(
+                        channel.url,
+                        country=channel.country,
+                        cafe24_brand_categories=cafe24_categories,
+                    ),
+                    timeout=chan_timeout,
+                )
+            except asyncio.TimeoutError:
+                console.print(
+                    f"[red]⏱ timeout:[/red] {channel.name} ({chan_timeout}s 초과)"
+                )
+                result = ChannelProductResult(
+                    channel_url=channel.url,
+                    products=[],
+                    error=f"Channel timeout after {chan_timeout}s",
+                    error_type="timeout",
+                )
 
         duration_ms = int((time.time() - t_start) * 1000)
         sale_count = 0

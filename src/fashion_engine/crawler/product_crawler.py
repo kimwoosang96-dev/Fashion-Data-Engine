@@ -81,6 +81,8 @@ _TITLE_KEYWORD_DENYLIST: frozenset[str] = frozenset({
     "warranty protection",
     "product protection",
     "return assurance",
+    "sold out",   # Cafe24 SOLD OUT 플레이스홀더 (예: THEXSHOP)
+    "품절",       # 한국어 품절 플레이스홀더
 })
 
 _PRODUCT_TYPE_DENYLIST: frozenset[str] = frozenset({
@@ -160,7 +162,7 @@ class ProductCrawler:
                 "Accept": "application/json",
             },
             follow_redirects=True,
-            timeout=self._timeout,
+            timeout=httpx.Timeout(connect=10.0, read=30.0, write=10.0, pool=5.0),
         )
         return self
 
@@ -420,8 +422,21 @@ class ProductCrawler:
                     image_url = urljoin(base + "/", image_url)
 
                 product_url = urljoin(base + "/", href)
-                text = card.get_text(" ", strip=True).lower()
-                is_available = not ("품절" in text or "sold out" in text or "soldout" in text)
+                # 품절 배지 셀렉터 우선 — 카드 전체 텍스트 오탐 방지
+                sold_out_badge = card.select_one(
+                    ".icon-soldout, .soldout, [class*='soldout'], "
+                    ".sold-out-label, .btn-soldout, [class*='sold-out']"
+                )
+                if sold_out_badge:
+                    is_available = False
+                else:
+                    # 폴백: 제목 엘리먼트 텍스트만 체크 (카드 전체 텍스트 X)
+                    title_lower = title.lower()
+                    is_available = not (
+                        "품절" in title_lower
+                        or "sold out" in title_lower
+                        or "soldout" in title_lower
+                    )
 
                 normalized_key, match_confidence = self._build_normalized_key(
                     brand_slug=brand_slug,

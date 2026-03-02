@@ -11,6 +11,8 @@ PM/개발 작업 통제를 위한 단일 기준 문서입니다.
 
 ## 진행 중 작업
 <!-- ACTIVE_TASKS_START -->
+- [ ] T-20260302-065 | PRICE_CATALOG_AUDIT_01: 가격 오염 데이터 정비 + 재발 방지 | owner:codex-dev | priority:P1 | created:2026-03-02 | issue:`agents/issues/PRICE_CATALOG_AUDIT_01.md` | details:`get_rate_to_krw()` 1.0 fallback 제거·하드코딩 근사치 대체, `record_price()` 비현실적 가격 저장 거부, `scripts/audit_price_data.py` + `scripts/cleanup_price_data.py` 신규 작성, ProductCatalog 재빌드 → 격차 300%+ 제품 0개 달성
+- [ ] T-20260302-064 | CRAWL_RATE_LIMIT_FIX_01: Shopify IP rate-limit 대응 + 크롤 성공률 개선 | owner:codex-dev | priority:P1 | created:2026-03-02 | issue:`agents/issues/CRAWL_RATE_LIMIT_FIX_01.md` | details:concurrency 5→2, 전역 Shopify throttle(semaphore/token-bucket), 요청 헤더 강화(Accept/Accept-Language), limit 250→100, stagger delay 0~3s, CrawlChannelLog 예외 보호(5채널 누락 버그 수정) → Shopify 성공 채널 ≥50개 목표
 <!-- ACTIVE_TASKS_END -->
 
 ## 최근 완료 작업

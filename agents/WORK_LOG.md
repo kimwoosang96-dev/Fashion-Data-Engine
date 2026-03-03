@@ -130,6 +130,7 @@
 - 2026-03-03 20:58:00 | agent:codex-dev | task:T-20260303-078 | action:complete | message:INTEL_CRAWL_AUTO_TRIGGER_01 완료: crawl_products에 --no-intel 플래그 추가, 크롤 완료 후 total_upserted>0일 때 derived_spike→mirror 자동 실행(예외 격리) 구현. --no-intel 실행 시 스킵 로그, 기본 실행 시 자동 트리거 실행 로그 확인.
 - 2026-03-03 20:58:00 | agent:codex-dev | task:T-20260303-079 | action:complete | message:INTEL_SHOPIFY_DROP_DETECT_01 완료: ingest_intel_events에 COMING_SOON_TAGS 및 _ingest_shopify_drops 구현(brand-store+shopify+recent7d+tags), mirror 분기 포함 및 --job shopify_drops 단독 실행 지원. 검증 실행 성공(errors=0).
 - 2026-03-03 20:58:00 | agent:codex-dev | task:T-20260303-080 | action:complete | message:INTEL_DISCORD_ALERT_01 완료: intel_service notify_discord_if_warranted 구현(critical/high만 전송), config/.env.example에 INTEL_DISCORD_WEBHOOK_URL 추가, ingest/_upsert_event 및 upsert_derived_product_event 신규 이벤트 생성 시 Discord 알림 훅 연결(실패 시 warning, 이벤트 생성 유지).
+- 2026-03-03 21:30:00 | agent:claude-pm | task:- | action:log | message:crawl_news.py PostgreSQL timezone 버그 수정 (parsedate_to_datetime → UTC naive 변환). Railway DB intel 최신화 완료(mirror inserted=47, spike inserted=4). Railway Worker 서비스 등록 완료 — scheduler.py 자동 스케줄 운영 시작(뉴스4회/intel4회/제품크롤1회/일). INTEL_INGEST_ENABLED=true 설정. 현재 Railway DB intel_events 591건.
 
 ## 2026-03-01 01:39:18 data_audit 출력 전문
 ```text

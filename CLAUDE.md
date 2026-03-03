@@ -29,21 +29,28 @@ cd /Users/kim-usang/fashion-data-engine
 
 ## Current Session Notes (2026-03-03)
 
-### DB 상태 (Phase 26 완료)
+### DB 상태 (Phase 27 완료)
 - **채널**: 활성 ~137개 (접근 불가 7개 + 저우선 22개 비활성화)
 - **브랜드**: 2,500+개 / brand_id backfill 완료 (NULL 24% → 1.3%)
 - **제품**: 80,000+개 (Railway PG 기준) / ProductCatalog 64,075개
-- **Intel 이벤트**: `intel_events` 테이블 운영 중 (drops/collabs/news mirror + sale_start/sold_out/restock/sales_spike 파생 이벤트)
+- **Intel 이벤트**: Railway DB 591건 운영 중 (news 47 + collabs 34 + sales_spike 510)
+- **스케줄러**: Railway Worker 서비스 등록 완료 — 자동 크롤/ingest 운영 중
 
 ### 완료된 Phase (최신 순)
+- **Phase 27 — Intel Hub 고도화 (T-077~T-080)** ✅
+  - T-077: 뉴스 4회/일 + 한국 매체 RSS 4개 추가 (hypebeast.kr/vogue.co.kr/wkorea.com/boon.so)
+  - T-078: 크롤 완료 후 `derived_spike → mirror` 자동 트리거 (`--no-intel` 비활성화 지원)
+  - T-079: Shopify `coming-soon` 태그 자동 감지 → `drops` 이벤트 (`COMING_SOON_TAGS` 영문+한국어)
+  - T-080: Discord 실시간 알림 (`notify_discord_if_warranted()`, critical/high severity only)
+  - Railway Worker 서비스 등록: `uv run python scripts/scheduler.py` (자동 스케줄 운영)
+  - `crawl_news.py` PostgreSQL timezone 버그 수정 (`parsedate_to_datetime` → UTC naive 변환)
+
 - **Phase 26 — Fashion Intel Hub (T-072~T-076)** ✅
   - `intel_events / intel_event_sources / intel_ingest_runs / intel_ingest_logs` 4개 테이블
   - `/intel/events`, `/intel/map-points`, `/intel/timeline`, `/intel/highlights`, `/intel/events/{id}` API
   - `/intel` 프론트엔드: 레이어 토글, 가상 스크롤 피드, Maplibre 지도(npm), 타임라인
-  - `scripts/ingest_intel_events.py` — mirror(drops/collabs/news) + derived_spike 잡
   - 파생 이벤트: sale_start(discount_rate severity) / sold_out / restock / sales_spike(7d baseline)
   - `GET /admin/intel-status` 운영 대시보드 섹션
-  - 스케줄러 `intel_ingest_0730` 잡 (INTEL_INGEST_ENABLED gate)
 
 - **Phase 22~25 — 크롤러 안정화** ✅
   - `channel_probe.py`, `deactivate_dead_channels.py`, Cafe24 + WooCommerce 수집
@@ -61,20 +68,41 @@ cd /Users/kim-usang/fashion-data-engine
 ```bash
 # 제품 크롤
 uv run python scripts/crawl_products.py --limit 3
+uv run python scripts/crawl_products.py --no-intel  # intel 자동 트리거 비활성화
 
 # Intel 이벤트 ingest
 uv run python scripts/ingest_intel_events.py --job mirror
 uv run python scripts/ingest_intel_events.py --job derived_spike --window-hours 48
+uv run python scripts/ingest_intel_events.py --job shopify_drops
+
+# Railway DB 대상 실행
+DATABASE_URL=$RAILWAY_DATABASE_URL uv run python scripts/ingest_intel_events.py --job mirror
+
+# 뉴스 수집
+uv run python scripts/crawl_news.py --per-feed 30
 
 # 카탈로그 빌드
 uv run python scripts/build_product_catalog.py
 
 # 환율 업데이트
 uv run python scripts/update_exchange_rates.py
+
+# 스케줄러 로컬 dry-run
+uv run python scripts/scheduler.py --dry-run
 ```
 
+### Railway 자동 스케줄 (Worker 서비스)
+| 시간 | 작업 |
+|------|------|
+| 03:00 | 전체 제품 크롤 + intel 자동 트리거 |
+| 00/06/12/18:00 | 뉴스 수집 (영문 4 + 한국 4) |
+| 00/06/12/18:10 | Intel mirror |
+| 03/09/15/21:00 | Intel spike |
+| 07:00 | 환율 업데이트 |
+| 매주 일요일 09:00 | 데이터 감사 |
+
 ### 완료된 이슈
-- Phase 2~4, 17~19, 22~26 (T-001~T-076) 모두 완료 ✅
+- Phase 2~4, 17~19, 22~27 (T-001~T-080) 모두 완료 ✅
 
 ---
 

@@ -27,58 +27,54 @@ cd /Users/kim-usang/fashion-data-engine
 
 ---
 
-## Current Session Notes (2026-02-26)
+## Current Session Notes (2026-03-03)
 
-### DB 상태 (Phase 3 구축 중)
-- **채널**: 159개 (154 기존 + DSM, HBX, Slam Jam, Goodhood, Bodega 5개 추가)
-- **브랜드**: 2,508개 / channel_brand 링크: 2,557개 (Phase 2 기준)
-- **브랜드 티어**: 120개 분류 (high-end 3, premium 94, sports 14, street 9)
-- **협업**: 34개 seed, hype_score 계산 완료
-- **제품**: 898개 초기 크롤 완료 (ALIVEFORM·Patta·BoTT, brand-store 5채널 테스트)
-  - Patta KR: 642개 (세일 179개)
-  - BoTT: 188개
-  - ALIVEFORM: 68개
-- **환율**: USD 1,426 / EUR 1,686 / GBP 1,934 / JPY 9.1 / HKD 182 (2026-02-26 기준)
+### DB 상태 (Phase 26 완료)
+- **채널**: 활성 ~137개 (접근 불가 7개 + 저우선 22개 비활성화)
+- **브랜드**: 2,500+개 / brand_id backfill 완료 (NULL 24% → 1.3%)
+- **제품**: 80,000+개 (Railway PG 기준) / ProductCatalog 64,075개
+- **Intel 이벤트**: `intel_events` 테이블 운영 중 (drops/collabs/news mirror + sale_start/sold_out/restock/sales_spike 파생 이벤트)
 
-### Phase 3 스키마 (완료)
-- `Product.product_key`: "brand-slug:handle" 교차 채널 매칭 인덱스
-- `ExchangeRate`: 통화 → KRW 환율 저장
-- 마이그레이션: `c3ad818a067f_add_product_key_and_exchange_rates`
+### 완료된 Phase (최신 순)
+- **Phase 26 — Fashion Intel Hub (T-072~T-076)** ✅
+  - `intel_events / intel_event_sources / intel_ingest_runs / intel_ingest_logs` 4개 테이블
+  - `/intel/events`, `/intel/map-points`, `/intel/timeline`, `/intel/highlights`, `/intel/events/{id}` API
+  - `/intel` 프론트엔드: 레이어 토글, 가상 스크롤 피드, Maplibre 지도(npm), 타임라인
+  - `scripts/ingest_intel_events.py` — mirror(drops/collabs/news) + derived_spike 잡
+  - 파생 이벤트: sale_start(discount_rate severity) / sold_out / restock / sales_spike(7d baseline)
+  - `GET /admin/intel-status` 운영 대시보드 섹션
+  - 스케줄러 `intel_ingest_0730` 잡 (INTEL_INGEST_ENABLED gate)
+
+- **Phase 22~25 — 크롤러 안정화** ✅
+  - `channel_probe.py`, `deactivate_dead_channels.py`, Cafe24 + WooCommerce 수집
+  - price guard, catalog_service(incremental), CrawlRun 모니터링
 
 ### API 엔드포인트 (전체)
-**Phase 2 (검증 완료):**
-- `GET /brands/?tier=<tier>`, `/brands/landscape`, `/brands/{slug}/channels`
-- `GET /collabs/`, `/collabs/hype-by-category`
-- `GET /channels/landscape`
+- `GET /brands/*`, `/collabs/*`, `/channels/landscape`
+- `GET /products/sales`, `/products/search`, `/products/compare/{product_key}`
+- `GET /catalog/`, `/catalog/{normalized_key:path}`
+- `GET /purchases/*`, `/drops/*`
+- `GET /intel/events`, `/intel/map-points`, `/intel/timeline`, `/intel/highlights`, `/intel/events/{id}`
+- `GET /admin/crawl-runs`, `/admin/intel-status`, `/admin/catalog-stats`
 
-**Phase 3 (신규, 검증 완료):**
-- `GET /products/sales?brand=&tier=` — 세일 제품 (할인율 정렬)
-- `GET /products/search?q=` — 제품명 검색
-- `GET /products/compare/{product_key}` — 전 채널 가격 비교 ← 핵심
-- `GET /brands/{slug}/products` — 브랜드별 제품 + 가격
-
-### 크롤러 현황
-- **brand_crawler.py**: 브랜드명 수집 (Shopify vendor + Cafe24 cate_no)
-- **product_crawler.py**: 제품·가격 수집 (Shopify REST API, httpx 기반)
-  - URL 서브도메인 기반 통화 자동 감지 (kr.→KRW, jp.→JPY 등)
-  - 전체 크롤: `uv run python scripts/crawl_products.py` (미실행)
-
-### 실행 명령
+### 주요 실행 명령
 ```bash
-# 환율 업데이트 (일 1회 권장)
-uv run python scripts/update_exchange_rates.py
-
-# 제품 크롤 (전체 또는 테스트)
+# 제품 크롤
 uv run python scripts/crawl_products.py --limit 3
-uv run python scripts/crawl_products.py --channel-type brand-store
 
-# 가격 비교 조회 예시
-# GET /products/compare/new-balance:new-balance-2002r
+# Intel 이벤트 ingest
+uv run python scripts/ingest_intel_events.py --job mirror
+uv run python scripts/ingest_intel_events.py --job derived_spike --window-hours 48
+
+# 카탈로그 빌드
+uv run python scripts/build_product_catalog.py
+
+# 환율 업데이트
+uv run python scripts/update_exchange_rates.py
 ```
 
 ### 완료된 이슈
-- Phase 2 Codex Issues 01~04 ✅
-- Phase 3 제품 가격 비교 인프라 ✅ (전체 채널 크롤은 미실행)
+- Phase 2~4, 17~19, 22~26 (T-001~T-076) 모두 완료 ✅
 
 ---
 

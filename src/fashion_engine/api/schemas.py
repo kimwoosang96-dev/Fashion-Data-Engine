@@ -395,6 +395,64 @@ class ChannelNoteOut(BaseModel):
     resolved_at: datetime | None
 
 
+class IntelEventOut(BaseModel):
+    id: int
+    event_type: str
+    layer: str
+    title: str
+    summary: str | None
+    event_time: str | None
+    detected_at: str
+    severity: str
+    confidence: str
+    brand_id: int | None
+    brand_name: str | None
+    brand_slug: str | None
+    channel_id: int | None
+    channel_name: str | None
+    product_id: int | None
+    product_name: str | None
+    product_key: str | None
+    geo_country: str | None
+    geo_city: str | None
+    geo_lat: float | None
+    geo_lng: float | None
+    geo_precision: str
+    source_url: str | None
+    source_domain: str | None
+    source_type: str
+    is_verified: bool
+
+
+class IntelEventsPage(BaseModel):
+    items: list[IntelEventOut]
+    next_cursor: str | None
+    total: int
+
+
+class IntelMapPointOut(BaseModel):
+    id: int
+    layer: str
+    severity: str
+    confidence: str
+    lat: float
+    lng: float
+    title: str
+    event_time: str
+    geo_precision: str
+
+
+class IntelTimelineBucket(BaseModel):
+    bucket: str
+    total: int
+    layers: dict[str, int]
+
+
+class IntelTimelineOut(BaseModel):
+    granularity: str
+    items: list[IntelTimelineBucket]
+
+
 class ChannelNoteCreate(BaseModel):
     note_type: str = "observation"
     body: str

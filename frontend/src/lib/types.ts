@@ -379,3 +379,78 @@ export interface ChannelNoteOut {
   created_at: string;
   resolved_at: string | null;
 }
+
+export interface IntelEvent {
+  id: number;
+  event_type: string;
+  layer: string;
+  title: string;
+  summary: string | null;
+  event_time: string | null;
+  detected_at: string;
+  severity: string;
+  confidence: string;
+  brand_id: number | null;
+  brand_name: string | null;
+  brand_slug: string | null;
+  channel_id: number | null;
+  channel_name: string | null;
+  product_id: number | null;
+  product_name: string | null;
+  product_key: string | null;
+  geo_country: string | null;
+  geo_city: string | null;
+  geo_lat: number | null;
+  geo_lng: number | null;
+  geo_precision: string;
+  source_url: string | null;
+  source_domain: string | null;
+  source_type: string;
+  is_verified: boolean;
+}
+
+export interface IntelEventsPage {
+  items: IntelEvent[];
+  next_cursor: string | null;
+  total: number;
+}
+
+export interface IntelMapPoint {
+  id: number;
+  layer: string;
+  severity: string;
+  confidence: string;
+  lat: number;
+  lng: number;
+  title: string;
+  event_time: string;
+  geo_precision: string;
+}
+
+export interface IntelTimelineOut {
+  granularity: string;
+  items: Array<{
+    bucket: string;
+    total: number;
+    layers: Record<string, number>;
+  }>;
+}
+
+export interface AdminIntelStatus {
+  latest_run: {
+    id: number | null;
+    job_name: string | null;
+    status: string | null;
+    started_at: string | null;
+    finished_at: string | null;
+    inserted_count: number;
+    updated_count: number;
+    error_count: number;
+  };
+  events_total: number;
+  events_last_24h: number;
+  latest_event_at: string | null;
+  freshness_minutes: number | null;
+  layers: Array<{ layer: string; count: number }>;
+  derived_24h: Record<string, number>;
+}

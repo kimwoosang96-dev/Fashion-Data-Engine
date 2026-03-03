@@ -25,7 +25,9 @@ import crawl_products  # noqa: E402
 import crawl_drops  # noqa: E402
 import crawl_news  # noqa: E402
 import data_audit  # noqa: E402
+import ingest_intel_events  # noqa: E402
 import update_exchange_rates  # noqa: E402
+from fashion_engine.config import settings  # noqa: E402
 from fashion_engine.services.alert_service import send_audit_alert  # noqa: E402
 
 
@@ -108,6 +110,21 @@ async def run_data_audit_job() -> None:
         LOGGER.exception("[JOB] data-audit failed")
 
 
+async def run_intel_ingest_job() -> None:
+    if not settings.intel_ingest_enabled:
+        LOGGER.info("[JOB] intel-ingest skipped (INTEL_INGEST_ENABLED=false)")
+        return
+    try:
+        LOGGER.info("[JOB] intel-ingest(mirror) started")
+        code1 = await ingest_intel_events.run(job="mirror")
+        LOGGER.info("[JOB] intel-ingest(mirror) completed code=%s", code1)
+        LOGGER.info("[JOB] intel-ingest(derived_spike) started")
+        code2 = await ingest_intel_events.run(job="derived_spike", window_hours=48)
+        LOGGER.info("[JOB] intel-ingest(derived_spike) completed code=%s", code2)
+    except Exception:
+        LOGGER.exception("[JOB] intel-ingest failed")
+
+
 def register_jobs(scheduler: AsyncIOScheduler) -> None:
     scheduler.add_job(
         run_product_crawl_job,
@@ -137,6 +154,12 @@ def register_jobs(scheduler: AsyncIOScheduler) -> None:
         run_data_audit_job,
         CronTrigger(day_of_week="sun", hour=9, minute=0),
         id="audit_weekly_sun_0900",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        run_intel_ingest_job,
+        CronTrigger(hour=7, minute=30),
+        id="intel_ingest_0730",
         replace_existing=True,
     )
 

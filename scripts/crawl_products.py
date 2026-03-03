@@ -46,6 +46,7 @@ from fashion_engine.services.product_service import (
 )
 from fashion_engine.services.channel_service import update_platform
 from fashion_engine.services.catalog_service import build_catalog_incremental
+from fashion_engine.services.intel_service import upsert_derived_product_event
 from fashion_engine.services.alert_service import (
     AlertPayload,
     new_product_alert,
@@ -186,7 +187,7 @@ async def _crawl_one_channel(
                             if existing_row:
                                 prev_price_krw = await _get_prev_price_krw(db, existing_row.id)
 
-                            product, is_new, sale_just_started = await upsert_product(
+                            product, is_new, sale_just_started, availability_transition = await upsert_product(
                                 db, channel.id, info, brand_id=brand_id
                             )
                             await record_price(db, product.id, info, rate_to_krw=rate)
@@ -201,6 +202,50 @@ async def _crawl_one_channel(
                                 new_count += 1
                             else:
                                 updated_count += 1
+
+                            if sale_just_started:
+                                discount_rate: float | None = None
+                                if (
+                                    info.compare_at_price
+                                    and info.price
+                                    and info.compare_at_price > 0
+                                    and info.compare_at_price > info.price
+                                ):
+                                    discount_rate = round(
+                                        1 - (info.price / info.compare_at_price), 4
+                                    )
+                                await upsert_derived_product_event(
+                                    db,
+                                    event_type="sale_start",
+                                    product=product,
+                                    channel=channel,
+                                    brand=brand,
+                                    title=f"{info.title} 세일 시작",
+                                    summary=f"{channel.name}에서 세일 전환 감지",
+                                    source_url=info.product_url,
+                                    details={
+                                        "discount_rate": discount_rate,
+                                        "channel_name": channel.name,
+                                        "price": info.price,
+                                        "compare_at_price": info.compare_at_price,
+                                    },
+                                )
+                            if availability_transition in {"sold_out", "restock"}:
+                                await upsert_derived_product_event(
+                                    db,
+                                    event_type=availability_transition,
+                                    product=product,
+                                    channel=channel,
+                                    brand=brand,
+                                    title=(
+                                        f"{info.title} 품절 전환"
+                                        if availability_transition == "sold_out"
+                                        else f"{info.title} 재입고"
+                                    ),
+                                    summary=f"{channel.name} {availability_transition} 감지",
+                                    source_url=info.product_url,
+                                    details={"channel_name": channel.name},
+                                )
 
                             # ── 알림 트리거 ───────────────────────────────────────
                             brand_slug = brand.slug if brand else None

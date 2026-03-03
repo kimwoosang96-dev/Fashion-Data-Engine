@@ -121,6 +121,12 @@
 - 2026-03-01 01:22:38 | agent:codex-dev | task:T-20260301-044 | action:complete | message:DIRECTOR_PAGE_01 완료: /directors/by-brand API+스키마 추가, 프론트 브랜드 섹션 UI(현행 우선/현재 배지/헤더 링크/검색 필터) 반영.
 - 2026-03-01 01:39:18 | agent:codex-dev | task:T-20260301-045 | action:log | message:data_audit 실행 완료(local sqlite). 요약: ERROR 1 / WARNING 3 (brand_id NULL 비율 23.67%, 제품0 채널 78, 7일+ 미크롤 78).
 
+- 2026-03-03 01:56:00 | agent:codex-dev | task:T-20260303-072 | action:complete | message:INTEL_HUB_SPRINT0_01 완료: intel 라우터 스텁/메인 등록, .env.example Intel 변수 4개, scheduler Intel 잡 스텁, /intel/events 200 검증 완료. (npm registry DNS 제한으로 maplibre/pmtiles 설치는 세션 내 미완료)
+- 2026-03-03 01:56:00 | agent:codex-dev | task:T-20260303-073 | action:complete | message:INTEL_HUB_DATA_MODEL_01 완료: intel 4개 테이블 마이그레이션(f1a2b3c4d5e6), ingest_intel_events mirror 구현/실행(inserted=34), /intel/events|map-points|timeline|highlights|events/{id} API 구현, Makefile ingest-intel 추가.
+- 2026-03-03 01:56:00 | agent:codex-dev | task:T-20260303-074 | action:complete | message:INTEL_HUB_FRONTEND_01 완료: /intel 페이지(레이어 토글, 시간 필터, URL deep link, 가상 스크롤 피드, stacked 타임라인, 상세 드로어/watchlist) 구현, IntelMap(Maplibre CDN) 및 Nav Intel 메뉴 반영.
+- 2026-03-03 01:56:00 | agent:codex-dev | task:T-20260303-075 | action:complete | message:INTEL_HUB_DERIVED_EVENTS_01 완료: sale_start/sold_out/restock 파생 이벤트 후크(crawl_products+upsert_product) 및 derived_spike 배치(job=derived_spike, inserted=500) 반영, scheduler intel_ingest_0730 활성화, /admin/intel-status API+Admin UI 섹션 추가.
+- 2026-03-03 02:06:00 | agent:codex-dev | task:T-20260303-076 | action:complete | message:INTEL_HUB_DERIVED_EVENTS_FIX_01 완료: sales_spike 후보 선정 로직을 48h/7d baseline delta 조건으로 강화(sale_count>=15 + ratio/discount delta), sale_start severity를 discount_rate 기반으로 정교화, upsert_derived_product_event geo_precision(country/global) 명시, calc_confidence_score 유틸 추가, crawl_products sale_start details에 discount_rate 전달. derived_spike 배치 재실행 성공(errors=0).
+
 ## 2026-03-01 01:39:18 data_audit 출력 전문
 ```text
 Fashion Data Audit

@@ -12,6 +12,7 @@ import {
   getAdminCollabs,
   getAdminDirectors,
   getAdminStats,
+  getAdminIntelStatus,
   getBrands,
   getChannels,
   patchAdminBrandInstagram,
@@ -30,6 +31,7 @@ import type {
   AdminCrawlStatus,
   AdminCollabItem,
   AdminStats,
+  AdminIntelStatus,
   Brand,
   BrandDirector,
   Channel,
@@ -53,6 +55,7 @@ export default function AdminPage() {
   const [token, setToken] = useState("");
   const [activeTab, setActiveTab] = useState<TabKey>("db");
   const [stats, setStats] = useState<AdminStats | null>(null);
+  const [intelStatus, setIntelStatus] = useState<AdminIntelStatus | null>(null);
   const [channelSignals, setChannelSignals] = useState<ChannelSignalOut[]>([]);
   const [crawlStatus, setCrawlStatus] = useState<AdminCrawlStatus[]>([]);
   const [crawlFilter, setCrawlFilter] = useState<"all" | "ok" | "never" | "stale">("all");
@@ -96,12 +99,14 @@ export default function AdminPage() {
     setLoading(true);
     setMsg("");
     try {
-      const [s, h] = await Promise.all([
+      const [s, h, intel] = await Promise.all([
         getAdminStats(adminToken),
         getChannelSignals(adminToken, 500, 0),
+        getAdminIntelStatus(adminToken),
       ]);
       setStats(s);
       setChannelSignals(h);
+      setIntelStatus(intel);
       const [d, b, c, k, audit, crawl] = await Promise.all([
         getAdminDirectors(adminToken),
         getBrands(),
@@ -413,6 +418,32 @@ export default function AdminPage() {
                   <div key={`${r.from_currency}-${r.fetched_at}`} className="border rounded-md px-3 py-2">
                     <p className="font-medium">{r.from_currency}</p>
                     <p className="text-gray-600">{r.rate.toLocaleString("ko-KR")}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {intelStatus && (
+            <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
+              <h2 className="text-sm font-semibold">Intel 상태</h2>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+                <Stat label="이벤트 총계" value={intelStatus.events_total} />
+                <Stat label="24시간 이벤트" value={intelStatus.events_last_24h} />
+                <Stat
+                  label="Freshness(분)"
+                  value={intelStatus.freshness_minutes ?? "-"}
+                />
+                <Stat
+                  label="최근 런 상태"
+                  value={intelStatus.latest_run.status ?? "-"}
+                />
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                {Object.entries(intelStatus.derived_24h).map(([k, v]) => (
+                  <div key={k} className="border rounded px-2 py-1.5">
+                    <p className="text-gray-500">{k}</p>
+                    <p className="font-semibold">{v}</p>
                   </div>
                 ))}
               </div>
@@ -1007,7 +1038,7 @@ function TrafficLight({ signal }: { signal: "red" | "yellow" | "green" }) {
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
+function Stat({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-4">
       <p className="text-xs text-gray-500">{label}</p>

@@ -15,6 +15,12 @@ from fashion_engine.models.brand_director import BrandDirector
 from fashion_engine.models.crawl_run import CrawlRun, CrawlChannelLog
 from fashion_engine.models.product_catalog import ProductCatalog
 from fashion_engine.models.channel_note import ChannelNote
+from fashion_engine.models.intel import (
+    IntelEvent,
+    IntelEventSource,
+    IntelIngestRun,
+    IntelIngestLog,
+)
 
 __all__ = [
     "Channel", "Brand", "ChannelBrand", "Category", "PriceHistory", "Product",
@@ -24,4 +30,8 @@ __all__ = [
     "CrawlRun", "CrawlChannelLog",
     "ProductCatalog",
     "ChannelNote",
+    "IntelEvent",
+    "IntelEventSource",
+    "IntelIngestRun",
+    "IntelIngestLog",
 ]

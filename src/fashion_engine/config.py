@@ -19,6 +19,8 @@ class Settings(BaseSettings):
 
     discord_webhook_url: str | None = None
     alert_price_drop_threshold: float = 0.10  # 10% 이상 하락 시 알림
+    intel_ingest_enabled: bool = False
+    intel_default_time_range_days: int = 7
 
     @property
     def cors_allowed_origins_list(self) -> list[str]:

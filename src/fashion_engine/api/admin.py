@@ -26,6 +26,7 @@ from fashion_engine.models.product import Product
 from fashion_engine.models.product_catalog import ProductCatalog
 from fashion_engine.models.crawl_run import CrawlRun, CrawlChannelLog
 from fashion_engine.models.channel_note import ChannelNote
+from fashion_engine.models.intel import IntelEvent, IntelIngestRun
 from fashion_engine.api.schemas import (
     CrawlRunOut,
     CrawlRunDetail,
@@ -128,6 +129,75 @@ async def get_admin_stats(
             }
             for row in rates
         ],
+    }
+
+
+@router.get("/intel-status")
+async def get_admin_intel_status(
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    latest_run = (
+        await db.execute(
+            select(IntelIngestRun).order_by(IntelIngestRun.started_at.desc()).limit(1)
+        )
+    ).scalar_one_or_none()
+    total_events = (
+        await db.execute(select(func.count(IntelEvent.id)))
+    ).scalar_one()
+    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+    cutoff = now_utc - timedelta(hours=24)
+    events_last_24h = (
+        await db.execute(
+            select(func.count(IntelEvent.id)).where(IntelEvent.detected_at >= cutoff)
+        )
+    ).scalar_one()
+    latest_event_at = (
+        await db.execute(select(func.max(IntelEvent.detected_at)))
+    ).scalar_one_or_none()
+    freshness_minutes = None
+    if latest_event_at:
+        freshness_minutes = int((now_utc - latest_event_at).total_seconds() // 60)
+    layer_rows = (
+        await db.execute(
+            select(IntelEvent.layer, func.count(IntelEvent.id))
+            .group_by(IntelEvent.layer)
+            .order_by(func.count(IntelEvent.id).desc())
+        )
+    ).all()
+    derived_rows = (
+        await db.execute(
+            select(IntelEvent.event_type, func.count(IntelEvent.id))
+            .where(
+                IntelEvent.event_type.in_(
+                    ["sale_start", "sold_out", "restock", "sales_spike"]
+                ),
+                IntelEvent.detected_at >= cutoff,
+            )
+            .group_by(IntelEvent.event_type)
+        )
+    ).all()
+    derived = {k: int(v) for k, v in derived_rows}
+    for key in ["sale_start", "sold_out", "restock", "sales_spike"]:
+        derived.setdefault(key, 0)
+
+    return {
+        "latest_run": {
+            "id": latest_run.id if latest_run else None,
+            "job_name": latest_run.job_name if latest_run else None,
+            "status": latest_run.status if latest_run else None,
+            "started_at": latest_run.started_at.isoformat() if latest_run and latest_run.started_at else None,
+            "finished_at": latest_run.finished_at.isoformat() if latest_run and latest_run.finished_at else None,
+            "inserted_count": int(latest_run.inserted_count or 0) if latest_run else 0,
+            "updated_count": int(latest_run.updated_count or 0) if latest_run else 0,
+            "error_count": int(latest_run.error_count or 0) if latest_run else 0,
+        },
+        "events_total": int(total_events or 0),
+        "events_last_24h": int(events_last_24h or 0),
+        "latest_event_at": latest_event_at.isoformat() if latest_event_at else None,
+        "freshness_minutes": freshness_minutes,
+        "layers": [{"layer": layer, "count": int(count)} for layer, count in layer_rows],
+        "derived_24h": derived,
     }
 
 

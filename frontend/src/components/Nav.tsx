@@ -10,6 +10,7 @@ const links = [
   { href: "/brands", label: "브랜드", icon: "🏷️" },
   { href: "/directors", label: "디렉터", icon: "🧠" },
   { href: "/news", label: "뉴스", icon: "📰" },
+  { href: "/intel", label: "Intel", icon: "🧭" },
   { href: "/collabs", label: "협업", icon: "🤝" },
   { href: "/watchlist", label: "관심목록", icon: "❤️" },
   { href: "/purchases", label: "구매이력", icon: "🛍️" },

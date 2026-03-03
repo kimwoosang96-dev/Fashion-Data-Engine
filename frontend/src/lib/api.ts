@@ -6,6 +6,7 @@ import type {
   AdminStats, AdminChannelHealth, AdminCrawlStatus, ChannelSignalOut,
   FashionNews, CollabItem, BrandDirector, DirectorsByBrand, AdminCollabItem, AdminAuditItem, MultiChannelProduct,
   CrawlRunOut, CrawlRunDetail, ChannelNoteOut,
+  IntelEvent, IntelEventsPage, IntelMapPoint, IntelTimelineOut, AdminIntelStatus,
 } from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -258,6 +259,55 @@ export const getCollabHypeByCategory = () =>
   apiFetch<Array<{ category: string; count: number; avg_hype: number; max_hype: number }>>(
     "/collabs/hype-by-category"
   );
+
+// ── Intel Hub ────────────────────────────────────────────────────────────
+export const getIntelEvents = (params: {
+  layers?: string[];
+  time_range?: string;
+  cursor?: string;
+  limit?: number;
+  q?: string;
+}) => {
+  const q = new URLSearchParams();
+  if (params.layers?.length) q.set("layers", params.layers.join(","));
+  if (params.time_range) q.set("time_range", params.time_range);
+  if (params.cursor) q.set("cursor", params.cursor);
+  if (params.limit) q.set("limit", String(params.limit));
+  if (params.q) q.set("q", params.q);
+  return apiFetch<IntelEventsPage>(`/intel/events?${q.toString()}`);
+};
+
+export const getIntelMapPoints = (params: {
+  layers?: string[];
+  time_range?: string;
+  limit?: number;
+}) => {
+  const q = new URLSearchParams();
+  if (params.layers?.length) q.set("layers", params.layers.join(","));
+  if (params.time_range) q.set("time_range", params.time_range);
+  if (params.limit) q.set("limit", String(params.limit));
+  return apiFetch<IntelMapPoint[]>(`/intel/map-points?${q.toString()}`);
+};
+
+export const getIntelTimeline = (params: {
+  layers?: string[];
+  time_range?: string;
+  granularity?: "hour" | "day" | "week";
+}) => {
+  const q = new URLSearchParams();
+  if (params.layers?.length) q.set("layers", params.layers.join(","));
+  if (params.time_range) q.set("time_range", params.time_range);
+  if (params.granularity) q.set("granularity", params.granularity);
+  return apiFetch<IntelTimelineOut>(`/intel/timeline?${q.toString()}`);
+};
+
+export const getIntelEventDetail = (eventId: number) =>
+  apiFetch<IntelEvent & { details_json?: string; sources?: Array<Record<string, unknown>> }>(
+    `/intel/events/${eventId}`
+  );
+
+export const getAdminIntelStatus = (token: string) =>
+  adminFetch<AdminIntelStatus>("/admin/intel-status", token);
 export const getDirectors = (limit = 200, offset = 0) =>
   apiFetch<BrandDirector[]>(`/directors/?limit=${limit}&offset=${offset}`);
 export const getDirectorsByBrand = () =>

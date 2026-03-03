@@ -77,12 +77,13 @@ async def upsert_product(
     channel_id: int,
     info: ProductInfo,
     brand_id: int | None = None,
-) -> tuple["Product", bool, bool]:
+) -> tuple["Product", bool, bool, str | None]:
     """
     url 기준으로 제품 upsert.
-    반환: (product, is_new, sale_just_started)
+    반환: (product, is_new, sale_just_started, availability_transition)
       - is_new: product_key가 이 크롤에서 처음 등장한 경우
       - sale_just_started: 이전 is_sale=False → 이번 True 전환
+      - availability_transition: "sold_out" | "restock" | None
     """
     is_sale = info.compare_at_price is not None and info.compare_at_price > info.price
 
@@ -94,6 +95,7 @@ async def upsert_product(
         prev_sale = existing.is_sale
         sale_just_started = (not prev_sale) and is_sale
         was_active = bool(existing.is_active)
+        availability_transition: str | None = None
         existing.name = info.title
         existing.vendor = info.vendor or None
         existing.product_key = info.product_key
@@ -106,11 +108,14 @@ async def upsert_product(
         existing.is_active = info.is_available
         if was_active and not info.is_available:
             existing.archived_at = datetime.utcnow()
+            availability_transition = "sold_out"
         elif info.is_available:
             existing.archived_at = None
+            if not was_active:
+                availability_transition = "restock"
         existing.image_url = info.image_url
         existing.updated_at = datetime.utcnow()
-        return existing, False, sale_just_started
+        return existing, False, sale_just_started, availability_transition
     else:
         product = Product(
             channel_id=channel_id,
@@ -132,7 +137,7 @@ async def upsert_product(
         )
         db.add(product)
         await db.flush()  # id 확보
-        return product, True, False
+        return product, True, False, None
 
 
 async def record_price(

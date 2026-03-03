@@ -11,6 +11,10 @@ PM/개발 작업 통제를 위한 단일 기준 문서입니다.
 
 ## 진행 중 작업
 <!-- ACTIVE_TASKS_START -->
+- [ ] T-20260303-080 | INTEL_DISCORD_ALERT_01: Intel Hub critical/high 이벤트 Discord 실시간 알림 | owner:codex-dev | priority:P2 | status:pending | created:2026-03-03 | details:`notify_discord_if_warranted()` 구현(severity 필터, embed 포맷). `settings.intel_discord_webhook_url` 추가. `_upsert_event()` 및 `upsert_derived_product_event()` 완료 후 자동 호출(신규 이벤트만). `.env.example`에 `INTEL_DISCORD_WEBHOOK_URL` 추가. Railway Variables 수동 등록 필요.
+- [ ] T-20260303-079 | INTEL_SHOPIFY_DROP_DETECT_01: Shopify 브랜드 스토어 coming-soon 태그 상품 자동 감지 → intel drops 이벤트 생성 | owner:codex-dev | priority:P2 | status:pending | created:2026-03-03 | details:`COMING_SOON_TAGS` 상수(영문+한국어). `_ingest_shopify_drops()` 구현(brand-store+shopify 채널 필터, 최근 7일 updated_at). `run()` mirror 분기에 포함 + `--job shopify_drops` 단독 지원. `selectinload` 임포트 추가.
+- [ ] T-20260303-078 | INTEL_CRAWL_AUTO_TRIGGER_01: crawl_products.py 완료 후 intel ingest 자동 트리거 | owner:codex-dev | priority:P1 | status:pending | created:2026-03-03 | details:`crawl_products.py` 완료 후 `derived_spike` + `mirror` 순차 자동 실행. `--no-intel` 플래그 비활성화 지원. try/except로 intel 실패가 크롤 결과에 영향 없도록 격리. `scheduler.py` derived_spike 독립 4회/일(03/09/15/21:00) 잡 분리.
+- [ ] T-20260303-077 | INTEL_NEWS_REALTIME_01: 뉴스 수집 주기 4회/일 + 한국 패션 매체 RSS 추가 | owner:codex-dev | priority:P1 | status:pending | created:2026-03-03 | details:`crawl_news.py` RSS_FEEDS에 한국 4개 추가(hypebeast.kr/vogue.co.kr/wkorea.com/boon.so). `scheduler.py` 뉴스 크롤 00:00/06:00/12:00/18:00 4회/일 변경. `intel_mirror` 뉴스 크롤 완료 10분 후(00:10/06:10/12:10/18:10) 실행. 기존 `intel_ingest_0730` 단건 잡 제거.
 <!-- ACTIVE_TASKS_END -->
 
 ## 최근 완료 작업

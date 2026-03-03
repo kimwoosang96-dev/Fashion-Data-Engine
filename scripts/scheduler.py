@@ -87,7 +87,16 @@ async def run_news_crawl_job() -> None:
 async def run_product_crawl_job() -> None:
     try:
         LOGGER.info("[JOB] products started")
-        await crawl_products.run(limit=0, channel_type=None, no_alerts=False)
+        await crawl_products.run(
+            limit=0,
+            channel_type=None,
+            channel_id=None,
+            channel_name=None,
+            no_alerts=False,
+            skip_catalog=False,
+            no_intel=False,
+            concurrency=2,
+        )
         LOGGER.info("[JOB] products completed")
     except Exception:
         LOGGER.exception("[JOB] products failed")
@@ -110,19 +119,28 @@ async def run_data_audit_job() -> None:
         LOGGER.exception("[JOB] data-audit failed")
 
 
-async def run_intel_ingest_job() -> None:
+async def run_intel_mirror_job() -> None:
     if not settings.intel_ingest_enabled:
-        LOGGER.info("[JOB] intel-ingest skipped (INTEL_INGEST_ENABLED=false)")
+        LOGGER.info("[JOB] intel-mirror skipped (INTEL_INGEST_ENABLED=false)")
         return
     try:
-        LOGGER.info("[JOB] intel-ingest(mirror) started")
-        code1 = await ingest_intel_events.run(job="mirror")
-        LOGGER.info("[JOB] intel-ingest(mirror) completed code=%s", code1)
-        LOGGER.info("[JOB] intel-ingest(derived_spike) started")
-        code2 = await ingest_intel_events.run(job="derived_spike", window_hours=48)
-        LOGGER.info("[JOB] intel-ingest(derived_spike) completed code=%s", code2)
+        LOGGER.info("[JOB] intel-mirror started")
+        code = await ingest_intel_events.run(job="mirror")
+        LOGGER.info("[JOB] intel-mirror completed code=%s", code)
     except Exception:
-        LOGGER.exception("[JOB] intel-ingest failed")
+        LOGGER.exception("[JOB] intel-mirror failed")
+
+
+async def run_intel_spike_job() -> None:
+    if not settings.intel_ingest_enabled:
+        LOGGER.info("[JOB] intel-spike skipped (INTEL_INGEST_ENABLED=false)")
+        return
+    try:
+        LOGGER.info("[JOB] intel-spike started")
+        code = await ingest_intel_events.run(job="derived_spike", window_hours=48)
+        LOGGER.info("[JOB] intel-spike completed code=%s", code)
+    except Exception:
+        LOGGER.exception("[JOB] intel-spike failed")
 
 
 def register_jobs(scheduler: AsyncIOScheduler) -> None:
@@ -146,8 +164,8 @@ def register_jobs(scheduler: AsyncIOScheduler) -> None:
     )
     scheduler.add_job(
         run_news_crawl_job,
-        CronTrigger(hour=8, minute=0),
-        id="news_daily_0800",
+        CronTrigger(hour="0,6,12,18", minute=0),
+        id="news_4x_daily",
         replace_existing=True,
     )
     scheduler.add_job(
@@ -157,9 +175,15 @@ def register_jobs(scheduler: AsyncIOScheduler) -> None:
         replace_existing=True,
     )
     scheduler.add_job(
-        run_intel_ingest_job,
-        CronTrigger(hour=7, minute=30),
-        id="intel_ingest_0730",
+        run_intel_mirror_job,
+        CronTrigger(hour="0,6,12,18", minute=10),
+        id="intel_mirror_4x_daily",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        run_intel_spike_job,
+        CronTrigger(hour="3,9,15,21", minute=0),
+        id="intel_spike_4x_daily",
         replace_existing=True,
     )
 

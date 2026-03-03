@@ -397,6 +397,7 @@ def main(
     channel_name: str = typer.Option("", help="특정 채널명만 크롤링 (부분 일치)"),
     no_alerts: bool = typer.Option(False, "--no-alerts", help="Discord 알림 비활성화"),
     skip_catalog: bool = typer.Option(False, "--skip-catalog", help="크롤 완료 후 catalog 증분 빌드 생략"),
+    no_intel: bool = typer.Option(False, "--no-intel", help="크롤 완료 후 intel ingest 자동 실행 비활성화"),
     concurrency: int = typer.Option(
         2, help="동시 처리 채널 수 (기본 2, Shopify rate-limit 방지)"
     ),
@@ -409,6 +410,7 @@ def main(
             channel_name.strip() or None,
             no_alerts,
             skip_catalog,
+            no_intel,
             concurrency,
         )
     )
@@ -421,6 +423,7 @@ async def run(
     channel_name: str | None,
     no_alerts: bool,
     skip_catalog: bool,
+    no_intel: bool,
     concurrency: int = 5,
 ) -> None:
     console.print("[bold blue]Fashion Data Engine — 제품 가격 크롤링[/bold blue]\n")
@@ -502,11 +505,13 @@ async def run(
             )
 
     # CrawlRun 완료 처리
+    total_upserted = 0
     async with AsyncSessionLocal() as db:
         run_obj = await db.get(CrawlRun, run_id)
         if run_obj:
             run_obj.status = "done"
             run_obj.finished_at = datetime.utcnow()
+            total_upserted = int(run_obj.new_products or 0) + int(run_obj.updated_products or 0)
             await db.commit()
 
     console.print(results_table)
@@ -516,6 +521,29 @@ async def run(
         console.print("[cyan]▶ ProductCatalog 증분 빌드 시작[/cyan]")
         updated = await build_catalog_incremental(since=run_started_at)
         console.print(f"[green]✅ ProductCatalog 증분 빌드 완료[/green] (updated={updated})")
+
+    # Intel ingest 자동 트리거 (--no-intel 또는 변경 없음이면 스킵)
+    if not no_intel and total_upserted > 0:
+        try:
+            console.print("[cyan][INTEL][/cyan] derived_spike 자동 실행")
+            import ingest_intel_events
+
+            code_spike = await ingest_intel_events.run(job="derived_spike", window_hours=48)
+            console.print(f"[cyan][INTEL][/cyan] derived_spike 완료 code={code_spike}")
+        except Exception as e:
+            console.print(f"[yellow][INTEL] derived_spike 자동 실행 실패(무시): {e}[/yellow]")
+        try:
+            console.print("[cyan][INTEL][/cyan] mirror 자동 실행")
+            import ingest_intel_events
+
+            code_mirror = await ingest_intel_events.run(job="mirror")
+            console.print(f"[cyan][INTEL][/cyan] mirror 완료 code={code_mirror}")
+        except Exception as e:
+            console.print(f"[yellow][INTEL] mirror 자동 실행 실패(무시): {e}[/yellow]")
+    elif no_intel:
+        console.print("[dim][INTEL] --no-intel 설정으로 자동 실행 스킵[/dim]")
+    else:
+        console.print("[dim][INTEL] 변경 데이터 없음(total_upserted=0)으로 자동 실행 스킵[/dim]")
 
 
 if __name__ == "__main__":

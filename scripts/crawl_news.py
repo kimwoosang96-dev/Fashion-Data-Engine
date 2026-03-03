@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import sys
-from datetime import datetime
+from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 from pathlib import Path
 from urllib.parse import urlparse
@@ -34,6 +34,10 @@ RSS_FEEDS = [
     "https://www.highsnobiety.com/feed/",
     "https://sneakernews.com/feed/",
     "https://www.complex.com/style/rss",
+    "https://hypebeast.kr/feed",
+    "https://www.vogue.co.kr/feed/",
+    "https://www.wkorea.com/rss/rss.asp",
+    "https://magazine.boon.so/rss",
 ]
 
 
@@ -42,7 +46,8 @@ def _published_dt(entry: dict) -> datetime | None:
         raw = entry.get(key)
         if raw:
             try:
-                return parsedate_to_datetime(raw)
+                dt = parsedate_to_datetime(raw)
+                return dt.astimezone(UTC).replace(tzinfo=None)
             except Exception:
                 continue
     return None
@@ -82,6 +87,12 @@ async def run(per_feed: int = 30) -> None:
 
         for feed_url in RSS_FEEDS:
             parsed = feedparser.parse(feed_url)
+            if getattr(parsed, "bozo", False):
+                console.print(
+                    f"[yellow]RSS 파싱 스킵(bozo):[/yellow] {feed_url} "
+                    f"({getattr(parsed, 'bozo_exception', 'unknown')})"
+                )
+                continue
             entries = parsed.entries[:per_feed]
             for entry in entries:
                 scanned += 1
@@ -125,7 +136,7 @@ async def run(per_feed: int = 30) -> None:
                     summary=(summary[:4000] if summary else None),
                     published_at=_published_dt(entry),
                     source=_source_from_url(link),
-                    crawled_at=datetime.utcnow(),
+                    crawled_at=datetime.now(UTC).replace(tzinfo=None),
                 )
                 db.add(news)
                 inserted += 1
@@ -138,4 +149,4 @@ async def run(per_feed: int = 30) -> None:
 
 
 if __name__ == "__main__":
-    main()
+    app()

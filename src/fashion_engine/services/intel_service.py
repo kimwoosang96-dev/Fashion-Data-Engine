@@ -2,14 +2,17 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlparse
 
+import httpx
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from fashion_engine.config import settings
 from fashion_engine.models.brand import Brand
 from fashion_engine.models.channel import Channel
 from fashion_engine.models.intel import IntelEvent
@@ -19,6 +22,17 @@ DEFAULT_LIMIT = 100
 MAX_LIMIT = 300
 CONFIDENCE_ORDER = {"low": 1, "medium": 2, "high": 3}
 SEVERITY_ORDER = {"low": 1, "medium": 2, "high": 3, "critical": 4}
+logger = logging.getLogger(__name__)
+
+LAYER_EMOJI = {
+    "drops": "🚀",
+    "collabs": "🤝",
+    "news": "📰",
+    "sale_start": "🔥",
+    "sold_out": "⚫",
+    "restock": "🟢",
+    "sales_spike": "📈",
+}
 
 
 def utcnow() -> datetime:
@@ -76,6 +90,44 @@ def _calc_sale_start_severity(discount_rate: float | None) -> str:
     if pct >= 15:
         return "medium"
     return "low"
+
+
+async def notify_discord_if_warranted(event: IntelEvent) -> None:
+    """severity=critical/high 이벤트를 Intel 전용 Discord webhook으로 전송."""
+    if event.severity not in {"critical", "high"}:
+        return
+    if not settings.intel_discord_webhook_url:
+        return
+
+    emoji = LAYER_EMOJI.get(event.layer, "📌")
+    color = 0xFF4444 if event.severity == "critical" else 0xFF8800
+    brand_name = event.brand.name if getattr(event, "brand", None) else "-"
+    event_ts = event.event_time or event.detected_at
+
+    payload = {
+        "embeds": [
+            {
+                "color": color,
+                "title": f"{emoji} {event.title[:200]}",
+                "description": event.summary or "",
+                "fields": [
+                    {"name": "Layer", "value": event.layer, "inline": True},
+                    {"name": "Severity", "value": event.severity, "inline": True},
+                    {"name": "Brand", "value": brand_name, "inline": True},
+                ],
+                "url": f"https://fashion-data-engine.vercel.app/intel?event_id={event.id}",
+                "timestamp": event_ts.replace(tzinfo=timezone.utc).isoformat()
+                if event_ts.tzinfo is None
+                else event_ts.isoformat(),
+            }
+        ]
+    }
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            resp = await client.post(settings.intel_discord_webhook_url, json=payload)
+            resp.raise_for_status()
+    except Exception as exc:
+        logger.warning("Discord intel alert 발송 실패: %s", exc)
 
 
 def build_time_cutoff(time_range: str) -> datetime | None:
@@ -434,4 +486,5 @@ async def upsert_derived_product_event(
     )
     db.add(row)
     await db.flush()
+    await notify_discord_if_warranted(row)
     return row

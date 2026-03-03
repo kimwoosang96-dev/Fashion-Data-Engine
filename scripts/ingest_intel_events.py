@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 import typer
 from rich.console import Console
 from sqlalchemy import Float, Integer, and_, case, cast, func, select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -30,10 +31,21 @@ from fashion_engine.models.intel import (  # noqa: E402
 )
 from fashion_engine.models.price_history import PriceHistory  # noqa: E402
 from fashion_engine.models.product import Product  # noqa: E402
-from fashion_engine.services.intel_service import normalize_domain  # noqa: E402
+from fashion_engine.services.intel_service import (  # noqa: E402
+    normalize_domain,
+    notify_discord_if_warranted,
+)
 
 app = typer.Typer()
 console = Console()
+COMING_SOON_TAGS = {
+    "coming-soon",
+    "coming soon",
+    "preorder",
+    "pre-order",
+    "예약",
+    "예약판매",
+}
 
 
 def utcnow() -> datetime:
@@ -155,6 +167,7 @@ async def _upsert_event(
         db.add(event)
         await db.flush()
         run.inserted_count += 1
+        await notify_discord_if_warranted(event)
 
     source_row = (
         await db.execute(
@@ -263,6 +276,65 @@ async def _ingest_news(db: AsyncSession, run: IntelIngestRun) -> None:
             confidence="medium",
             details={"entity_type": row.entity_type, "source": row.source},
             published_at=row.published_at,
+        )
+
+
+async def _ingest_shopify_drops(db: AsyncSession, run: IntelIngestRun) -> None:
+    """brand-store Shopify 채널의 coming-soon 태그 상품을 drops 이벤트로 생성."""
+    since = utcnow() - timedelta(days=7)
+    rows = list(
+        (
+            await db.execute(
+                select(Product)
+                .options(selectinload(Product.channel), selectinload(Product.brand))
+                .join(Channel, Product.channel_id == Channel.id)
+                .where(
+                    Product.is_active == True,
+                    Product.updated_at >= since,
+                    Product.tags.is_not(None),
+                    Channel.channel_type == "brand-store",
+                    Channel.platform == "shopify",
+                )
+            )
+        ).scalars().all()
+    )
+
+    for product in rows:
+        raw_tags = product.tags or ""
+        tags = [t.strip().lower() for t in raw_tags.split(",") if t.strip()]
+        if not any(tag in COMING_SOON_TAGS for tag in tags):
+            continue
+
+        channel = product.channel
+        brand = product.brand
+        brand_name = brand.name if brand else (channel.name if channel else "Unknown")
+        geo_country = (channel.country or "").upper()[:2] if channel else None
+
+        await _upsert_event(
+            db,
+            run=run,
+            source_table="products",
+            source_pk=product.id,
+            event_type="drop",
+            layer="drops",
+            title=f"{brand_name} 드롭 예고: {product.name[:80]}",
+            summary=f"{channel.name if channel else '-'}에서 coming-soon 태그 감지",
+            event_time=product.updated_at or utcnow(),
+            brand_id=product.brand_id,
+            channel_id=product.channel_id,
+            product_id=product.id,
+            product_key=product.product_key,
+            source_url=product.url,
+            source_type="crawler",
+            severity="high",
+            confidence="medium",
+            geo_country=geo_country,
+            details={
+                "product_key": product.product_key,
+                "tags": product.tags,
+                "image_url": product.image_url,
+            },
+            published_at=product.updated_at,
         )
 
 
@@ -437,6 +509,9 @@ async def run(job: str, window_hours: int = 48) -> int:
                 await _ingest_drops(db, run_row)
                 await _ingest_collabs(db, run_row)
                 await _ingest_news(db, run_row)
+                await _ingest_shopify_drops(db, run_row)
+            elif job == "shopify_drops":
+                await _ingest_shopify_drops(db, run_row)
             elif job == "derived_spike":
                 await _ingest_derived_spike(db, run_row, window_hours=window_hours)
             else:
@@ -470,7 +545,7 @@ def main(
     job: str = typer.Option(
         "mirror",
         "--job",
-        help="mirror | drops_collabs_news | derived_spike",
+        help="mirror | drops_collabs_news | shopify_drops | derived_spike",
     ),
     window_hours: int = typer.Option(48, "--window-hours", min=1, max=240),
 ):

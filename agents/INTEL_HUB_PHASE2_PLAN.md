@@ -72,11 +72,12 @@ scheduler.add_job(run_intel_mirror_job, CronTrigger(hour="0,6,12,18", minute=10)
 
 `run_intel_mirror_job`은 `mirror` 잡만 실행 (derived_spike는 별도).
 
-**DoD**
-- [ ] RSS_FEEDS에 한국 매체 4개 추가
-- [ ] 스케줄러 뉴스 크롤 4회/일 변경
-- [ ] 스케줄러 intel mirror 4회/일 변경 (크롤 완료 10분 후)
-- [ ] 로컬 테스트: `uv run python scripts/crawl_news.py` → 한국 매체 기사 수집 확인
+**DoD** ✅ 완료 (2026-03-03)
+- [x] RSS_FEEDS에 한국 매체 4개 추가
+- [x] 스케줄러 뉴스 크롤 4회/일 변경
+- [x] 스케줄러 intel mirror 4회/일 변경 (크롤 완료 10분 후)
+- [x] 로컬 테스트: `uv run python scripts/crawl_news.py` → 한국 매체 기사 수집 확인
+- [x] `_published_dt()` PostgreSQL timezone 버그 수정 (UTC naive 변환)
 
 ---
 
@@ -104,11 +105,11 @@ if total_products > 0 and not args.no_intel:
 scheduler.add_job(run_intel_spike_job, CronTrigger(hour="3,9,15,21", minute=0), id="intel_spike_4x")
 ```
 
-**DoD**
-- [ ] `crawl_products.py`에 `--no-intel` 플래그 추가
-- [ ] 크롤 완료 후 `ingest_intel_events.run(job="derived_spike")` 자동 호출
-- [ ] 스케줄러 derived_spike 4회/일 별도 잡으로 분리
-- [ ] 기존 `intel_ingest_0730` 잡 제거 (mirror + spike 통합 잡 → 분리)
+**DoD** ✅ 완료 (2026-03-03)
+- [x] `crawl_products.py`에 `--no-intel` 플래그 추가
+- [x] 크롤 완료 후 `ingest_intel_events.run(job="derived_spike")` + `mirror` 자동 호출
+- [x] 스케줄러 derived_spike 4회/일 별도 잡으로 분리
+- [x] 기존 `intel_ingest_0730` 잡 제거 (mirror + spike 통합 잡 → 분리)
 
 ---
 
@@ -177,11 +178,11 @@ if job in {"mirror", "drops_collabs_news", "shopify_drops"}:
 scheduler.add_job(run_shopify_drops_job, CronTrigger(hour="3,9,15,21", minute=20), id="intel_shopify_drops")
 ```
 
-**DoD**
-- [ ] `_ingest_shopify_drops()` 구현
-- [ ] `--job shopify_drops` 옵션 추가
-- [ ] 스케줄러 등록
-- [ ] 테스트: coming-soon 태그 보유 브랜드 스토어에서 이벤트 생성 확인
+**DoD** ✅ 완료 (2026-03-03)
+- [x] `_ingest_shopify_drops()` 구현 (COMING_SOON_TAGS 영문+한국어, selectinload, 7일 필터)
+- [x] `--job shopify_drops` 옵션 추가
+- [x] mirror 분기에 포함 (별도 스케줄러 잡 대신 mirror에 통합)
+- [x] 테스트: `--job shopify_drops` 실행 성공 (errors=0, DB에 coming-soon 태그 상품 없어 inserted=0)
 
 ---
 
@@ -233,13 +234,13 @@ async def notify_discord_if_warranted(event: IntelEvent) -> None:
 INTEL_DISCORD_WEBHOOK_URL=  # intel 전용 (기존 DISCORD_WEBHOOK_URL과 분리)
 ```
 
-**DoD**
-- [ ] `notify_discord_if_warranted()` 구현
-- [ ] `upsert_derived_product_event()` 완료 후 자동 호출
-- [ ] `_upsert_event()` 완료 후 자동 호출 (severity 필터 내부 처리)
-- [ ] `.env.example`에 `INTEL_DISCORD_WEBHOOK_URL` 추가
-- [ ] Railway Variables에 `INTEL_DISCORD_WEBHOOK_URL` 설정 필요 (수동)
-- [ ] 테스트: sale_start 이벤트 수동 생성 → Discord 메시지 수신 확인
+**DoD** ✅ 완료 (2026-03-03)
+- [x] `notify_discord_if_warranted()` 구현 (critical/high, embed 포맷, timezone 처리)
+- [x] `upsert_derived_product_event()` 완료 후 자동 호출
+- [x] `_upsert_event()` 완료 후 자동 호출 (신규 이벤트만, severity 필터 내부 처리)
+- [x] `.env.example`에 `INTEL_DISCORD_WEBHOOK_URL` 추가
+- [ ] Railway Variables에 `INTEL_DISCORD_WEBHOOK_URL` 설정 필요 (수동 — Discord webhook 미생성)
+- [ ] 테스트: Discord webhook URL 설정 후 메시지 수신 확인 (미완료)
 
 ---
 
@@ -289,13 +290,14 @@ async def _expire_old_events(db: AsyncSession) -> int:
 
 ---
 
-## 기대 효과
+## 달성 결과 (2026-03-03 기준)
 
-| 항목 | 현재 | Phase 2 후 |
-|------|------|------------|
-| 뉴스 갱신 주기 | 24시간 | 6시간 |
-| 파생 이벤트 지연 | 최대 24시간 | 크롤 완료 즉시 |
-| 커버 소스 | 영문 4 | 영문 4 + 한국 4 |
-| 드롭 감지 | 수동 시딩만 | Shopify coming-soon 자동 감지 |
-| 알림 | 없음 | Discord 즉시 알림 (critical/high) |
-| 일 이벤트 생성량 | ~38건 (초기 1회) | ~50~200건/일 (추정) |
+| 항목 | Phase 1 | Phase 2 달성 |
+|------|---------|-------------|
+| 뉴스 갱신 주기 | 24시간 (1회/일) | **6시간 (4회/일)** ✅ |
+| 파생 이벤트 지연 | 최대 24시간 | **크롤 완료 즉시** ✅ |
+| 커버 소스 | 영문 4개 | **영문 4 + 한국 4** ✅ |
+| 드롭 감지 | 수동 시딩만 | **Shopify coming-soon 자동 감지** ✅ |
+| Discord 알림 | 없음 | **구현 완료** (webhook URL 등록 시 즉시 가동) |
+| 자동 스케줄 | 없음 (수동 실행) | **Railway Worker 서비스 운영 중** ✅ |
+| Railway DB 이벤트 | 38건 | **591건** (news 47 + collabs 34 + spike 510) ✅ |

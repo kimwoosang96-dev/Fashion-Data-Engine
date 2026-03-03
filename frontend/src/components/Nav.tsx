@@ -4,18 +4,15 @@ import { usePathname } from "next/navigation";
 
 const links = [
   { href: "/", label: "대시보드", icon: "📊" },
+  { href: "/intel", label: "Intel Hub", icon: "🧭" },
   { href: "/sales", label: "세일 제품", icon: "🔥" },
+  { href: "/drops", label: "드롭", icon: "🚀" },
   { href: "/compete", label: "경쟁", icon: "⚔️" },
-  { href: "/channels", label: "판매채널", icon: "🏪" },
   { href: "/brands", label: "브랜드", icon: "🏷️" },
+  { href: "/channels", label: "판매채널", icon: "🏪" },
   { href: "/directors", label: "디렉터", icon: "🧠" },
-  { href: "/news", label: "뉴스", icon: "📰" },
-  { href: "/intel", label: "Intel", icon: "🧭" },
-  { href: "/collabs", label: "협업", icon: "🤝" },
   { href: "/watchlist", label: "관심목록", icon: "❤️" },
   { href: "/purchases", label: "구매이력", icon: "🛍️" },
-  { href: "/drops", label: "드롭", icon: "🚀" },
-  { href: "/map", label: "세계지도", icon: "🗺️" },
   { href: "/admin", label: "운영관리", icon: "⚙️" },
 ];
 
@@ -47,9 +44,6 @@ export function Nav() {
           );
         })}
       </ul>
-      <div className="px-4 py-3 border-t border-gray-100">
-        <p className="text-xs text-gray-400">API: localhost:8000</p>
-      </div>
     </nav>
   );
 }

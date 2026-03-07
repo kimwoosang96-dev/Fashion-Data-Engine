@@ -56,7 +56,8 @@ SHOPIFY_MAX_PAGES = 40
 
 _BROWSER_HEADERS: dict[str, str] = {
     "Accept": "application/json, text/html, */*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.9,ko;q=0.8",
+    # Accept-Language 제거: 헤더 존재만으로 Shopify Markets가 KRW 로컬라이즈 가격을
+    # 반환하는 버그 유발 (한국 IP + Accept-Language → markets/KRW 전환)
     # Accept-Encoding 제거: httpx가 자동으로 설정 + 자동 해제함
     # 수동 설정 시 httpx의 자동 압축 해제가 비활성화되어 gzip 파싱 실패
     "Cache-Control": "no-cache",

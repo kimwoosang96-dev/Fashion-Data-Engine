@@ -1,10 +1,11 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 
 from fashion_engine.config import settings
-from fashion_engine.database import init_db
+from fashion_engine.database import AsyncSessionLocal
 from fashion_engine.api.channels import router as channels_router
 from fashion_engine.api.brands import router as brands_router
 from fashion_engine.api.collabs import router as collabs_router
@@ -21,8 +22,6 @@ from fashion_engine.api.intel import router as intel_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 시작 시 DB 테이블 자동 생성
-    await init_db()
     yield
 
 
@@ -65,4 +64,9 @@ async def root():
 
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    try:
+        async with AsyncSessionLocal() as session:
+            await session.execute(text("SELECT 1"))
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="database unavailable") from exc
+    return {"status": "ok", "database": "ok"}

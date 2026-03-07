@@ -182,6 +182,7 @@ GET  /drops/?status=                       → 드롭 목록
 source /Users/kim-usang/.local/bin/env
 cd /Users/kim-usang/fashion-data-engine
 uv sync
+uv run alembic upgrade head
 
 # Node.js (nvm 필요)
 export NVM_DIR="$HOME/.nvm" && . "$NVM_DIR/nvm.sh"
@@ -192,6 +193,7 @@ cd frontend && npm install
 
 ```bash
 # 터미널 1 — 백엔드
+uv run alembic upgrade head
 uv run uvicorn fashion_engine.api.main:app --reload
 # → http://localhost:8000/docs
 

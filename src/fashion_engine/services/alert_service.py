@@ -8,6 +8,7 @@ Discord webhook 알림 서비스.
 """
 import logging
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
 import httpx
@@ -145,6 +146,30 @@ async def send_audit_alert(findings: list[Any]) -> bool:
         "description": f"ERROR {err_count}개 / WARNING {warn_count}개",
         "color": color,
         "fields": fields or [{"name": "결과", "value": "알림 조건 충족", "inline": False}],
+    }
+    return await _send_embed({"embeds": [embed]})
+
+
+async def send_heartbeat_alert(
+    *,
+    last_crawl_at: datetime | None,
+    next_jobs: list[str],
+) -> bool:
+    """스케줄러 heartbeat 알림."""
+    last_crawl_text = (
+        last_crawl_at.strftime("%Y-%m-%d %H:%M:%S")
+        if last_crawl_at
+        else "기록 없음"
+    )
+    next_jobs_text = "\n".join(next_jobs[:6]) if next_jobs else "예정 작업 없음"
+    embed = {
+        "title": "💓 Scheduler Heartbeat",
+        "description": "스케줄러가 정상 가동 중입니다.",
+        "color": 0x3498DB,
+        "fields": [
+            {"name": "마지막 크롤 시각", "value": last_crawl_text, "inline": False},
+            {"name": "다음 예정 작업", "value": next_jobs_text[:1000], "inline": False},
+        ],
     }
     return await _send_embed({"embeds": [embed]})
 

@@ -11,11 +11,13 @@ import argparse
 import asyncio
 import logging
 import sys
+from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from sqlalchemy import select
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -26,9 +28,12 @@ import crawl_drops  # noqa: E402
 import crawl_news  # noqa: E402
 import data_audit  # noqa: E402
 import ingest_intel_events  # noqa: E402
+import manage_partitions  # noqa: E402
 import update_exchange_rates  # noqa: E402
+from fashion_engine.database import AsyncSessionLocal  # noqa: E402
+from fashion_engine.models.crawl_run import CrawlRun  # noqa: E402
 from fashion_engine.config import settings  # noqa: E402
-from fashion_engine.services.alert_service import send_audit_alert  # noqa: E402
+from fashion_engine.services.alert_service import send_audit_alert, send_heartbeat_alert  # noqa: E402
 
 
 def setup_logger() -> logging.Logger:
@@ -143,6 +148,45 @@ async def run_intel_spike_job() -> None:
         LOGGER.exception("[JOB] intel-spike failed")
 
 
+async def _get_last_done_crawl_at() -> datetime | None:
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(CrawlRun.finished_at)
+            .where(CrawlRun.status == "done", CrawlRun.finished_at.is_not(None))
+            .order_by(CrawlRun.finished_at.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+
+async def run_partition_maintenance_job(*, startup: bool = False) -> None:
+    try:
+        target_years = None if startup else [datetime.now(ZoneInfo("Asia/Seoul")).year + 1]
+        label = "partition-maintenance-startup" if startup else "partition-maintenance"
+        LOGGER.info("[JOB] %s started", label)
+        ensured = await manage_partitions.main(target_years or [])
+        LOGGER.info("[JOB] %s completed ensured=%s", label, ensured)
+    except Exception:
+        LOGGER.exception("[JOB] partition-maintenance failed")
+
+
+async def run_scheduler_heartbeat_job(scheduler: AsyncIOScheduler) -> None:
+    try:
+        LOGGER.info("[JOB] scheduler-heartbeat started")
+        last_crawl_at = await _get_last_done_crawl_at()
+        next_jobs = []
+        for job in scheduler.get_jobs():
+            if job.next_run_time is None:
+                continue
+            next_jobs.append(
+                f"{job.id} — {job.next_run_time.astimezone(ZoneInfo('Asia/Seoul')).strftime('%Y-%m-%d %H:%M:%S KST')}"
+            )
+        sent = await send_heartbeat_alert(last_crawl_at=last_crawl_at, next_jobs=next_jobs)
+        LOGGER.info("[JOB] scheduler-heartbeat completed sent=%s", sent)
+    except Exception:
+        LOGGER.exception("[JOB] scheduler-heartbeat failed")
+
+
 def register_jobs(scheduler: AsyncIOScheduler) -> None:
     scheduler.add_job(
         run_product_crawl_job,
@@ -186,6 +230,19 @@ def register_jobs(scheduler: AsyncIOScheduler) -> None:
         id="intel_spike_4x_daily",
         replace_existing=True,
     )
+    scheduler.add_job(
+        run_partition_maintenance_job,
+        CronTrigger(month=12, day=1, hour=3, minute=30),
+        id="partition_maintenance_yearly_1201",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        run_scheduler_heartbeat_job,
+        CronTrigger(hour=9, minute=5),
+        kwargs={"scheduler": scheduler},
+        id="scheduler_heartbeat_daily_0905",
+        replace_existing=True,
+    )
 
 
 def print_jobs(scheduler: AsyncIOScheduler) -> None:
@@ -206,6 +263,7 @@ async def main(dry_run: bool) -> None:
         return
 
     try:
+        await run_partition_maintenance_job(startup=True)
         while True:
             await asyncio.sleep(3600)
     except KeyboardInterrupt:

@@ -26,7 +26,7 @@ async def get_db() -> AsyncSession:
 
 
 async def init_db() -> None:
-    """개발 환경: 테이블 자동 생성 (Alembic 마이그레이션이 없을 때)"""
+    """로컬 SQLite 개발용 테이블 자동 생성. 운영/Railway에서는 Alembic을 사용한다."""
     # 모든 모델이 임포트된 상태에서 호출해야 함
     import fashion_engine.models  # noqa: F401 — 모든 모델 등록
     async with engine.begin() as conn:

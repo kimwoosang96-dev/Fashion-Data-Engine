@@ -17,6 +17,8 @@
     (429)이 발생할 수 있습니다. probe는 별도 시간대(권장: 크롤 30분 이상 전)에 실행하세요.
 """
 import asyncio
+from dataclasses import dataclass, field
+import logging
 import sys
 import time
 from datetime import datetime
@@ -25,26 +27,29 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 import typer
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from rich.console import Console
 from rich.table import Table
-from sqlalchemy.exc import DBAPIError
 from sqlalchemy import select, text
+from sqlalchemy.exc import DBAPIError
 
 from fashion_engine.config import settings
 from fashion_engine.database import init_db, AsyncSessionLocal
 from fashion_engine.models.channel import Channel
 from fashion_engine.models.channel_brand import ChannelBrand
 from fashion_engine.models.brand import Brand
+from fashion_engine.models.price_history import PriceHistory
 from fashion_engine.models.product import Product
 from fashion_engine.models.crawl_run import CrawlRun, CrawlChannelLog
 from fashion_engine.crawler.product_crawler import ProductCrawler, ChannelProductResult
 from fashion_engine.services.product_service import (
+    build_price_history_row,
+    build_product_upsert_row,
     get_rate_to_krw,
     find_brands_by_vendors,
     get_existing_products_by_urls,
     get_prev_prices_by_product_ids,
     upsert_product,
-    record_price,
 )
 from fashion_engine.services.channel_service import update_platform
 from fashion_engine.services.catalog_service import build_catalog_incremental
@@ -57,6 +62,7 @@ from fashion_engine.services.alert_service import (
 )
 from fashion_engine.services.watchlist_service import should_alert
 
+logger = logging.getLogger(__name__)
 console = Console()
 app = typer.Typer()
 
@@ -77,6 +83,8 @@ _POSTGRES_CRAWL_TIMEOUT_SQL = (
     "SET LOCAL lock_timeout = '5s'",
     "SET LOCAL statement_timeout = '120s'",
 )
+_PRODUCT_BULK_CHUNK_SIZE = 500
+_PRICE_HISTORY_BULK_CHUNK_SIZE = 1000
 
 
 async def _apply_crawl_db_timeouts(db) -> None:
@@ -104,6 +112,528 @@ def _classify_db_error(exc: Exception) -> str | None:
     return None
 
 
+@dataclass
+class PendingDerivedEvent:
+    event_type: str
+    product_id: int
+    brand_id: int | None
+    title: str
+    summary: str
+    source_url: str
+    details: dict
+
+
+@dataclass
+class PendingAlertJob:
+    alert_kind: str
+    brand_slug: str | None
+    product_key: str | None
+    payload: AlertPayload
+
+
+@dataclass
+class ChannelPostCommitWork:
+    derived_events: list[PendingDerivedEvent] = field(default_factory=list)
+    alert_jobs: list[PendingAlertJob] = field(default_factory=list)
+
+
+@dataclass
+class ChannelSaveOutcome:
+    products_count: int = 0
+    sale_count: int = 0
+    new_count: int = 0
+    updated_count: int = 0
+    post_commit_work: ChannelPostCommitWork = field(default_factory=ChannelPostCommitWork)
+
+
+def _dedupe_product_infos(products: list) -> list:
+    deduped: dict[str, object] = {}
+    for info in products:
+        deduped[info.product_url] = info
+    return list(deduped.values())
+
+
+def _chunk_rows(rows: list[dict], chunk_size: int) -> list[list[dict]]:
+    return [rows[idx:idx + chunk_size] for idx in range(0, len(rows), chunk_size)]
+
+
+def _build_alert_job(
+    *,
+    channel: Channel,
+    info,
+    brand_slug: str | None,
+    prev_price_krw: int | None,
+    current_krw: int,
+    threshold: float,
+    is_new: bool,
+    sale_just_started: bool,
+) -> PendingAlertJob | None:
+    is_sale = (
+        info.compare_at_price is not None
+        and info.compare_at_price > info.price
+    )
+    discount_rate = None
+    if is_sale and info.compare_at_price:
+        discount_rate = round((1 - info.price / info.compare_at_price) * 100)
+    original_krw = (
+        int(info.compare_at_price * (current_krw / info.price))
+        if info.compare_at_price and info.price
+        else None
+    )
+    payload = AlertPayload(
+        product_name=info.title,
+        product_key=info.product_key,
+        channel_name=channel.name,
+        product_url=info.product_url,
+        image_url=info.image_url,
+        price_krw=current_krw,
+        original_price_krw=original_krw,
+        discount_rate=discount_rate,
+        prev_price_krw=prev_price_krw,
+    )
+    if is_new:
+        return PendingAlertJob(
+            alert_kind="new_product",
+            brand_slug=brand_slug,
+            product_key=info.product_key,
+            payload=payload,
+        )
+    if sale_just_started:
+        return PendingAlertJob(
+            alert_kind="sale_start",
+            brand_slug=brand_slug,
+            product_key=info.product_key,
+            payload=payload,
+        )
+    if (
+        prev_price_krw
+        and prev_price_krw > 0
+        and current_krw < prev_price_krw * (1 - threshold)
+    ):
+        return PendingAlertJob(
+            alert_kind="price_drop",
+            brand_slug=brand_slug,
+            product_key=info.product_key,
+            payload=payload,
+        )
+    return None
+
+
+def _build_derived_event(
+    *,
+    event_type: str,
+    product_id: int,
+    brand_id: int | None,
+    channel: Channel,
+    info,
+    details: dict,
+) -> PendingDerivedEvent:
+    if event_type == "sale_start":
+        title = f"{info.title} 세일 시작"
+        summary = f"{channel.name}에서 세일 전환 감지"
+    elif event_type == "sold_out":
+        title = f"{info.title} 품절 전환"
+        summary = f"{channel.name} sold_out 감지"
+    else:
+        title = f"{info.title} 재입고"
+        summary = f"{channel.name} restock 감지"
+    return PendingDerivedEvent(
+        event_type=event_type,
+        product_id=product_id,
+        brand_id=brand_id,
+        title=title,
+        summary=summary,
+        source_url=info.product_url,
+        details=details,
+    )
+
+
+async def _save_channel_products_sqlite(
+    db,
+    *,
+    channel: Channel,
+    products: list,
+    rate: float,
+    threshold: float,
+    alerts_enabled: bool,
+    no_intel: bool,
+) -> ChannelSaveOutcome:
+    outcome = ChannelSaveOutcome(products_count=len(products))
+    vendor_names = sorted({info.vendor for info in products if info.vendor})
+    brand_by_vendor = await find_brands_by_vendors(db, vendor_names)
+    existing_by_url = await get_existing_products_by_urls(
+        db,
+        [info.product_url for info in products],
+    )
+    prev_price_by_product_id = (
+        await get_prev_prices_by_product_ids(
+            db,
+            [row.id for row in existing_by_url.values()],
+        )
+        if alerts_enabled
+        else {}
+    )
+
+    for info in products:
+        brand = brand_by_vendor.get(info.vendor or "")
+        brand_id = brand.id if brand else None
+        brand_slug = brand.slug if brand else None
+        existing_row = existing_by_url.get(info.product_url)
+        prev_price_krw = (
+            prev_price_by_product_id.get(existing_row.id)
+            if existing_row
+            else None
+        )
+
+        product, is_new, sale_just_started, availability_transition = await upsert_product(
+            db,
+            channel.id,
+            info,
+            brand_id=brand_id,
+            existing=existing_row,
+        )
+        price_row = build_price_history_row(product.id, info, rate)
+        if price_row is not None:
+            db.add(PriceHistory(**price_row))
+            current_krw = int(price_row["price"])
+        else:
+            current_krw = round(float(info.price) * rate)
+
+        is_sale = (
+            info.compare_at_price is not None
+            and info.compare_at_price > info.price
+        )
+        if is_sale:
+            outcome.sale_count += 1
+        if is_new:
+            outcome.new_count += 1
+        else:
+            outcome.updated_count += 1
+
+        if sale_just_started and not no_intel:
+            discount_rate = None
+            if (
+                info.compare_at_price
+                and info.price
+                and info.compare_at_price > 0
+                and info.compare_at_price > info.price
+            ):
+                discount_rate = round(1 - (info.price / info.compare_at_price), 4)
+            outcome.post_commit_work.derived_events.append(
+                _build_derived_event(
+                    event_type="sale_start",
+                    product_id=product.id,
+                    brand_id=brand_id,
+                    channel=channel,
+                    info=info,
+                    details={
+                        "discount_rate": discount_rate,
+                        "channel_name": channel.name,
+                        "price": info.price,
+                        "compare_at_price": info.compare_at_price,
+                    },
+                )
+            )
+        if availability_transition in {"sold_out", "restock"} and not no_intel:
+            outcome.post_commit_work.derived_events.append(
+                _build_derived_event(
+                    event_type=availability_transition,
+                    product_id=product.id,
+                    brand_id=brand_id,
+                    channel=channel,
+                    info=info,
+                    details={"channel_name": channel.name},
+                )
+            )
+
+        if alerts_enabled:
+            alert_job = _build_alert_job(
+                channel=channel,
+                info=info,
+                brand_slug=brand_slug,
+                prev_price_krw=prev_price_krw,
+                current_krw=current_krw,
+                threshold=threshold,
+                is_new=is_new,
+                sale_just_started=sale_just_started,
+            )
+            if alert_job:
+                outcome.post_commit_work.alert_jobs.append(alert_job)
+
+    return outcome
+
+
+async def _save_channel_products_postgres(
+    db,
+    *,
+    channel: Channel,
+    products: list,
+    rate: float,
+    threshold: float,
+    alerts_enabled: bool,
+    no_intel: bool,
+) -> ChannelSaveOutcome:
+    outcome = ChannelSaveOutcome(products_count=len(products))
+    vendor_names = sorted({info.vendor for info in products if info.vendor})
+    brand_by_vendor = await find_brands_by_vendors(db, vendor_names)
+    existing_by_url = await get_existing_products_by_urls(
+        db,
+        [info.product_url for info in products],
+    )
+    prev_price_by_product_id = (
+        await get_prev_prices_by_product_ids(
+            db,
+            [row.id for row in existing_by_url.values()],
+        )
+        if alerts_enabled
+        else {}
+    )
+
+    upsert_rows: list[dict] = []
+    meta_by_url: dict[str, dict] = {}
+    row_now = datetime.utcnow()
+
+    for info in products:
+        brand = brand_by_vendor.get(info.vendor or "")
+        brand_id = brand.id if brand else None
+        brand_slug = brand.slug if brand else None
+        existing_row = existing_by_url.get(info.product_url)
+        prev_price_krw = (
+            prev_price_by_product_id.get(existing_row.id)
+            if existing_row
+            else None
+        )
+        row, is_new, sale_just_started, availability_transition = build_product_upsert_row(
+            channel_id=channel.id,
+            info=info,
+            brand_id=brand_id,
+            existing=existing_row,
+            now=row_now,
+        )
+        upsert_rows.append(row)
+        meta_by_url[info.product_url] = {
+            "info": info,
+            "brand_id": brand_id,
+            "brand_slug": brand_slug,
+            "prev_price_krw": prev_price_krw,
+            "is_new": is_new,
+            "sale_just_started": sale_just_started,
+            "availability_transition": availability_transition,
+        }
+        if (
+            info.compare_at_price is not None
+            and info.compare_at_price > info.price
+        ):
+            outcome.sale_count += 1
+        if is_new:
+            outcome.new_count += 1
+        else:
+            outcome.updated_count += 1
+
+    product_id_by_url: dict[str, int] = {}
+    for chunk in _chunk_rows(upsert_rows, _PRODUCT_BULK_CHUNK_SIZE):
+        stmt = pg_insert(Product).values(chunk)
+        excluded = stmt.excluded
+        upsert_stmt = (
+            stmt.on_conflict_do_update(
+                index_elements=[Product.url],
+                set_={
+                    "channel_id": excluded.channel_id,
+                    "brand_id": excluded.brand_id,
+                    "name": excluded.name,
+                    "vendor": excluded.vendor,
+                    "product_key": excluded.product_key,
+                    "normalized_key": excluded.normalized_key,
+                    "match_confidence": excluded.match_confidence,
+                    "gender": excluded.gender,
+                    "subcategory": excluded.subcategory,
+                    "sku": excluded.sku,
+                    "tags": excluded.tags,
+                    "image_url": excluded.image_url,
+                    "is_active": excluded.is_active,
+                    "is_sale": excluded.is_sale,
+                    "archived_at": excluded.archived_at,
+                    "updated_at": excluded.updated_at,
+                },
+            )
+            .returning(Product.id, Product.url)
+        )
+        upserted_rows = (await db.execute(upsert_stmt)).all()
+        product_id_by_url.update({row.url: row.id for row in upserted_rows})
+
+    price_rows: list[dict] = []
+    for product_url, meta in meta_by_url.items():
+        info = meta["info"]
+        product_id = product_id_by_url[product_url]
+        price_row = build_price_history_row(product_id, info, rate, crawled_at=row_now)
+        if price_row is not None:
+            price_rows.append(price_row)
+            current_krw = int(price_row["price"])
+        else:
+            current_krw = round(float(info.price) * rate)
+
+        if meta["sale_just_started"] and not no_intel:
+            discount_rate = None
+            if (
+                info.compare_at_price
+                and info.price
+                and info.compare_at_price > 0
+                and info.compare_at_price > info.price
+            ):
+                discount_rate = round(1 - (info.price / info.compare_at_price), 4)
+            outcome.post_commit_work.derived_events.append(
+                _build_derived_event(
+                    event_type="sale_start",
+                    product_id=product_id,
+                    brand_id=meta["brand_id"],
+                    channel=channel,
+                    info=info,
+                    details={
+                        "discount_rate": discount_rate,
+                        "channel_name": channel.name,
+                        "price": info.price,
+                        "compare_at_price": info.compare_at_price,
+                    },
+                )
+            )
+        if meta["availability_transition"] in {"sold_out", "restock"} and not no_intel:
+            outcome.post_commit_work.derived_events.append(
+                _build_derived_event(
+                    event_type=meta["availability_transition"],
+                    product_id=product_id,
+                    brand_id=meta["brand_id"],
+                    channel=channel,
+                    info=info,
+                    details={"channel_name": channel.name},
+                )
+            )
+
+        if alerts_enabled:
+            alert_job = _build_alert_job(
+                channel=channel,
+                info=info,
+                brand_slug=meta["brand_slug"],
+                prev_price_krw=meta["prev_price_krw"],
+                current_krw=current_krw,
+                threshold=threshold,
+                is_new=meta["is_new"],
+                sale_just_started=meta["sale_just_started"],
+            )
+            if alert_job:
+                outcome.post_commit_work.alert_jobs.append(alert_job)
+
+    for chunk in _chunk_rows(price_rows, _PRICE_HISTORY_BULK_CHUNK_SIZE):
+        await db.execute(pg_insert(PriceHistory).values(chunk))
+
+    return outcome
+
+
+async def run_channel_post_commit_pipeline(
+    *,
+    channel: Channel,
+    work: ChannelPostCommitWork,
+) -> None:
+    if work.derived_events:
+        try:
+            async with AsyncSessionLocal() as db:
+                await _apply_crawl_db_timeouts(db)
+                product_rows = (
+                    await db.execute(
+                        select(Product).where(
+                            Product.id.in_([item.product_id for item in work.derived_events])
+                        )
+                    )
+                ).scalars().all()
+                brand_ids = sorted({item.brand_id for item in work.derived_events if item.brand_id})
+                brand_rows = (
+                    await db.execute(select(Brand).where(Brand.id.in_(brand_ids)))
+                ).scalars().all() if brand_ids else []
+                product_by_id = {row.id: row for row in product_rows}
+                brand_by_id = {row.id: row for row in brand_rows}
+
+                for item in work.derived_events:
+                    product = product_by_id.get(item.product_id)
+                    if not product:
+                        continue
+                    brand = brand_by_id.get(item.brand_id) if item.brand_id else None
+                    await upsert_derived_product_event(
+                        db,
+                        event_type=item.event_type,
+                        product=product,
+                        channel=channel,
+                        brand=brand,
+                        title=item.title,
+                        summary=item.summary,
+                        source_url=item.source_url,
+                        details=item.details,
+                    )
+                await db.commit()
+        except Exception as exc:
+            logger.warning("channel post-commit intel failed channel=%s: %s", channel.name, exc)
+
+    if work.alert_jobs and settings.discord_webhook_url:
+        try:
+            allowed_jobs: list[PendingAlertJob] = []
+            async with AsyncSessionLocal() as db:
+                await _apply_crawl_db_timeouts(db)
+                for job in work.alert_jobs:
+                    if await should_alert(
+                        db,
+                        brand_slug=job.brand_slug,
+                        channel_url=channel.url,
+                        product_key=job.product_key,
+                    ):
+                        allowed_jobs.append(job)
+
+            for job in allowed_jobs:
+                if job.alert_kind == "new_product":
+                    await new_product_alert(job.payload)
+                elif job.alert_kind == "sale_start":
+                    await sale_alert(job.payload)
+                elif job.alert_kind == "price_drop":
+                    await price_drop_alert(job.payload)
+        except Exception as exc:
+            logger.warning("channel post-commit alerts failed channel=%s: %s", channel.name, exc)
+
+
+async def run_post_commit_pipeline(
+    *,
+    run_started_at: datetime,
+    skip_catalog: bool,
+    no_intel: bool,
+    total_upserted: int,
+) -> None:
+    if not skip_catalog:
+        try:
+            console.print("[cyan]▶ ProductCatalog 증분 빌드 시작[/cyan]")
+            updated = await build_catalog_incremental(since=run_started_at)
+            console.print(f"[green]✅ ProductCatalog 증분 빌드 완료[/green] (updated={updated})")
+        except Exception as exc:
+            console.print(f"[yellow]catalog 증분 빌드 실패(무시): {exc}[/yellow]")
+
+    if not no_intel and total_upserted > 0:
+        try:
+            console.print("[cyan][INTEL][/cyan] derived_spike 자동 실행")
+            import ingest_intel_events
+
+            code_spike = await ingest_intel_events.run(job="derived_spike", window_hours=48)
+            console.print(f"[cyan][INTEL][/cyan] derived_spike 완료 code={code_spike}")
+        except Exception as exc:
+            console.print(f"[yellow][INTEL] derived_spike 자동 실행 실패(무시): {exc}[/yellow]")
+        try:
+            console.print("[cyan][INTEL][/cyan] mirror 자동 실행")
+            import ingest_intel_events
+
+            code_mirror = await ingest_intel_events.run(job="mirror")
+            console.print(f"[cyan][INTEL][/cyan] mirror 완료 code={code_mirror}")
+        except Exception as exc:
+            console.print(f"[yellow][INTEL] mirror 자동 실행 실패(무시): {exc}[/yellow]")
+    elif no_intel:
+        console.print("[dim][INTEL] --no-intel 설정으로 자동 실행 스킵[/dim]")
+    else:
+        console.print("[dim][INTEL] 변경 데이터 없음(total_upserted=0)으로 자동 실행 스킵[/dim]")
+
+
 async def _crawl_one_channel(
     channel: Channel,
     run_id: int,
@@ -118,7 +648,6 @@ async def _crawl_one_channel(
         console.print(f"[dim]▶ 시작:[/dim] {channel.name}")
         t_start = time.time()
 
-        # ── 1. Cafe24 카테고리 로드 (편집샵만) ───────────────────────────
         cafe24_categories: list[tuple[str, str]] = []
         if channel.channel_type == "edit-shop":
             async with AsyncSessionLocal() as db:
@@ -140,7 +669,6 @@ async def _crawl_one_channel(
                     if r.name and r.cate_no
                 ]
 
-        # ── 2. 크롤 (채널별 독립 크롤러 인스턴스) ───────────────────────
         chan_timeout = _CHANNEL_TIMEOUT_SECS.get(
             channel.platform or "default",
             _CHANNEL_TIMEOUT_SECS["default"],
@@ -156,9 +684,7 @@ async def _crawl_one_channel(
                     timeout=chan_timeout,
                 )
             except asyncio.TimeoutError:
-                console.print(
-                    f"[red]⏱ timeout:[/red] {channel.name} ({chan_timeout}s 초과)"
-                )
+                console.print(f"[red]⏱ timeout:[/red] {channel.name} ({chan_timeout}s 초과)")
                 result = ChannelProductResult(
                     channel_url=channel.url,
                     products=[],
@@ -167,12 +693,10 @@ async def _crawl_one_channel(
                 )
 
         duration_ms = int((time.time() - t_start) * 1000)
-        sale_count = 0
-        new_count = 0
-        updated_count = 0
+        save_outcome = ChannelSaveOutcome()
 
-        # ── 3. DB 저장 ───────────────────────────────────────────────────
         if result.products and not result.error:
+            result.products = _dedupe_product_infos(result.products)
             try:
                 async with AsyncSessionLocal() as db:
                     await _apply_crawl_db_timeouts(db)
@@ -193,143 +717,29 @@ async def _crawl_one_channel(
                         result.error = f"Missing FX rate for {currency}"
                         result.error_type = "parse_error"
                         result.products = []
-                        new_count = 0
-                        updated_count = 0
-                        sale_count = 0
                     else:
-                        vendor_names = sorted({info.vendor for info in result.products if info.vendor})
-                        brand_by_vendor = await find_brands_by_vendors(db, vendor_names)
-                        existing_by_url = await get_existing_products_by_urls(
-                            db,
-                            [info.product_url for info in result.products],
-                        )
-                        prev_price_by_product_id = (
-                            await get_prev_prices_by_product_ids(
+                        alerts_enabled = (not no_alerts) and bool(settings.discord_webhook_url)
+                        if db.get_bind().dialect.name == "postgresql":
+                            save_outcome = await _save_channel_products_postgres(
                                 db,
-                                [row.id for row in existing_by_url.values()],
+                                channel=channel,
+                                products=result.products,
+                                rate=rate,
+                                threshold=threshold,
+                                alerts_enabled=alerts_enabled,
+                                no_intel=no_intel,
                             )
-                            if (not no_alerts and settings.discord_webhook_url)
-                            else {}
-                        )
-
-                        for info in result.products:
-                            brand = brand_by_vendor.get(info.vendor or "")
-                            brand_id = brand.id if brand else None
-
-                            existing_row = existing_by_url.get(info.product_url)
-                            prev_price_krw = (
-                                prev_price_by_product_id.get(existing_row.id)
-                                if existing_row
-                                else None
-                            )
-
-                            product, is_new, sale_just_started, availability_transition = await upsert_product(
+                        else:
+                            save_outcome = await _save_channel_products_sqlite(
                                 db,
-                                channel.id,
-                                info,
-                                brand_id=brand_id,
-                                existing=existing_row,
+                                channel=channel,
+                                products=result.products,
+                                rate=rate,
+                                threshold=threshold,
+                                alerts_enabled=alerts_enabled,
+                                no_intel=no_intel,
                             )
-                            await record_price(db, product.id, info, rate_to_krw=rate)
-
-                            is_sale = (
-                                info.compare_at_price is not None
-                                and info.compare_at_price > info.price
-                            )
-                            if is_sale:
-                                sale_count += 1
-                            if is_new:
-                                new_count += 1
-                            else:
-                                updated_count += 1
-
-                            if sale_just_started and not no_intel:
-                                discount_rate: float | None = None
-                                if (
-                                    info.compare_at_price
-                                    and info.price
-                                    and info.compare_at_price > 0
-                                    and info.compare_at_price > info.price
-                                ):
-                                    discount_rate = round(
-                                        1 - (info.price / info.compare_at_price), 4
-                                    )
-                                await upsert_derived_product_event(
-                                    db,
-                                    event_type="sale_start",
-                                    product=product,
-                                    channel=channel,
-                                    brand=brand,
-                                    title=f"{info.title} 세일 시작",
-                                    summary=f"{channel.name}에서 세일 전환 감지",
-                                    source_url=info.product_url,
-                                    details={
-                                        "discount_rate": discount_rate,
-                                        "channel_name": channel.name,
-                                        "price": info.price,
-                                        "compare_at_price": info.compare_at_price,
-                                    },
-                                )
-                            if availability_transition in {"sold_out", "restock"} and not no_intel:
-                                await upsert_derived_product_event(
-                                    db,
-                                    event_type=availability_transition,
-                                    product=product,
-                                    channel=channel,
-                                    brand=brand,
-                                    title=(
-                                        f"{info.title} 품절 전환"
-                                        if availability_transition == "sold_out"
-                                        else f"{info.title} 재입고"
-                                    ),
-                                    summary=f"{channel.name} {availability_transition} 감지",
-                                    source_url=info.product_url,
-                                    details={"channel_name": channel.name},
-                                )
-
-                            # ── 알림 트리거 ───────────────────────────────────────
-                            brand_slug = brand.slug if brand else None
-                            if not no_alerts and settings.discord_webhook_url and await should_alert(
-                                db,
-                                brand_slug=brand_slug,
-                                channel_url=channel.url,
-                                product_key=info.product_key,
-                            ):
-                                current_krw = int(info.price * rate)
-                                discount_rate: int | None = None
-                                if is_sale and info.compare_at_price:
-                                    discount_rate = round(
-                                        (1 - info.price / info.compare_at_price) * 100
-                                    )
-                                original_krw = (
-                                    int(info.compare_at_price * rate)
-                                    if info.compare_at_price
-                                    else None
-                                )
-                                payload = AlertPayload(
-                                    product_name=info.title,
-                                    product_key=info.product_key,
-                                    channel_name=channel.name,
-                                    product_url=info.product_url,
-                                    image_url=info.image_url,
-                                    price_krw=current_krw,
-                                    original_price_krw=original_krw,
-                                    discount_rate=discount_rate,
-                                    prev_price_krw=prev_price_krw,
-                                )
-
-                                if is_new:
-                                    await new_product_alert(payload)
-                                elif sale_just_started:
-                                    await sale_alert(payload)
-                                elif (
-                                    prev_price_krw
-                                    and prev_price_krw > 0
-                                    and current_krw < prev_price_krw * (1 - threshold)
-                                ):
-                                    await price_drop_alert(payload)
-
-                    await db.commit()
+                        await db.commit()
             except Exception as save_exc:
                 db_error_type = _classify_db_error(save_exc)
                 if db_error_type == "lock_timeout":
@@ -339,8 +749,8 @@ async def _crawl_one_channel(
                 result.error = f"save_error: {str(save_exc)[:180]}"
                 result.error_type = db_error_type or "internal_error"
                 result.products = []
+                save_outcome = ChannelSaveOutcome()
 
-        # ── 4. CrawlChannelLog + CrawlRun 업데이트 (Lock으로 동시성 보호) ──
         log_status = "success" if not result.error else "failed"
         if not result.products and not result.error:
             log_status = "skipped"
@@ -354,9 +764,9 @@ async def _crawl_one_channel(
                             run_id=run_id,
                             channel_id=channel.id,
                             status=log_status,
-                            products_found=len(result.products),
-                            products_new=new_count,
-                            products_updated=updated_count,
+                            products_found=save_outcome.products_count if not result.error else 0,
+                            products_new=save_outcome.new_count,
+                            products_updated=save_outcome.updated_count,
                             error_msg=(result.error or "")[:500] if result.error else None,
                             error_type=(
                                 result.error_type
@@ -367,7 +777,6 @@ async def _crawl_one_channel(
                             duration_ms=duration_ms,
                         )
                     )
-                    # 원자적 카운터 업데이트 (READ-MODIFY-WRITE 경쟁 방지)
                     await db.execute(
                         text(
                             "UPDATE crawl_runs SET"
@@ -378,8 +787,8 @@ async def _crawl_one_channel(
                             " WHERE id = :run_id"
                         ),
                         {
-                            "new_p": new_count,
-                            "upd_p": updated_count,
+                            "new_p": save_outcome.new_count,
+                            "upd_p": save_outcome.updated_count,
                             "err": 1 if result.error else 0,
                             "run_id": run_id,
                         },
@@ -417,22 +826,22 @@ async def _crawl_one_channel(
                 )
 
         status_icon = "✅" if not result.error else "❌"
+        products_count = save_outcome.products_count if not result.error else 0
         console.print(
             f"[dim]{status_icon} 완료:[/dim] {channel.name}"
-            f" — {len(result.products)}개 (신규 {new_count}, 세일 {sale_count})"
+            f" — {products_count}개 (신규 {save_outcome.new_count}, 세일 {save_outcome.sale_count})"
             + (f" [red]{result.error[:60]}[/red]" if result.error else "")
         )
 
         return {
             "channel_name": channel.name,
             "country": channel.country or "-",
-            "products_count": len(result.products),
-            "sale_count": sale_count,
-            "new_count": new_count,
+            "products_count": products_count,
+            "sale_count": save_outcome.sale_count,
+            "new_count": save_outcome.new_count,
             "error": result.error,
+            "post_commit_work": save_outcome.post_commit_work,
         }
-
-
 @app.command()
 def main(
     limit: int = typer.Option(0, help="크롤링할 채널 수 (0=전체)"),
@@ -556,6 +965,13 @@ async def run(
                 r["error"] or "",
             )
 
+    for ch, raw in zip(channels, raw_results):
+        if isinstance(raw, Exception):
+            continue
+        work = raw.get("post_commit_work")
+        if work and (work.derived_events or work.alert_jobs):
+            await run_channel_post_commit_pipeline(channel=ch, work=work)
+
     # CrawlRun 완료 처리
     total_upserted = 0
     async with AsyncSessionLocal() as db:
@@ -569,34 +985,12 @@ async def run(
 
     console.print(results_table)
     console.print(f"\n[bold green]CrawlRun #{run_id} 완료[/bold green]")
-
-    if not skip_catalog:
-        console.print("[cyan]▶ ProductCatalog 증분 빌드 시작[/cyan]")
-        updated = await build_catalog_incremental(since=run_started_at)
-        console.print(f"[green]✅ ProductCatalog 증분 빌드 완료[/green] (updated={updated})")
-
-    # Intel ingest 자동 트리거 (--no-intel 또는 변경 없음이면 스킵)
-    if not no_intel and total_upserted > 0:
-        try:
-            console.print("[cyan][INTEL][/cyan] derived_spike 자동 실행")
-            import ingest_intel_events
-
-            code_spike = await ingest_intel_events.run(job="derived_spike", window_hours=48)
-            console.print(f"[cyan][INTEL][/cyan] derived_spike 완료 code={code_spike}")
-        except Exception as e:
-            console.print(f"[yellow][INTEL] derived_spike 자동 실행 실패(무시): {e}[/yellow]")
-        try:
-            console.print("[cyan][INTEL][/cyan] mirror 자동 실행")
-            import ingest_intel_events
-
-            code_mirror = await ingest_intel_events.run(job="mirror")
-            console.print(f"[cyan][INTEL][/cyan] mirror 완료 code={code_mirror}")
-        except Exception as e:
-            console.print(f"[yellow][INTEL] mirror 자동 실행 실패(무시): {e}[/yellow]")
-    elif no_intel:
-        console.print("[dim][INTEL] --no-intel 설정으로 자동 실행 스킵[/dim]")
-    else:
-        console.print("[dim][INTEL] 변경 데이터 없음(total_upserted=0)으로 자동 실행 스킵[/dim]")
+    await run_post_commit_pipeline(
+        run_started_at=run_started_at,
+        skip_catalog=skip_catalog,
+        no_intel=no_intel,
+        total_upserted=total_upserted,
+    )
 
 
 if __name__ == "__main__":

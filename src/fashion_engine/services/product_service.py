@@ -148,6 +148,129 @@ async def get_prev_prices_by_product_ids(
 
 # ── 제품 upsert ───────────────────────────────────────────────────────────
 
+
+def build_product_upsert_row(
+    channel_id: int,
+    info: ProductInfo,
+    brand_id: int | None = None,
+    existing: Product | None = None,
+    now: datetime | None = None,
+) -> tuple[dict, bool, bool, str | None]:
+    """Product upsert용 row와 상태 메타데이터를 만든다."""
+    row_now = now or datetime.utcnow()
+    is_sale = info.compare_at_price is not None and info.compare_at_price > info.price
+
+    if existing:
+        prev_sale = bool(existing.is_sale)
+        sale_just_started = (not prev_sale) and is_sale
+        was_active = bool(existing.is_active)
+        availability_transition: str | None = None
+        archived_at = existing.archived_at
+
+        if was_active and not info.is_available:
+            archived_at = row_now
+            availability_transition = "sold_out"
+        elif info.is_available:
+            archived_at = None
+            if not was_active:
+                availability_transition = "restock"
+
+        return (
+            {
+                "channel_id": channel_id,
+                "brand_id": brand_id,
+                "name": info.title,
+                "vendor": info.vendor or None,
+                "product_key": info.product_key,
+                "normalized_key": info.normalized_key,
+                "match_confidence": info.match_confidence,
+                "gender": info.gender,
+                "subcategory": info.subcategory,
+                "sku": info.sku,
+                "tags": info.tags,
+                "url": info.product_url,
+                "image_url": info.image_url,
+                "is_active": info.is_available,
+                "is_sale": is_sale,
+                "archived_at": archived_at,
+                "updated_at": row_now,
+            },
+            False,
+            sale_just_started,
+            availability_transition,
+        )
+
+    return (
+        {
+            "channel_id": channel_id,
+            "brand_id": brand_id,
+            "name": info.title,
+            "vendor": info.vendor or None,
+            "product_key": info.product_key,
+            "normalized_key": info.normalized_key,
+            "match_confidence": info.match_confidence,
+            "gender": info.gender,
+            "subcategory": info.subcategory,
+            "sku": info.sku,
+            "tags": info.tags,
+            "url": info.product_url,
+            "image_url": info.image_url,
+            "is_active": info.is_available,
+            "is_sale": is_sale,
+            "archived_at": None if info.is_available else row_now,
+            "created_at": row_now,
+            "updated_at": row_now,
+        },
+        True,
+        False,
+        None,
+    )
+
+
+def build_price_history_row(
+    product_id: int,
+    info: ProductInfo,
+    rate_to_krw: float | None,
+    crawled_at: datetime | None = None,
+) -> dict | None:
+    """PriceHistory insert용 row를 만든다."""
+    if rate_to_krw is None:
+        logger.warning("rate=None → 가격 저장 스킵 (product_id=%d)", product_id)
+        return None
+
+    is_sale = info.compare_at_price is not None and info.compare_at_price > info.price
+    discount_rate: int | None = None
+    if is_sale and info.compare_at_price:
+        discount_rate = round((1 - info.price / info.compare_at_price) * 100)
+
+    price_krw_int = round(float(info.price) * rate_to_krw)
+    min_krw = 1_000
+    max_krw = 50_000_000
+    if price_krw_int < min_krw or price_krw_int > max_krw:
+        logger.warning(
+            "비현실적 가격 감지: product_id=%d, price=%s %s (rate=%.2f) → %d KRW, 저장 스킵",
+            product_id,
+            info.price,
+            info.currency,
+            rate_to_krw,
+            price_krw_int,
+        )
+        return None
+
+    return {
+        "product_id": product_id,
+        "price": Decimal(str(price_krw_int)),
+        "original_price": (
+            Decimal(str(round(info.compare_at_price * rate_to_krw)))
+            if info.compare_at_price
+            else None
+        ),
+        "currency": "KRW",
+        "is_sale": is_sale,
+        "discount_rate": discount_rate,
+        "crawled_at": crawled_at or datetime.utcnow(),
+    }
+
 async def upsert_product(
     db: AsyncSession,
     channel_id: int,
@@ -162,60 +285,27 @@ async def upsert_product(
       - sale_just_started: 이전 is_sale=False → 이번 True 전환
       - availability_transition: "sold_out" | "restock" | None
     """
-    is_sale = info.compare_at_price is not None and info.compare_at_price > info.price
-
     if existing is None:
         existing = (
             await db.execute(select(Product).where(Product.url == info.product_url))
         ).scalar_one_or_none()
 
+    row, is_new, sale_just_started, availability_transition = build_product_upsert_row(
+        channel_id=channel_id,
+        info=info,
+        brand_id=brand_id,
+        existing=existing,
+    )
+
     if existing:
-        prev_sale = existing.is_sale
-        sale_just_started = (not prev_sale) and is_sale
-        was_active = bool(existing.is_active)
-        availability_transition: str | None = None
-        existing.name = info.title
-        existing.vendor = info.vendor or None
-        existing.product_key = info.product_key
-        existing.normalized_key = info.normalized_key
-        existing.match_confidence = info.match_confidence
-        existing.gender = info.gender
-        existing.subcategory = info.subcategory
-        existing.tags = info.tags
-        existing.is_sale = is_sale
-        existing.is_active = info.is_available
-        if was_active and not info.is_available:
-            existing.archived_at = datetime.utcnow()
-            availability_transition = "sold_out"
-        elif info.is_available:
-            existing.archived_at = None
-            if not was_active:
-                availability_transition = "restock"
-        existing.image_url = info.image_url
-        existing.updated_at = datetime.utcnow()
-        return existing, False, sale_just_started, availability_transition
-    else:
-        product = Product(
-            channel_id=channel_id,
-            brand_id=brand_id,
-            name=info.title,
-            vendor=info.vendor or None,
-            product_key=info.product_key,
-            normalized_key=info.normalized_key,
-            match_confidence=info.match_confidence,
-            gender=info.gender,
-            subcategory=info.subcategory,
-            sku=info.sku,
-            tags=info.tags,
-            url=info.product_url,
-            image_url=info.image_url,
-            is_active=info.is_available,
-            is_sale=is_sale,
-            archived_at=None if info.is_available else datetime.utcnow(),
-        )
-        db.add(product)
-        await db.flush()  # id 확보
-        return product, True, False, None
+        for key, value in row.items():
+            setattr(existing, key, value)
+        return existing, is_new, sale_just_started, availability_transition
+
+    product = Product(**row)
+    db.add(product)
+    await db.flush()  # id 확보
+    return product, is_new, sale_just_started, availability_transition
 
 
 async def record_price(
@@ -228,45 +318,11 @@ async def record_price(
     가격 이력 INSERT (항상 새 레코드 — 시계열 추적).
     price, original_price는 KRW 환산값으로 저장.
     """
-    if rate_to_krw is None:
-        logger.warning("rate=None → 가격 저장 스킵 (product_id=%d)", product_id)
+    row = build_price_history_row(product_id, info, rate_to_krw)
+    if row is None:
         return None
 
-    is_sale = info.compare_at_price is not None and info.compare_at_price > info.price
-    discount_rate: int | None = None
-    if is_sale and info.compare_at_price:
-        discount_rate = round((1 - info.price / info.compare_at_price) * 100)
-
-    price_krw_int = round(float(info.price) * rate_to_krw)
-    MIN_KRW = 1_000
-    MAX_KRW = 50_000_000
-    if price_krw_int < MIN_KRW or price_krw_int > MAX_KRW:
-        logger.warning(
-            "비현실적 가격 감지: product_id=%d, price=%s %s (rate=%.2f) → %d KRW, 저장 스킵",
-            product_id,
-            info.price,
-            info.currency,
-            rate_to_krw,
-            price_krw_int,
-        )
-        return None
-
-    price_krw = Decimal(str(price_krw_int))
-    original_krw = (
-        Decimal(str(round(info.compare_at_price * rate_to_krw)))
-        if info.compare_at_price
-        else None
-    )
-
-    ph = PriceHistory(
-        product_id=product_id,
-        price=price_krw,
-        original_price=original_krw,
-        currency="KRW",
-        is_sale=is_sale,
-        discount_rate=discount_rate,
-        crawled_at=datetime.utcnow(),
-    )
+    ph = PriceHistory(**row)
     db.add(ph)
     return ph
 

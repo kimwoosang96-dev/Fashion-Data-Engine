@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
 import { Nav } from "@/components/Nav";
 
-const inter = Inter({ subsets: ["latin"] });
-
 export const metadata: Metadata = {
-  title: "Fashion Data Engine",
-  description: "패션 판매채널 데이터 관리 대시보드",
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
+  title: {
+    default: "패션 다나와",
+    template: "%s | 패션 다나와",
+  },
+  description: "패션 최저가 비교, 세일 추이, 브랜드/채널 랭킹을 보는 패션 다나와",
 };
 
 export default function RootLayout({
@@ -17,7 +18,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko">
-      <body className={`${inter.className} bg-gray-50 text-gray-900`}>
+      <body className="bg-gray-50 text-gray-900">
         <div className="flex h-screen overflow-hidden">
           <Nav />
           <main className="flex-1 overflow-y-auto">

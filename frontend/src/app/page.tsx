@@ -4,11 +4,12 @@ import {
   getSaleHighlights,
   getChannels,
   getBrands,
+  getProductRanking,
   searchProducts,
   getRelatedSearches,
   searchBrands,
 } from "@/lib/api";
-import type { Product, Channel, Brand, SaleHighlight } from "@/lib/types";
+import type { Product, Channel, Brand, SaleHighlight, ProductRankingItem } from "@/lib/types";
 import { ProductCard } from "@/components/ProductCard";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
@@ -19,6 +20,7 @@ export default function DashboardPage() {
   const [baseSaleProducts, setBaseSaleProducts] = useState<SaleHighlight[]>([]);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
+  const [hotRanking, setHotRanking] = useState<ProductRankingItem[]>([]);
   const [searchResults, setSearchResults] = useState<Product[] | null>(null);
   const [brandSuggestions, setBrandSuggestions] = useState<Brand[]>([]);
   const [relatedSearches, setRelatedSearches] = useState<string[]>([]);
@@ -28,12 +30,13 @@ export default function DashboardPage() {
   const searchBoxRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    Promise.all([getSaleHighlights(60, 0), getChannels(), getBrands()])
-      .then(([products, ch, br]) => {
+    Promise.all([getSaleHighlights(60, 0), getChannels(), getBrands(), getProductRanking("sale_hot", 10)])
+      .then(([products, ch, br, ranking]) => {
         setSaleProducts(products);
         setBaseSaleProducts(products);
         setChannels(ch);
         setBrands(br);
+        setHotRanking(ranking);
       })
       .finally(() => setLoading(false));
   }, []);
@@ -190,10 +193,60 @@ export default function DashboardPage() {
                 priceKrw={p.price_krw}
                 originalPriceKrw={p.original_price_krw ?? undefined}
                 discountRate={p.discount_rate ?? undefined}
+                showPriceBadge
               />
             ))}
           </div>
         </div>
+      )}
+
+      {!loading && hotRanking.length > 0 && (
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">오늘의 HOT 세일 TOP 10</h2>
+              <p className="text-sm text-gray-500">할인율과 채널 수를 기준으로 매긴 실시간 랭킹</p>
+            </div>
+            <Link href="/ranking" className="text-sm font-medium text-blue-600 hover:underline">
+              전체 랭킹 보기
+            </Link>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+            {hotRanking.map((item, index) => (
+              <article key={`${item.product_key}-${item.channel_name}`} className="rounded-xl border border-gray-200 bg-white p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="text-2xl font-black text-gray-200">{String(index + 1).padStart(2, "0")}</div>
+                  <div className="rounded-full bg-red-100 px-2 py-1 text-[11px] font-semibold text-red-700">
+                    {item.discount_rate ? `-${item.discount_rate}%` : "세일"}
+                  </div>
+                </div>
+                <p className="mt-3 line-clamp-2 text-sm font-semibold text-gray-900">{item.product_name}</p>
+                <p className="mt-1 text-xs text-gray-500">
+                  {item.brand_name ? `${item.brand_name} · ` : ""}
+                  {item.channel_name}
+                </p>
+                <div className="mt-3 flex items-end gap-2">
+                  <span className="text-lg font-bold text-gray-900">₩{item.price_krw.toLocaleString("ko-KR")}</span>
+                  {item.original_price_krw && (
+                    <span className="text-xs text-gray-400 line-through">₩{item.original_price_krw.toLocaleString("ko-KR")}</span>
+                  )}
+                </div>
+                <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
+                  <span>{item.total_channels}개 채널</span>
+                  {item.product_key ? (
+                    <Link href={`/compare/${encodeURIComponent(item.product_key)}`} className="font-medium text-blue-600 hover:underline">
+                      비교 보기
+                    </Link>
+                  ) : (
+                    <a href={item.product_url} target="_blank" rel="noreferrer" className="font-medium text-blue-600 hover:underline">
+                      상품 보기
+                    </a>
+                  )}
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
       )}
     </div>
   );

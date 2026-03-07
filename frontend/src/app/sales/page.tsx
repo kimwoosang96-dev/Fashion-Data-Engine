@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getSaleCount, getSaleHighlights } from "@/lib/api";
 import type { SaleFilters, SaleHighlight } from "@/lib/types";
+import { PriceBadge } from "@/components/PriceBadge";
 import { Input } from "@/components/ui/input";
 
 const fmt = (n: number) => `₩${n.toLocaleString("ko-KR")}`;
@@ -183,6 +184,7 @@ export default function SalesPage() {
                   <p className="text-sm font-semibold line-clamp-2">{item.product_name}</p>
                   <p className="text-xs text-gray-500 mt-1">{item.channel_name}</p>
                   <div className="mt-2 flex flex-wrap gap-1.5">
+                    <PriceBadge productKey={item.product_key} />
                     <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-medium">
                       {item.discount_rate ? `-${item.discount_rate}%` : "세일"}
                     </span>

@@ -21,6 +21,7 @@ from fashion_engine.api.schemas import (
     BrandHighlightOut,
     CollabOut,
     BrandDirectorOut,
+    BrandRankingOut,
 )
 
 router = APIRouter(prefix="/brands", tags=["brands"])
@@ -103,6 +104,14 @@ async def search_brands(
 ):
     """브랜드명 검색 (한글/영문)"""
     return await brand_service.search_brands(db, q)
+
+
+@router.get("/ranking", response_model=list[BrandRankingOut])
+async def get_brand_ranking(
+    limit: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+):
+    return await product_service.get_brand_sale_ranking(db, limit=limit)
 
 
 @router.get("/{slug}", response_model=BrandOut)

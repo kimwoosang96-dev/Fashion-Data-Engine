@@ -2,7 +2,7 @@ import type {
   Product, PriceComparison, Brand, Purchase, PurchaseInput,
   Score, PurchaseStats, WatchListItem, Drop, Channel,
   SaleHighlight, ChannelHighlight, BrandHighlight, ChannelPriceHistory,
-  SaleFilters,
+  SaleFilters, PriceBadge, ProductRankingItem, BrandRankingItem,
   AdminStats, AdminChannelHealth, AdminCrawlStatus, ChannelSignalOut,
   FashionNews, CollabItem, BrandDirector, DirectorsByBrand, AdminCollabItem, AdminAuditItem, MultiChannelProduct,
   CrawlRunOut, CrawlRunDetail, ChannelNoteOut,
@@ -70,6 +70,19 @@ export const getPriceHistory = (productKey: string, days = 30) =>
   apiFetch<ChannelPriceHistory[]>(
     `/products/price-history/${encodeURIComponent(productKey)}?days=${days}`
   );
+export const getPriceBadge = (productKey: string, days = 90) =>
+  apiFetch<PriceBadge>(
+    `/products/price-badge/${encodeURIComponent(productKey)}?days=${days}`
+  );
+export const getProductKeys = (limit = 0) =>
+  apiFetch<Array<{ product_key: string }>>(`/products/keys?limit=${limit}`);
+export const getProductRanking = (
+  type: "sale_hot" | "price_drop" = "sale_hot",
+  limit = 100
+) =>
+  apiFetch<ProductRankingItem[]>(
+    `/products/ranking?type=${encodeURIComponent(type)}&limit=${limit}`
+  );
 export const getArchivedProducts = (limit = 100, offset = 0) =>
   apiFetch<Product[]>(`/products/archive?limit=${limit}&offset=${offset}`);
 export const getMultiChannelProducts = (
@@ -100,6 +113,8 @@ export const getBrandDirectors = (slug: string) =>
   apiFetch<BrandDirector[]>(`/brands/${encodeURIComponent(slug)}/directors`);
 export const getBrandCollabs = (slug: string) =>
   apiFetch<CollabItem[]>(`/brands/${encodeURIComponent(slug)}/collabs`);
+export const getBrandRanking = (limit = 50) =>
+  apiFetch<BrandRankingItem[]>(`/brands/ranking?limit=${limit}`);
 
 // ── Channels ──────────────────────────────────────────────────────────────
 export const getChannels = () => apiFetch<Channel[]>("/channels/");

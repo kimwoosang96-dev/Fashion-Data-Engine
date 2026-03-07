@@ -10,6 +10,9 @@ from fashion_engine.api.schemas import (
     SaleHighlightOut,
     ChannelPriceHistory,
     MultiChannelProductOut,
+    PriceBadgeOut,
+    ProductKeyOut,
+    ProductRankingOut,
 )
 
 router = APIRouter(prefix="/products", tags=["products"])
@@ -113,28 +116,11 @@ async def compare_prices(
     product_key 형식: "brand-slug:product-handle"
     예: new-balance:new-balance-2002r
     """
-    listings_raw = await product_service.get_price_comparison(db, product_key=product_key)
-
-    if not listings_raw:
+    comparison = await product_service.get_price_comparison(db, product_key=product_key)
+    if not comparison:
         raise HTTPException(status_code=404, detail=f"Product not found: {product_key}")
-
-    listings = [PriceComparisonItem(**item) for item in listings_raw]
-
-    # 첫 번째 제품명 사용 (price 오름차순 정렬이므로 listings[0]이 최저가)
-    # product_key에서 handle 부분을 제목으로 사용 (실제 제품명은 listings에서 추출 불가)
-    # → DB Product.name을 별도로 조회하는 대신 product_key의 handle 부분을 표시
-    handle_part = product_key.split(":", 1)[-1] if ":" in product_key else product_key
-
-    cheapest = listings[0] if listings else None
-
-    return PriceComparisonOut(
-        product_key=product_key,
-        product_name=handle_part.replace("-", " ").title(),
-        listings=listings,
-        cheapest_channel=cheapest.channel_name if cheapest else None,
-        cheapest_price_krw=cheapest.price_krw if cheapest else None,
-        total_listings=len(listings),
-    )
+    comparison["listings"] = [PriceComparisonItem(**item) for item in comparison["listings"]]
+    return PriceComparisonOut(**comparison)
 
 
 @router.get("/price-history/{product_key:path}", response_model=list[ChannelPriceHistory])
@@ -145,6 +131,36 @@ async def get_product_price_history(
 ):
     """제품 가격 히스토리 (채널별 시계열)."""
     return await product_service.get_price_history(db, product_key=product_key, days=days)
+
+
+@router.get("/price-badge/{product_key:path}", response_model=PriceBadgeOut)
+async def get_product_price_badge(
+    product_key: str,
+    days: int = Query(90, ge=7, le=3650),
+    db: AsyncSession = Depends(get_db),
+):
+    badge = await product_service.get_price_badge(db, product_key=product_key, days=days)
+    if not badge:
+        raise HTTPException(status_code=404, detail=f"Price badge not found: {product_key}")
+    return PriceBadgeOut(**badge)
+
+
+@router.get("/keys", response_model=list[ProductKeyOut])
+async def list_product_keys(
+    limit: int = Query(0, ge=0, le=200000),
+    db: AsyncSession = Depends(get_db),
+):
+    keys = await product_service.get_product_keys(db, limit=limit or None)
+    return [ProductKeyOut(product_key=key) for key in keys]
+
+
+@router.get("/ranking", response_model=list[ProductRankingOut])
+async def get_product_ranking(
+    type: str = Query("sale_hot", pattern="^(sale_hot|price_drop)$"),
+    limit: int = Query(100, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+):
+    return await product_service.get_product_ranking(db, ranking_type=type, limit=limit)
 
 
 @router.get("/archive", response_model=list[ProductOut])

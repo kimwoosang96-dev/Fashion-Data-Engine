@@ -219,6 +219,8 @@ class PriceComparisonItem(BaseModel):
 class PriceComparisonOut(BaseModel):
     product_key: str
     product_name: str
+    brand_name: str | None = None
+    image_url: str | None = None
     listings: list[PriceComparisonItem]
     cheapest_channel: str | None
     cheapest_price_krw: int | None
@@ -234,6 +236,48 @@ class PriceHistoryPoint(BaseModel):
 class ChannelPriceHistory(BaseModel):
     channel_name: str
     history: list[PriceHistoryPoint]
+
+
+class PriceBadgeOut(BaseModel):
+    product_key: str
+    current_min_krw: int | None
+    historical_min_krw: int | None
+    historical_min_date: str | None
+    is_all_time_low: bool
+    discount_from_historical_high_pct: int | None
+    price_position: str
+
+
+class ProductKeyOut(BaseModel):
+    product_key: str
+
+
+class ProductRankingOut(BaseModel):
+    product_key: str | None
+    product_name: str
+    brand_name: str | None
+    image_url: str | None
+    channel_name: str
+    channel_country: str | None
+    product_url: str
+    price_krw: int
+    original_price_krw: int | None
+    discount_rate: int | None
+    total_channels: int
+    price_drop_pct: float | None = None
+    price_drop_krw: int | None = None
+
+
+class BrandRankingOut(BaseModel):
+    brand_id: int
+    brand_name: str
+    brand_slug: str
+    tier: str | None
+    origin_country: str | None
+    sale_product_count: int
+    avg_discount_rate: float
+    max_discount_rate: int | None
+    active_channel_count: int
 
 
 class MultiChannelProductOut(BaseModel):

@@ -48,6 +48,8 @@ export interface PriceComparisonItem {
 export interface PriceComparison {
   product_key: string;
   product_name: string;
+  brand_name: string | null;
+  image_url: string | null;
   listings: PriceComparisonItem[];
   cheapest_channel: string | null;
   cheapest_price_krw: number | null;
@@ -205,6 +207,44 @@ export interface PriceHistoryPoint {
 export interface ChannelPriceHistory {
   channel_name: string;
   history: PriceHistoryPoint[];
+}
+
+export interface PriceBadge {
+  product_key: string;
+  current_min_krw: number | null;
+  historical_min_krw: number | null;
+  historical_min_date: string | null;
+  is_all_time_low: boolean;
+  discount_from_historical_high_pct: number | null;
+  price_position: "all_time_low" | "low" | "mid" | "high";
+}
+
+export interface ProductRankingItem {
+  product_key: string | null;
+  product_name: string;
+  brand_name: string | null;
+  image_url: string | null;
+  channel_name: string;
+  channel_country: string | null;
+  product_url: string;
+  price_krw: number;
+  original_price_krw: number | null;
+  discount_rate: number | null;
+  total_channels: number;
+  price_drop_pct: number | null;
+  price_drop_krw: number | null;
+}
+
+export interface BrandRankingItem {
+  brand_id: number;
+  brand_name: string;
+  brand_slug: string;
+  tier: string | null;
+  origin_country: string | null;
+  sale_product_count: number;
+  avg_discount_rate: number;
+  max_discount_rate: number | null;
+  active_channel_count: number;
 }
 
 export interface FashionNews {

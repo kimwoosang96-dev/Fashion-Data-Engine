@@ -27,6 +27,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 import typer
 from rich.console import Console
 from rich.table import Table
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy import select, text
 
 from fashion_engine.config import settings
@@ -71,6 +72,37 @@ _CHANNEL_TIMEOUT_SECS: dict[str, int] = {
     "default": 300,
 }
 
+_POSTGRES_CRAWL_TIMEOUT_SQL = (
+    "SET LOCAL idle_in_transaction_session_timeout = '60s'",
+    "SET LOCAL lock_timeout = '5s'",
+    "SET LOCAL statement_timeout = '120s'",
+)
+
+
+async def _apply_crawl_db_timeouts(db) -> None:
+    """PostgreSQL 저장 세션에 크롤 전용 timeout을 건다."""
+    bind = db.get_bind()
+    if bind.dialect.name != "postgresql":
+        return
+    for sql in _POSTGRES_CRAWL_TIMEOUT_SQL:
+        await db.execute(text(sql))
+
+
+def _classify_db_error(exc: Exception) -> str | None:
+    """DB 예외를 lock/statement timeout 중심으로 분류한다."""
+    if not isinstance(exc, DBAPIError):
+        return None
+
+    orig = getattr(exc, "orig", None)
+    sqlstate = getattr(orig, "sqlstate", None) or getattr(orig, "pgcode", None)
+    msg = str(orig or exc).lower()
+
+    if sqlstate == "55P03" or "lock timeout" in msg:
+        return "lock_timeout"
+    if sqlstate == "57014" or "statement timeout" in msg:
+        return "statement_timeout"
+    return None
+
 
 async def _crawl_one_channel(
     channel: Channel,
@@ -90,6 +122,7 @@ async def _crawl_one_channel(
         cafe24_categories: list[tuple[str, str]] = []
         if channel.channel_type == "edit-shop":
             async with AsyncSessionLocal() as db:
+                await _apply_crawl_db_timeouts(db)
                 rows = (
                     await db.execute(
                         select(Brand.name, ChannelBrand.cate_no)
@@ -142,6 +175,7 @@ async def _crawl_one_channel(
         if result.products and not result.error:
             try:
                 async with AsyncSessionLocal() as db:
+                    await _apply_crawl_db_timeouts(db)
                     if result.crawl_strategy == "shopify-api":
                         await update_platform(db, channel.id, "shopify")
                     elif result.crawl_strategy == "cafe24-html":
@@ -297,8 +331,13 @@ async def _crawl_one_channel(
 
                     await db.commit()
             except Exception as save_exc:
+                db_error_type = _classify_db_error(save_exc)
+                if db_error_type == "lock_timeout":
+                    console.print(f"[yellow]lock timeout:[/yellow] {channel.name}")
+                elif db_error_type == "statement_timeout":
+                    console.print(f"[yellow]statement timeout:[/yellow] {channel.name}")
                 result.error = f"save_error: {str(save_exc)[:180]}"
-                result.error_type = "internal_error"
+                result.error_type = db_error_type or "internal_error"
                 result.products = []
 
         # ── 4. CrawlChannelLog + CrawlRun 업데이트 (Lock으로 동시성 보호) ──
@@ -309,6 +348,7 @@ async def _crawl_one_channel(
         try:
             async with run_lock:
                 async with AsyncSessionLocal() as db:
+                    await _apply_crawl_db_timeouts(db)
                     db.add(
                         CrawlChannelLog(
                             run_id=run_id,
@@ -469,6 +509,7 @@ async def run(
 
     # CrawlRun 생성
     async with AsyncSessionLocal() as db:
+        await _apply_crawl_db_timeouts(db)
         crawl_run = CrawlRun(total_channels=len(channels), status="running")
         db.add(crawl_run)
         await db.commit()
@@ -518,6 +559,7 @@ async def run(
     # CrawlRun 완료 처리
     total_upserted = 0
     async with AsyncSessionLocal() as db:
+        await _apply_crawl_db_timeouts(db)
         run_obj = await db.get(CrawlRun, run_id)
         if run_obj:
             run_obj.status = "done"

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 import logging
 
@@ -125,31 +125,14 @@ async def get_prev_prices_by_product_ids(
     db: AsyncSession,
     product_ids: list[int],
 ) -> dict[int, int]:
-    """제품별 최신 KRW 가격을 한 번에 조회한다."""
+    """제품별 현재 KRW 가격을 한 번에 조회한다."""
     clean_ids = [pid for pid in product_ids if pid]
     if not clean_ids:
         return {}
-
-    latest_ph = (
-        select(
-            PriceHistory.product_id,
-            func.max(PriceHistory.crawled_at).label("latest"),
-        )
-        .where(
-            PriceHistory.currency == "KRW",
-            PriceHistory.product_id.in_(clean_ids),
-        )
-        .group_by(PriceHistory.product_id)
-        .subquery()
-    )
     rows = (
         await db.execute(
-            select(PriceHistory.product_id, PriceHistory.price)
-            .join(
-                latest_ph,
-                (PriceHistory.product_id == latest_ph.c.product_id)
-                & (PriceHistory.crawled_at == latest_ph.c.latest),
-            )
+            select(Product.id, Product.price_krw)
+            .where(Product.id.in_(clean_ids), Product.price_krw.is_not(None))
         )
     ).all()
     return {int(product_id): int(price) for product_id, price in rows}
@@ -161,6 +144,7 @@ async def get_prev_prices_by_product_ids(
 def build_product_upsert_row(
     channel_id: int,
     info: ProductInfo,
+    rate_to_krw: float | None,
     brand_id: int | None = None,
     existing: Product | None = None,
     now: datetime | None = None,
@@ -168,6 +152,17 @@ def build_product_upsert_row(
     """Product upsert용 row와 상태 메타데이터를 만든다."""
     row_now = now or datetime.utcnow()
     is_sale = info.compare_at_price is not None and info.compare_at_price > info.price
+    discount_rate: int | None = None
+    if is_sale and info.compare_at_price:
+        discount_rate = round((1 - info.price / info.compare_at_price) * 100)
+    price_krw = _to_krw_int(info.price, rate_to_krw)
+    original_price_krw = (
+        _to_krw_int(info.compare_at_price, rate_to_krw)
+        if info.compare_at_price
+        else None
+    )
+    currency = (info.currency or "KRW").upper()[:3]
+    raw_price = Decimal(str(info.price))
 
     if existing:
         prev_sale = bool(existing.is_sale)
@@ -175,6 +170,7 @@ def build_product_upsert_row(
         was_active = bool(existing.is_active)
         availability_transition: str | None = None
         archived_at = existing.archived_at
+        sale_started_at = existing.sale_started_at
 
         if was_active and not info.is_available:
             archived_at = row_now
@@ -183,6 +179,10 @@ def build_product_upsert_row(
             archived_at = None
             if not was_active:
                 availability_transition = "restock"
+        if sale_just_started:
+            sale_started_at = row_now
+        elif not is_sale:
+            sale_started_at = None
 
         return (
             {
@@ -199,6 +199,17 @@ def build_product_upsert_row(
                 "tags": info.tags,
                 "url": info.product_url,
                 "image_url": info.image_url,
+                "price_krw": price_krw if price_krw is not None else existing.price_krw,
+                "original_price_krw": (
+                    original_price_krw
+                    if original_price_krw is not None or not is_sale
+                    else existing.original_price_krw
+                ),
+                "discount_rate": discount_rate,
+                "currency": currency,
+                "raw_price": raw_price,
+                "price_updated_at": row_now,
+                "sale_started_at": sale_started_at,
                 "is_active": info.is_available,
                 "is_sale": is_sale,
                 "archived_at": archived_at,
@@ -224,6 +235,13 @@ def build_product_upsert_row(
             "tags": info.tags,
             "url": info.product_url,
             "image_url": info.image_url,
+            "price_krw": price_krw,
+            "original_price_krw": original_price_krw,
+            "discount_rate": discount_rate,
+            "currency": currency,
+            "raw_price": raw_price,
+            "price_updated_at": row_now,
+            "sale_started_at": row_now if is_sale else None,
             "is_active": info.is_available,
             "is_sale": is_sale,
             "archived_at": None if info.is_available else row_now,
@@ -233,7 +251,16 @@ def build_product_upsert_row(
         True,
         False,
         None,
-    )
+)
+
+
+def _to_krw_int(value: float | Decimal | None, rate_to_krw: float | None) -> int | None:
+    if value is None or rate_to_krw is None:
+        return None
+    price_krw_int = round(float(value) * rate_to_krw)
+    if price_krw_int < 1_000 or price_krw_int > 50_000_000:
+        return None
+    return price_krw_int
 
 
 def build_price_history_row(
@@ -252,17 +279,15 @@ def build_price_history_row(
     if is_sale and info.compare_at_price:
         discount_rate = round((1 - info.price / info.compare_at_price) * 100)
 
-    price_krw_int = round(float(info.price) * rate_to_krw)
-    min_krw = 1_000
-    max_krw = 50_000_000
-    if price_krw_int < min_krw or price_krw_int > max_krw:
+    price_krw_int = _to_krw_int(info.price, rate_to_krw)
+    if price_krw_int is None:
         logger.warning(
             "비현실적 가격 감지: product_id=%d, price=%s %s (rate=%.2f) → %d KRW, 저장 스킵",
             product_id,
             info.price,
             info.currency,
             rate_to_krw,
-            price_krw_int,
+            round(float(info.price) * rate_to_krw),
         )
         return None
 
@@ -270,8 +295,8 @@ def build_price_history_row(
         "product_id": product_id,
         "price": Decimal(str(price_krw_int)),
         "original_price": (
-            Decimal(str(round(info.compare_at_price * rate_to_krw)))
-            if info.compare_at_price
+            Decimal(str(original_price_krw))
+            if (original_price_krw := _to_krw_int(info.compare_at_price, rate_to_krw)) is not None
             else None
         ),
         "currency": "KRW",
@@ -284,6 +309,7 @@ async def upsert_product(
     db: AsyncSession,
     channel_id: int,
     info: ProductInfo,
+    rate_to_krw: float | None,
     brand_id: int | None = None,
     existing: Product | None = None,
 ) -> tuple["Product", bool, bool, str | None]:
@@ -302,6 +328,7 @@ async def upsert_product(
     row, is_new, sale_just_started, availability_transition = build_product_upsert_row(
         channel_id=channel_id,
         info=info,
+        rate_to_krw=rate_to_krw,
         brand_id=brand_id,
         existing=existing,
     )
@@ -349,32 +376,19 @@ async def get_sale_products(
     limit: int = 50,
     offset: int = 0,
 ) -> list[Product]:
-    """세일 중인 제품 목록 (최신 가격 기준 할인율 내림차순)."""
-    # 최신 PriceHistory subquery
-    latest_ph = (
-        select(
-            PriceHistory.product_id,
-            func.max(PriceHistory.crawled_at).label("latest"),
-        )
-        .group_by(PriceHistory.product_id)
-        .subquery()
-    )
-    latest_price = (
-        select(PriceHistory)
-        .join(
-            latest_ph,
-            (PriceHistory.product_id == latest_ph.c.product_id)
-            & (PriceHistory.crawled_at == latest_ph.c.latest),
-        )
-        .subquery()
-    )
-
+    """세일 중인 제품 목록 (products 현재 가격 기준 할인율 내림차순)."""
     query = (
         select(Product)
-        .join(latest_price, Product.id == latest_price.c.product_id)
         .options(selectinload(Product.channel), selectinload(Product.brand))
-        .where(Product.is_sale == True, Product.is_active == True)
-        .order_by(desc(latest_price.c.discount_rate))
+        .where(
+            Product.is_sale == True,
+            Product.is_active == True,
+            Product.price_krw.is_not(None),
+        )
+        .order_by(
+            desc(Product.discount_rate).nullslast(),
+            Product.price_krw.asc(),
+        )
         .limit(limit)
         .offset(offset)
     )
@@ -392,9 +406,9 @@ async def get_sale_products(
     if category:
         query = query.where(Product.subcategory == category)
     if min_price is not None:
-        query = query.where(latest_price.c.price >= min_price)
+        query = query.where(Product.price_krw >= min_price)
     if max_price is not None:
-        query = query.where(latest_price.c.price <= max_price)
+        query = query.where(Product.price_krw <= max_price)
 
     return list((await db.execute(query)).scalars().all())
 
@@ -424,26 +438,15 @@ async def get_sale_highlights(
     offset: int = 0,
 ) -> list[dict]:
     """세일 제품 하이라이트 (product_key 기준 최저가 1건 + 채널 수)."""
-    latest_sub = (
-        select(
-            PriceHistory.product_id,
-            func.max(PriceHistory.crawled_at).label("latest"),
-        )
-        .group_by(PriceHistory.product_id)
-        .subquery()
-    )
-
     dedup_key = func.coalesce(Product.product_key, cast(Product.id, String))
     ranked = (
-        select(Product, PriceHistory, Channel)
-        .join(latest_sub, Product.id == latest_sub.c.product_id)
-        .join(
-            PriceHistory,
-            (PriceHistory.product_id == Product.id)
-            & (PriceHistory.crawled_at == latest_sub.c.latest),
-        )
+        select(Product, Channel)
         .join(Channel, Product.channel_id == Channel.id)
-        .where(Product.is_sale == True, Product.is_active == True)
+        .where(
+            Product.is_sale == True,
+            Product.is_active == True,
+            Product.price_krw.is_not(None),
+        )
         .with_only_columns(
             Product.id.label("product_id"),
             Product.name.label("product_name"),
@@ -454,14 +457,14 @@ async def get_sale_highlights(
             Product.is_active.label("is_active"),
             Channel.name.label("channel_name"),
             Channel.country.label("channel_country"),
-            PriceHistory.price.label("price_krw"),
-            PriceHistory.original_price.label("original_price_krw"),
-            PriceHistory.discount_rate.label("discount_rate"),
+            Product.price_krw.label("price_krw"),
+            Product.original_price_krw.label("original_price_krw"),
+            Product.discount_rate.label("discount_rate"),
             func.count(Product.id).over(partition_by=dedup_key).label("total_channels"),
             func.row_number()
             .over(
                 partition_by=dedup_key,
-                order_by=(PriceHistory.price.asc(), Product.id.asc()),
+                order_by=(Product.price_krw.asc(), Product.id.asc()),
             )
             .label("price_rank"),
         )
@@ -471,9 +474,9 @@ async def get_sale_highlights(
     if category:
         ranked = ranked.where(Product.subcategory == category)
     if min_price is not None:
-        ranked = ranked.where(PriceHistory.price >= min_price)
+        ranked = ranked.where(Product.price_krw >= min_price)
     if max_price is not None:
-        ranked = ranked.where(PriceHistory.price <= max_price)
+        ranked = ranked.where(Product.price_krw <= max_price)
 
     ranked_sub = ranked.subquery()
     rows = (
@@ -523,32 +526,22 @@ async def get_sale_products_count_filtered(
     min_price: int | None = None,
     max_price: int | None = None,
 ) -> int:
-    latest_sub = (
-        select(
-            PriceHistory.product_id,
-            func.max(PriceHistory.crawled_at).label("latest"),
-        )
-        .group_by(PriceHistory.product_id)
-        .subquery()
-    )
     query = (
         select(func.count(Product.id))
-        .join(latest_sub, Product.id == latest_sub.c.product_id)
-        .join(
-            PriceHistory,
-            (PriceHistory.product_id == Product.id)
-            & (PriceHistory.crawled_at == latest_sub.c.latest),
+        .where(
+            Product.is_sale == True,
+            Product.is_active == True,
+            Product.price_krw.is_not(None),
         )
-        .where(Product.is_sale == True, Product.is_active == True)
     )
     if gender:
         query = query.where(Product.gender == gender)
     if category:
         query = query.where(Product.subcategory == category)
     if min_price is not None:
-        query = query.where(PriceHistory.price >= min_price)
+        query = query.where(Product.price_krw >= min_price)
     if max_price is not None:
-        query = query.where(PriceHistory.price <= max_price)
+        query = query.where(Product.price_krw <= max_price)
 
     result = await db.execute(query)
     return int(result.scalar_one() or 0)
@@ -641,32 +634,17 @@ async def get_price_comparison(
     동일 product_key를 가진 모든 채널 제품의 최신 가격 비교.
     KRW 기준 오름차순 정렬.
     """
-    # 각 product별 최신 PriceHistory
-    latest_sub = (
-        select(
-            PriceHistory.product_id,
-            func.max(PriceHistory.crawled_at).label("latest"),
-        )
-        .group_by(PriceHistory.product_id)
-        .subquery()
-    )
-
     rows = (
         await db.execute(
-            select(Product, PriceHistory, Channel, Brand)
-            .join(
-                latest_sub,
-                (Product.id == latest_sub.c.product_id),
-            )
-            .join(
-                PriceHistory,
-                (PriceHistory.product_id == Product.id)
-                & (PriceHistory.crawled_at == latest_sub.c.latest),
-            )
+            select(Product, Channel, Brand)
             .join(Channel, Product.channel_id == Channel.id)
             .join(Brand, Product.brand_id == Brand.id, isouter=True)
-            .where(Product.product_key == product_key, Product.is_active == True)
-            .order_by(PriceHistory.price)
+            .where(
+                Product.product_key == product_key,
+                Product.is_active == True,
+                Product.price_krw.is_not(None),
+            )
+            .order_by(Product.price_krw.asc())
         )
     ).all()
 
@@ -674,7 +652,7 @@ async def get_price_comparison(
     product_name: str | None = None
     brand_name: str | None = None
     image_url: str | None = None
-    for product, ph, channel, brand in rows:
+    for product, channel, brand in rows:
         if product_name is None and product.name:
             product_name = product.name
         if brand_name is None and brand and brand.name:
@@ -693,10 +671,10 @@ async def get_price_comparison(
                 "channel_url": channel.url,
                 "channel_type": channel.channel_type,
                 "is_official": is_official,
-                "price_krw": int(ph.price),
-                "original_price_krw": int(ph.original_price) if ph.original_price else None,
-                "is_sale": ph.is_sale,
-                "discount_rate": ph.discount_rate,
+                "price_krw": int(product.price_krw),
+                "original_price_krw": int(product.original_price_krw) if product.original_price_krw else None,
+                "is_sale": product.is_sale,
+                "discount_rate": product.discount_rate,
                 "product_url": product.url,
                 "image_url": product.image_url,
             }
@@ -738,14 +716,6 @@ async def get_product_ranking(
     ranking_type: str,
     limit: int = 100,
 ) -> list[dict]:
-    latest_sub = (
-        select(
-            PriceHistory.product_id,
-            func.max(PriceHistory.crawled_at).label("latest"),
-        )
-        .group_by(PriceHistory.product_id)
-        .subquery()
-    )
     channel_count_sub = (
         select(
             Product.product_key.label("product_key"),
@@ -767,27 +737,25 @@ async def get_product_ranking(
                 Channel.name.label("channel_name"),
                 Channel.country.label("channel_country"),
                 Product.url.label("product_url"),
-                PriceHistory.price.label("price_krw"),
-                PriceHistory.original_price.label("original_price_krw"),
-                PriceHistory.discount_rate.label("discount_rate"),
+                Product.price_krw.label("price_krw"),
+                Product.original_price_krw.label("original_price_krw"),
+                Product.discount_rate.label("discount_rate"),
                 func.coalesce(channel_count_sub.c.total_channels, 1).label("total_channels"),
                 func.row_number()
                 .over(
                     partition_by=dedup_key,
-                    order_by=(PriceHistory.price.asc(), Product.id.asc()),
+                    order_by=(Product.price_krw.asc(), Product.id.asc()),
                 )
                 .label("product_rank"),
-            )
-            .join(latest_sub, Product.id == latest_sub.c.product_id)
-            .join(
-                PriceHistory,
-                (PriceHistory.product_id == Product.id)
-                & (PriceHistory.crawled_at == latest_sub.c.latest),
             )
             .join(Channel, Channel.id == Product.channel_id)
             .join(Brand, Brand.id == Product.brand_id, isouter=True)
             .join(channel_count_sub, channel_count_sub.c.product_key == Product.product_key, isouter=True)
-            .where(Product.is_sale == True, Product.is_active == True)
+            .where(
+                Product.is_sale == True,
+                Product.is_active == True,
+                Product.price_krw.is_not(None),
+            )
             .subquery()
         )
         rows = (
@@ -928,14 +896,6 @@ async def get_brand_sale_ranking(
     db: AsyncSession,
     limit: int = 50,
 ) -> list[dict]:
-    latest_sub = (
-        select(
-            PriceHistory.product_id,
-            func.max(PriceHistory.crawled_at).label("latest"),
-        )
-        .group_by(PriceHistory.product_id)
-        .subquery()
-    )
     rows = (
         await db.execute(
             select(
@@ -945,22 +905,20 @@ async def get_brand_sale_ranking(
                 Brand.tier.label("tier"),
                 Brand.origin_country.label("origin_country"),
                 func.count(Product.id).label("sale_product_count"),
-                func.avg(PriceHistory.discount_rate).label("avg_discount_rate"),
-                func.max(PriceHistory.discount_rate).label("max_discount_rate"),
+                func.avg(Product.discount_rate).label("avg_discount_rate"),
+                func.max(Product.discount_rate).label("max_discount_rate"),
                 func.count(func.distinct(Product.channel_id)).label("active_channel_count"),
             )
             .join(Product, Product.brand_id == Brand.id)
-            .join(latest_sub, latest_sub.c.product_id == Product.id)
-            .join(
-                PriceHistory,
-                (PriceHistory.product_id == Product.id)
-                & (PriceHistory.crawled_at == latest_sub.c.latest),
+            .where(
+                Product.is_sale == True,
+                Product.is_active == True,
+                Product.discount_rate.is_not(None),
             )
-            .where(Product.is_sale == True, Product.is_active == True)
             .group_by(Brand.id, Brand.name, Brand.slug, Brand.tier, Brand.origin_country)
             .order_by(
                 desc(func.count(Product.id)),
-                desc(func.avg(PriceHistory.discount_rate)),
+                desc(func.avg(Product.discount_rate)),
                 Brand.name.asc(),
             )
             .limit(limit)
@@ -1030,27 +988,6 @@ async def get_multi_channel_products(
     sort: str = "spread",
 ) -> list[dict]:
     """멀티채널에서 판매되는 product_key 집계 목록."""
-    latest_sub = (
-        select(
-            PriceHistory.product_id,
-            func.max(PriceHistory.crawled_at).label("latest"),
-        )
-        .group_by(PriceHistory.product_id)
-        .subquery()
-    )
-    latest_price = (
-        select(
-            PriceHistory.product_id.label("product_id"),
-            PriceHistory.price.label("price_krw"),
-        )
-        .join(
-            latest_sub,
-            (PriceHistory.product_id == latest_sub.c.product_id)
-            & (PriceHistory.crawled_at == latest_sub.c.latest),
-        )
-        .subquery()
-    )
-
     rows = (
         await db.execute(
             select(
@@ -1058,22 +995,25 @@ async def get_multi_channel_products(
                 func.min(Product.name).label("product_name"),
                 func.min(Product.image_url).label("image_url"),
                 func.count(func.distinct(Product.channel_id)).label("channel_count"),
-                func.min(latest_price.c.price_krw).label("min_price"),
-                func.max(latest_price.c.price_krw).label("max_price"),
+                func.min(Product.price_krw).label("min_price"),
+                func.max(Product.price_krw).label("max_price"),
             )
-            .outerjoin(latest_price, latest_price.c.product_id == Product.id)
-            .where(Product.product_key.isnot(None), Product.is_active == True)
+            .where(
+                Product.product_key.isnot(None),
+                Product.is_active == True,
+                Product.price_krw.is_not(None),
+            )
             .group_by(Product.product_key)
             .having(func.count(func.distinct(Product.channel_id)) >= min_channels)
-            .having(func.min(latest_price.c.price_krw).isnot(None))
-            .having(func.min(latest_price.c.price_krw) >= 10_000)
+            .having(func.min(Product.price_krw).isnot(None))
+            .having(func.min(Product.price_krw) >= 10_000)
             .order_by(
-                desc(func.max(latest_price.c.price_krw) - func.min(latest_price.c.price_krw))
+                desc(func.max(Product.price_krw) - func.min(Product.price_krw))
                 if sort == "spread"
                 else (
                     desc(func.count(func.distinct(Product.channel_id)))
                     if sort == "channels"
-                    else func.min(latest_price.c.price_krw)
+                    else func.min(Product.price_krw)
                 ),
             )
             .limit(limit)

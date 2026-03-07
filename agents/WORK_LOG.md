@@ -9,6 +9,9 @@
 
 ## 기록
 
+- 2026-03-08 11:35:00 | agent:codex-dev | task:T-20260308-100 | action:complete | message:PRODUCT_PRICE_SNAPSHOT_01 완료: products 현재가 스냅샷 컬럼과 백필 Alembic 추가, 크롤 저장 및 세일/비교/랭킹 조회를 products.price_* 기준으로 전환.
+- 2026-03-08 11:35:00 | agent:codex-dev | task:T-20260308-101 | action:complete | message:ACTIVITY_FEED_01 완료: activity_feed 모델/마이그레이션 추가, `/feed` API를 activity_feed 실데이터 기반으로 전환.
+- 2026-03-08 11:35:00 | agent:codex-dev | task:T-20260308-102 | action:complete | message:WATCH_AGENT_01 완료: watch_agent를 추가해 채널 크롤 직후 sale_start/new_drop/price_cut 이벤트를 activity_feed에 자동 적재하고 `--no-watch` 플래그를 연결.
 - 2026-02-26 23:30:00 | agent:codex-dev | task:T-20260226-001 | action:complete | message:Issue 01 완료 및 보고서 작성
 - 2026-02-26 23:30:30 | agent:codex-dev | task:T-20260226-002 | action:complete | message:Issue 02 완료 및 검증
 - 2026-02-26 23:31:00 | agent:codex-dev | task:T-20260226-003 | action:complete | message:Issue 03 완료 및 검증

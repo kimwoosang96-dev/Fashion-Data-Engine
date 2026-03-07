@@ -1,7 +1,8 @@
 from datetime import datetime
+from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from sqlalchemy import String, Boolean, DateTime, ForeignKey, Text
+from sqlalchemy import String, Boolean, DateTime, ForeignKey, Text, Integer, Numeric, SmallInteger
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from fashion_engine.database import Base
@@ -35,6 +36,14 @@ class Product(Base):
     image_url: Mapped[str | None] = mapped_column(String(1000))
     tags: Mapped[str | None] = mapped_column(Text)  # JSON 문자열 저장
     description: Mapped[str | None] = mapped_column(Text)
+
+    price_krw: Mapped[int | None] = mapped_column(Integer, index=True)
+    original_price_krw: Mapped[int | None] = mapped_column(Integer)
+    discount_rate: Mapped[int | None] = mapped_column(SmallInteger)
+    currency: Mapped[str | None] = mapped_column(String(3))
+    raw_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
+    price_updated_at: Mapped[datetime | None] = mapped_column(DateTime)
+    sale_started_at: Mapped[datetime | None] = mapped_column(DateTime, index=True)
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_new: Mapped[bool] = mapped_column(Boolean, default=False)                     # 신상품 여부

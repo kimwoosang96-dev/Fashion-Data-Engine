@@ -53,6 +53,7 @@ from fashion_engine.services.product_service import (
 )
 from fashion_engine.services.channel_service import update_platform
 from fashion_engine.services.catalog_service import build_catalog_incremental
+from watch_agent import run_channel_watch
 from fashion_engine.services.intel_service import upsert_derived_product_event
 from fashion_engine.services.alert_service import (
     AlertPayload,
@@ -289,6 +290,7 @@ async def _save_channel_products_sqlite(
             db,
             channel.id,
             info,
+            rate,
             brand_id=brand_id,
             existing=existing_row,
         )
@@ -406,6 +408,7 @@ async def _save_channel_products_postgres(
         row, is_new, sale_just_started, availability_transition = build_product_upsert_row(
             channel_id=channel.id,
             info=info,
+            rate_to_krw=rate,
             brand_id=brand_id,
             existing=existing_row,
             now=row_now,
@@ -594,6 +597,19 @@ async def run_channel_post_commit_pipeline(
                     await price_drop_alert(job.payload)
         except Exception as exc:
             logger.warning("channel post-commit alerts failed channel=%s: %s", channel.name, exc)
+
+
+async def run_channel_watch_pipeline(
+    *,
+    channel: Channel,
+    run_id: int,
+) -> None:
+    try:
+        inserted = await run_channel_watch(channel.id, run_id)
+        if inserted:
+            console.print(f"[dim][WATCH][/dim] {channel.name} activity_feed +{inserted}")
+    except Exception as exc:
+        logger.warning("channel watch failed channel=%s: %s", channel.name, exc)
 
 
 async def run_post_commit_pipeline(
@@ -854,6 +870,7 @@ def main(
     no_alerts: bool = typer.Option(False, "--no-alerts", help="Discord 알림 비활성화"),
     skip_catalog: bool = typer.Option(False, "--skip-catalog", help="크롤 완료 후 catalog 증분 빌드 생략"),
     no_intel: bool = typer.Option(False, "--no-intel", help="크롤 완료 후 intel ingest 자동 실행 비활성화"),
+    no_watch: bool = typer.Option(False, "--no-watch", help="크롤 완료 후 activity_feed 감지 비활성화"),
     concurrency: int = typer.Option(
         2, help="동시 처리 채널 수 (기본 2, Shopify rate-limit 방지)"
     ),
@@ -868,6 +885,7 @@ def main(
             no_alerts,
             skip_catalog,
             no_intel,
+            no_watch,
             concurrency,
         )
     )
@@ -882,6 +900,7 @@ async def run(
     no_alerts: bool,
     skip_catalog: bool,
     no_intel: bool,
+    no_watch: bool,
     concurrency: int = 5,
 ) -> None:
     console.print("[bold blue]Fashion Data Engine — 제품 가격 크롤링[/bold blue]\n")
@@ -971,6 +990,8 @@ async def run(
         work = raw.get("post_commit_work")
         if work and (work.derived_events or work.alert_jobs):
             await run_channel_post_commit_pipeline(channel=ch, work=work)
+        if not no_watch and not raw.get("error"):
+            await run_channel_watch_pipeline(channel=ch, run_id=run_id)
 
     # CrawlRun 완료 처리
     total_upserted = 0

@@ -149,6 +149,12 @@ class ProductOut(BaseModel):
     subcategory: str | None
     url: str
     image_url: str | None
+    price_krw: int | None = None
+    original_price_krw: int | None = None
+    discount_rate: int | None = None
+    currency: str | None = None
+    price_updated_at: datetime | None = None
+    sale_started_at: datetime | None = None
     is_sale: bool
     is_active: bool
     archived_at: datetime | None
@@ -493,7 +499,7 @@ class ActivityFeedItemOut(BaseModel):
     source_url: str | None
     image_url: str | None
     product_key: str | None
-    detected_at: str
+    detected_at: datetime
 
 
 class AdminDraftChannelOut(BaseModel):

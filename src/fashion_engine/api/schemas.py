@@ -227,27 +227,6 @@ class PriceComparisonOut(BaseModel):
     total_listings: int
 
 
-class PriceHistoryPoint(BaseModel):
-    date: str
-    price_krw: int
-    is_sale: bool
-
-
-class ChannelPriceHistory(BaseModel):
-    channel_name: str
-    history: list[PriceHistoryPoint]
-
-
-class PriceBadgeOut(BaseModel):
-    product_key: str
-    current_min_krw: int | None
-    historical_min_krw: int | None
-    historical_min_date: str | None
-    is_all_time_low: bool
-    discount_from_historical_high_pct: int | None
-    price_position: str
-
-
 class ProductKeyOut(BaseModel):
     product_key: str
 
@@ -501,6 +480,32 @@ class ChannelNoteCreate(BaseModel):
     note_type: str = "observation"
     body: str
     operator: str = "admin"
+
+
+class ActivityFeedItemOut(BaseModel):
+    id: int
+    event_type: str
+    product_name: str | None
+    brand_name: str | None
+    channel_name: str | None
+    price_krw: int | None
+    discount_rate: int | None
+    source_url: str | None
+    image_url: str | None
+    product_key: str | None
+    detected_at: str
+
+
+class AdminDraftChannelOut(BaseModel):
+    id: int
+    name: str
+    url: str
+    channel_type: str | None
+    platform: str | None
+    country: str | None
+    description: str | None
+    created_at: datetime
+    product_count: int
 
 
 # ── ProductCatalog 스키마 ────────────────────────────────────────────────────

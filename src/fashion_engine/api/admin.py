@@ -34,6 +34,7 @@ from fashion_engine.api.schemas import (
     ChannelNoteOut,
     ChannelNoteCreate,
     ChannelSignalOut,
+    AdminDraftChannelOut,
 )
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -846,6 +847,67 @@ async def admin_patch_channel_instagram(
     channel.instagram_url = (payload.get("instagram_url") or None)
     await db.commit()
     return {"ok": True, "id": channel.id, "instagram_url": channel.instagram_url}
+
+
+@router.get("/channels", response_model=list[AdminDraftChannelOut])
+async def list_admin_channels(
+    status: str = Query("all", pattern="^(all|draft)$"),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = (
+        select(
+            Channel.id,
+            Channel.name,
+            Channel.url,
+            Channel.channel_type,
+            Channel.platform,
+            Channel.country,
+            Channel.description,
+            Channel.created_at,
+            func.count(Product.id).label("product_count"),
+        )
+        .outerjoin(Product, Product.channel_id == Channel.id)
+        .group_by(Channel.id)
+        .order_by(Channel.created_at.desc(), Channel.id.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    if status == "draft":
+        stmt = stmt.where(Channel.is_active == False)  # noqa: E712
+    rows = (await db.execute(stmt)).all()
+    return [
+        {
+            "id": int(row.id),
+            "name": row.name,
+            "url": row.url,
+            "channel_type": row.channel_type,
+            "platform": row.platform,
+            "country": row.country,
+            "description": row.description,
+            "created_at": row.created_at,
+            "product_count": int(row.product_count or 0),
+        }
+        for row in rows
+    ]
+
+
+@router.patch("/channels/{channel_id}/activate")
+async def activate_admin_channel(
+    channel_id: int,
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    channel = (
+        await db.execute(select(Channel).where(Channel.id == channel_id))
+    ).scalar_one_or_none()
+    if not channel:
+        raise HTTPException(status_code=404, detail="channel not found")
+    channel.is_active = True
+    await db.commit()
+    return {"ok": True, "id": channel.id, "is_active": channel.is_active}
 
 
 # ── 크롤 모니터 ───────────────────────────────────────────────────────────────

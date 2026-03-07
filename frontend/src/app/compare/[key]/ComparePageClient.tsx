@@ -1,61 +1,19 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { getPriceHistory } from "@/lib/api";
-import type { PriceBadge, PriceComparison, PriceComparisonItem, ChannelPriceHistory } from "@/lib/types";
-import { PriceHistoryChart } from "@/components/PriceHistoryChart";
-import { PriceBadge as PriceBadgeChip } from "@/components/PriceBadge";
-
-const PERIODS = [
-  { label: "30일", value: 30 as const },
-  { label: "90일", value: 90 as const },
-  { label: "전체", value: 0 as const },
-];
+import type { PriceComparison, PriceComparisonItem } from "@/lib/types";
 
 function fmt(n: number) {
   return `₩${n.toLocaleString("ko-KR")}`;
 }
 
 export function ComparePageClient({
-  productKey,
   initialData,
-  initialBadge,
 }: {
-  productKey: string;
   initialData: PriceComparison;
-  initialBadge: PriceBadge | null;
 }) {
   const router = useRouter();
-  const [history, setHistory] = useState<ChannelPriceHistory[]>([]);
-  const [days, setDays] = useState<30 | 90 | 0>(30);
-  const [historyLoading, setHistoryLoading] = useState(true);
-  const [historyError, setHistoryError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    setHistoryLoading(true);
-    setHistoryError(null);
-    getPriceHistory(productKey, days)
-      .then((res) => {
-        if (!cancelled) setHistory(res);
-      })
-      .catch((error: Error) => {
-        if (!cancelled) setHistoryError(error.message);
-      })
-      .finally(() => {
-        if (!cancelled) setHistoryLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [days, productKey]);
-
-  const historicalLowest = useMemo(() => {
-    const values = history.flatMap((channel) => channel.history.map((point) => point.price_krw));
-    return values.length > 0 ? Math.min(...values) : null;
-  }, [history]);
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-6">
@@ -77,7 +35,6 @@ export function ComparePageClient({
             </p>
             <p className="mt-1 font-mono text-xs text-gray-400">{initialData.product_key}</p>
           </div>
-          <PriceBadgeChip productKey={initialData.product_key} detailed initialData={initialBadge} />
         </div>
       </div>
 
@@ -109,11 +66,6 @@ export function ComparePageClient({
                 <div className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
                   판매 채널 {initialData.total_listings}곳
                 </div>
-                {historicalLowest != null && (
-                  <div className="rounded-full bg-gray-900 px-3 py-1 text-xs font-medium text-white">
-                    역대 최저가 {fmt(historicalLowest)}
-                  </div>
-                )}
               </div>
             </div>
           </div>
@@ -146,40 +98,6 @@ export function ComparePageClient({
                 </div>
               ))}
           </div>
-        </div>
-      </section>
-
-      <section className="rounded-2xl border border-gray-200 bg-white p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-base font-semibold text-gray-900">가격 추이 차트</h2>
-            <p className="text-sm text-gray-500">채널별 KRW 가격 변화와 현재 포지션을 함께 봅니다.</p>
-          </div>
-          <div className="flex gap-2">
-            {PERIODS.map((period) => (
-              <button
-                key={period.label}
-                type="button"
-                onClick={() => setDays(period.value)}
-                className={`rounded-full px-3 py-1.5 text-xs font-medium ${
-                  days === period.value
-                    ? "bg-gray-900 text-white"
-                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                }`}
-              >
-                {period.label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="mt-5">
-          {historyLoading ? (
-            <p className="text-sm text-gray-400">가격 차트를 불러오는 중...</p>
-          ) : historyError ? (
-            <p className="text-sm text-red-500">{historyError}</p>
-          ) : (
-            <PriceHistoryChart data={history} />
-          )}
         </div>
       </section>
 

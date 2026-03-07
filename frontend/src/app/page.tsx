@@ -193,7 +193,6 @@ export default function DashboardPage() {
                 priceKrw={p.price_krw}
                 originalPriceKrw={p.original_price_krw ?? undefined}
                 discountRate={p.discount_rate ?? undefined}
-                showPriceBadge
               />
             ))}
           </div>

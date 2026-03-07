@@ -1,11 +1,11 @@
 import type {
   Product, PriceComparison, Brand, Purchase, PurchaseInput,
   Score, PurchaseStats, WatchListItem, Drop, Channel,
-  SaleHighlight, ChannelHighlight, BrandHighlight, ChannelPriceHistory,
-  SaleFilters, PriceBadge, ProductRankingItem, BrandRankingItem,
+  SaleHighlight, ChannelHighlight, BrandHighlight,
+  SaleFilters, ProductRankingItem, BrandRankingItem,
   AdminStats, AdminChannelHealth, AdminCrawlStatus, ChannelSignalOut,
   FashionNews, CollabItem, BrandDirector, DirectorsByBrand, AdminCollabItem, AdminAuditItem, MultiChannelProduct,
-  CrawlRunOut, CrawlRunDetail, ChannelNoteOut,
+  CrawlRunOut, CrawlRunDetail, ChannelNoteOut, ActivityFeedItem, AdminDraftChannel,
   IntelEvent, IntelEventsPage, IntelMapPoint, IntelTimelineOut, AdminIntelStatus,
 } from "./types";
 
@@ -65,14 +65,6 @@ export const getSaleCount = (filters?: SaleFilters) =>
       const q = salesFilterQuery(filters).replace(/^&/, "");
       return q ? `/products/sales-count?${q}` : "/products/sales-count";
     })()
-  );
-export const getPriceHistory = (productKey: string, days = 30) =>
-  apiFetch<ChannelPriceHistory[]>(
-    `/products/price-history/${encodeURIComponent(productKey)}?days=${days}`
-  );
-export const getPriceBadge = (productKey: string, days = 90) =>
-  apiFetch<PriceBadge>(
-    `/products/price-badge/${encodeURIComponent(productKey)}?days=${days}`
   );
 export const getProductKeys = (limit = 0) =>
   apiFetch<Array<{ product_key: string }>>(`/products/keys?limit=${limit}`);
@@ -255,6 +247,17 @@ export const getAdminBrandChannelAudit = (token: string, limit = 200) =>
     `/admin/brand-channel-audit?limit=${limit}`,
     token
   );
+export const getAdminDraftChannels = (token: string, limit = 100, offset = 0) =>
+  adminFetch<AdminDraftChannel[]>(
+    `/admin/channels?status=draft&limit=${limit}&offset=${offset}`,
+    token
+  );
+export const activateAdminChannel = (token: string, channelId: number) =>
+  adminFetch<{ ok: boolean; id: number; is_active: boolean }>(
+    `/admin/channels/${channelId}/activate`,
+    token,
+    { method: "PATCH" }
+  );
 
 // ── News / Collabs ───────────────────────────────────────────────────────
 export const getBrandNews = (brandSlug: string, limit = 20) =>
@@ -320,6 +323,20 @@ export const getIntelEventDetail = (eventId: number) =>
   apiFetch<IntelEvent & { details_json?: string; sources?: Array<Record<string, unknown>> }>(
     `/intel/events/${eventId}`
   );
+
+export const getActivityFeed = (params?: {
+  event_type?: string;
+  brand_id?: number;
+  limit?: number;
+  offset?: number;
+}) => {
+  const q = new URLSearchParams();
+  if (params?.event_type) q.set("event_type", params.event_type);
+  if (typeof params?.brand_id === "number") q.set("brand_id", String(params.brand_id));
+  if (typeof params?.limit === "number") q.set("limit", String(params.limit));
+  if (typeof params?.offset === "number") q.set("offset", String(params.offset));
+  return apiFetch<ActivityFeedItem[]>(`/feed${q.toString() ? `?${q.toString()}` : ""}`);
+};
 
 export const getAdminIntelStatus = (token: string) =>
   adminFetch<AdminIntelStatus>("/admin/intel-status", token);

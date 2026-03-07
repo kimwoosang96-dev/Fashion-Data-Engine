@@ -13,10 +13,12 @@ import {
   getAdminDirectors,
   getAdminStats,
   getAdminIntelStatus,
+  getAdminDraftChannels,
   getBrands,
   getChannels,
   patchAdminBrandInstagram,
   patchAdminChannelInstagram,
+  activateAdminChannel,
   triggerChannelCrawl,
   triggerAdminCrawl,
   getCrawlRuns,
@@ -37,6 +39,7 @@ import type {
   Channel,
   ChannelSignalOut,
   ChannelNoteOut,
+  AdminDraftChannel,
   CrawlRunOut,
   CrawlRunDetail,
   CrawlChannelLog,
@@ -64,6 +67,7 @@ export default function AdminPage() {
   const [auditItems, setAuditItems] = useState<AdminAuditItem[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [channels, setChannels] = useState<Channel[]>([]);
+  const [draftChannels, setDraftChannels] = useState<AdminDraftChannel[]>([]);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string>("");
   const [crawlRuns, setCrawlRuns] = useState<CrawlRunOut[]>([]);
@@ -121,6 +125,8 @@ export default function AdminPage() {
       setCollabs(k);
       setAuditItems(audit.items);
       setCrawlStatus(crawl);
+      const drafts = await getAdminDraftChannels(adminToken, 200, 0);
+      setDraftChannels(drafts);
       localStorage.setItem("admin_token", adminToken);
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "관리 API 호출 실패");
@@ -343,6 +349,17 @@ export default function AdminPage() {
       }));
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "노트 해결 처리 실패");
+    }
+  };
+
+  const activateDraftChannel = async (channelId: number) => {
+    if (!token.trim()) return;
+    try {
+      await activateAdminChannel(token.trim(), channelId);
+      setDraftChannels((prev) => prev.filter((row) => row.id !== channelId));
+      setMsg(`draft 채널 #${channelId} 활성화 완료`);
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "draft 채널 활성화 실패");
     }
   };
 
@@ -851,6 +868,45 @@ export default function AdminPage() {
       {/* ── 채널 관리 탭 ─────────────────────────────────────────────── */}
       {activeTab === "channels" && (
         <div className="space-y-5">
+          <section className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-semibold">Draft 채널 승인</h2>
+                <p className="text-xs text-gray-500">AI 발굴 또는 수동 등록으로 비활성 상태인 채널입니다.</p>
+              </div>
+              <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs text-gray-600">
+                {draftChannels.length}개
+              </span>
+            </div>
+            {draftChannels.length === 0 ? (
+              <p className="text-sm text-gray-400">승인 대기 중인 draft 채널이 없습니다.</p>
+            ) : (
+              <div className="space-y-2">
+                {draftChannels.map((row) => (
+                  <div key={row.id} className="flex flex-wrap items-start justify-between gap-3 rounded-lg border border-gray-200 p-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-gray-900">{row.name}</p>
+                      <p className="mt-1 text-xs text-gray-500 break-all">{row.url}</p>
+                      <p className="mt-1 text-xs text-gray-500">
+                        {row.country ?? "-"} · {row.platform ?? "unknown"} · {row.channel_type ?? "미분류"} · 제품 {row.product_count}개
+                      </p>
+                      {row.description && (
+                        <p className="mt-1 text-xs text-gray-600">{row.description}</p>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void activateDraftChannel(row.id)}
+                      className="shrink-0 rounded-md bg-gray-900 px-3 py-2 text-xs text-white"
+                    >
+                      활성화
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
           {channelSignals.length > 0 ? (
             <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
               <table className="w-full text-sm">

@@ -198,27 +198,6 @@ export interface BrandHighlight {
   is_selling_new_products: boolean;
 }
 
-export interface PriceHistoryPoint {
-  date: string;
-  price_krw: number;
-  is_sale: boolean;
-}
-
-export interface ChannelPriceHistory {
-  channel_name: string;
-  history: PriceHistoryPoint[];
-}
-
-export interface PriceBadge {
-  product_key: string;
-  current_min_krw: number | null;
-  historical_min_krw: number | null;
-  historical_min_date: string | null;
-  is_all_time_low: boolean;
-  discount_from_historical_high_pct: number | null;
-  price_position: "all_time_low" | "low" | "mid" | "high";
-}
-
 export interface ProductRankingItem {
   product_key: string | null;
   product_name: string;
@@ -418,6 +397,32 @@ export interface ChannelNoteOut {
   operator: string;
   created_at: string;
   resolved_at: string | null;
+}
+
+export interface ActivityFeedItem {
+  id: number;
+  event_type: "sale_start" | "new_drop" | "price_cut" | "sold_out" | "restock";
+  product_name: string | null;
+  brand_name: string | null;
+  channel_name: string | null;
+  price_krw: number | null;
+  discount_rate: number | null;
+  source_url: string | null;
+  image_url: string | null;
+  product_key: string | null;
+  detected_at: string;
+}
+
+export interface AdminDraftChannel {
+  id: number;
+  name: string;
+  url: string;
+  channel_type: string | null;
+  platform: string | null;
+  country: string | null;
+  description: string | null;
+  created_at: string;
+  product_count: number;
 }
 
 export interface IntelEvent {

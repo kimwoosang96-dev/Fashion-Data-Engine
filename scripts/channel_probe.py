@@ -227,6 +227,23 @@ async def _probe_one(client: httpx.AsyncClient, target: ProbeTarget) -> ProbeRes
         )
 
 
+async def probe_channel(url: str, name: str | None = None) -> ProbeResult:
+    """단일 URL 접근성/플랫폼 프로브."""
+    async with httpx.AsyncClient(
+        follow_redirects=True,
+        headers={"User-Agent": "Mozilla/5.0 channel-probe"},
+    ) as client:
+        return await _probe_one(
+            client,
+            ProbeTarget(
+                channel_id=0,
+                name=name or url,
+                url=url,
+                platform=None,
+            ),
+        )
+
+
 async def _load_targets(*, include_all: bool, force_retag: bool) -> tuple[list[ProbeTarget], int]:
     async with AsyncSessionLocal() as db:
         stmt = (

@@ -2,7 +2,6 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { PriceBadge } from "@/components/PriceBadge";
 import type { Product } from "@/lib/types";
 
 const krw = (n: number) => `₩${n.toLocaleString()}`;
@@ -13,7 +12,6 @@ interface Props {
   priceKrw?: number;
   originalPriceKrw?: number;
   discountRate?: number;
-  showPriceBadge?: boolean;
 }
 
 export function ProductCard({
@@ -22,7 +20,6 @@ export function ProductCard({
   priceKrw,
   originalPriceKrw,
   discountRate,
-  showPriceBadge = false,
 }: Props) {
   const hasCompare = !!product.product_key;
   const isSoldOut = !product.is_active;
@@ -43,11 +40,6 @@ export function ProductCard({
       <CardContent className="p-3">
         <p className="text-xs text-gray-500 mb-1 truncate">{channelName ?? ""}</p>
         <p className="text-sm font-medium leading-snug line-clamp-2">{product.name}</p>
-        {showPriceBadge && (
-          <div className="mt-2">
-            <PriceBadge productKey={product.product_key} />
-          </div>
-        )}
         <div className="flex items-center gap-2 mt-2">
           {priceKrw != null && (
             <span className="text-sm font-bold">{krw(priceKrw)}</span>

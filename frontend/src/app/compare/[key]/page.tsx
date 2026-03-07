@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getPriceBadge, getPriceComparison } from "@/lib/api";
+import { getPriceComparison } from "@/lib/api";
 import { ComparePageClient } from "./ComparePageClient";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
@@ -20,7 +20,7 @@ export async function generateMetadata(
       description: `${data.brand_name ? `${data.brand_name} ` : ""}${data.product_name} · ${data.total_listings}개 채널 최저가 ${minPriceText}`,
       openGraph: {
         title: `${data.product_name} 최저가 비교 | 패션 다나와`,
-        description: `${data.total_listings}개 채널 가격 비교와 가격 추이 차트`,
+        description: `${data.total_listings}개 채널 실시간 가격 비교`,
         url: `${SITE_URL}/compare/${encodeURIComponent(decodedKey)}`,
         images: data.image_url ? [{ url: data.image_url }] : undefined,
       },
@@ -42,8 +42,6 @@ export default async function ComparePage(
   if (!data) {
     notFound();
   }
-
-  const priceBadge = await getPriceBadge(decodedKey).catch(() => null);
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Product",
@@ -69,7 +67,7 @@ export default async function ComparePage(
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <ComparePageClient productKey={decodedKey} initialData={data} initialBadge={priceBadge} />
+      <ComparePageClient initialData={data} />
     </>
   );
 }

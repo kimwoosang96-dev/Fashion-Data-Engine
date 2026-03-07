@@ -6,6 +6,7 @@ const links = [
   { href: "/", label: "대시보드", icon: "📊" },
   { href: "/intel", label: "Intel Hub", icon: "🧭" },
   { href: "/sales", label: "세일 제품", icon: "🔥" },
+  { href: "/feed", label: "실시간 피드", icon: "⚡" },
   { href: "/ranking", label: "랭킹", icon: "🏁" },
   { href: "/drops", label: "드롭", icon: "🚀" },
   { href: "/compete", label: "경쟁", icon: "⚔️" },

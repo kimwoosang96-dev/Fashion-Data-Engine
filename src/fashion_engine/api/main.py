@@ -18,6 +18,7 @@ from fashion_engine.api.news import router as news_router
 from fashion_engine.api.directors import router as directors_router
 from fashion_engine.api.catalog import router as catalog_router
 from fashion_engine.api.intel import router as intel_router
+from fashion_engine.api.feed import router as feed_router
 
 
 @asynccontextmanager
@@ -51,6 +52,7 @@ app.include_router(news_router)
 app.include_router(directors_router)
 app.include_router(catalog_router)
 app.include_router(intel_router)
+app.include_router(feed_router)
 
 
 @app.get("/")

@@ -8,9 +8,7 @@ from fashion_engine.api.schemas import (
     PriceComparisonOut,
     PriceComparisonItem,
     SaleHighlightOut,
-    ChannelPriceHistory,
     MultiChannelProductOut,
-    PriceBadgeOut,
     ProductKeyOut,
     ProductRankingOut,
 )
@@ -121,28 +119,6 @@ async def compare_prices(
         raise HTTPException(status_code=404, detail=f"Product not found: {product_key}")
     comparison["listings"] = [PriceComparisonItem(**item) for item in comparison["listings"]]
     return PriceComparisonOut(**comparison)
-
-
-@router.get("/price-history/{product_key:path}", response_model=list[ChannelPriceHistory])
-async def get_product_price_history(
-    product_key: str,
-    days: int = Query(30, ge=0, le=3650),
-    db: AsyncSession = Depends(get_db),
-):
-    """제품 가격 히스토리 (채널별 시계열)."""
-    return await product_service.get_price_history(db, product_key=product_key, days=days)
-
-
-@router.get("/price-badge/{product_key:path}", response_model=PriceBadgeOut)
-async def get_product_price_badge(
-    product_key: str,
-    days: int = Query(90, ge=7, le=3650),
-    db: AsyncSession = Depends(get_db),
-):
-    badge = await product_service.get_price_badge(db, product_key=product_key, days=days)
-    if not badge:
-        raise HTTPException(status_code=404, detail=f"Price badge not found: {product_key}")
-    return PriceBadgeOut(**badge)
 
 
 @router.get("/keys", response_model=list[ProductKeyOut])

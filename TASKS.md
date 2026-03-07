@@ -714,7 +714,7 @@ if __name__ == "__main__":
 
 ---
 
-## 구현 순서 요약
+## 구현 순서 요약 (T-081~T-093)
 
 ```
 즉시 (독립):
@@ -732,4 +732,339 @@ if __name__ == "__main__":
 
 이후:
   T-092 (Custom GPT) → T-088 (PWA 푸시)
+```
+
+---
+
+# 과업지시서 (T-094 ~ T-100)
+
+> T-081~T-093 완료 후 다음 단계. 사용자 경험 고도화 및 인텔 수집 채널 확장.
+> 비용 없이 운영 가능한 것을 우선 배치.
+
+---
+
+## T-094: Custom GPT / OpenClaw OAuth 연동 검증
+
+**목표:** 구현된 OAuth2 서버가 실제 Custom GPT Actions 및 OpenClaw와 정상 연동되는지 검증.
+
+**선행 조건:** Railway 배포 완료, `ADMIN_BEARER_TOKEN` 설정됨
+
+**작업 내용:**
+
+1. **Railway 배포 확인:**
+   - `/oauth/authorize` 엔드포인트 접근 확인
+   - `/oauth/token` 엔드포인트 응답 확인
+   ```bash
+   curl https://fashion-data-engine-production.up.railway.app/oauth/authorize \
+     "?client_id=test&redirect_uri=https://example.com&response_type=code"
+   # → HTML 승인 폼 반환 확인
+   ```
+
+2. **Custom GPT Actions 설정 (ChatGPT UI):**
+   - 내 GPT 만들기 → Actions → `openapi_gpt_actions.yaml` 임포트
+   - Authentication: OAuth 선택
+   - Client ID: `fashion-data-engine`
+   - Client Secret: `ADMIN_BEARER_TOKEN` 값
+   - Authorization URL: `https://fashion-data-engine-production.up.railway.app/oauth/authorize`
+   - Token URL: `https://fashion-data-engine-production.up.railway.app/oauth/token`
+   - Scope: `feed:write`
+   - GPT 저장 후 "연결" 버튼 클릭 → 승인 폼에서 토큰 입력 → 연결 완료
+
+3. **Custom GPT Instructions 작성:**
+   ```
+   너는 패션 정보 수집 비서다. 사용자가 세일, 신제품, 가격 변동 정보를 말하면
+   /feed/ingest API를 통해 activity_feed에 자동으로 기록한다.
+
+   기록 시 규칙:
+   - event_type: sale_start(세일 시작), new_drop(신제품), price_cut(가격 인하), sold_out(품절)
+   - source_url: 반드시 실제 상품 URL 포함
+   - brand_slug: 브랜드 영문 slug (palace, stussy, stone-island 등)
+   - price_krw: KRW 기준 가격 (외화면 환산)
+   - detected_at: 현재 시각 (ISO 8601)
+
+   브라우징으로 직접 확인한 정보만 기록. 추측 금지.
+   ```
+
+4. **OpenClaw 연동 (선택):**
+   - OpenClaw 설치 후 HTTP 스킬 추가
+   - Bearer 토큰 획득: OAuth 흐름 완료 후 발급된 토큰 사용
+   - `/feed/ingest` POST 스킬 정의
+
+**완료 기준:**
+- Custom GPT에서 `POST /feed/ingest` 호출 → Railway DB `activity_feed` 레코드 생성 확인
+- `GET /feed`에서 GPT가 기록한 이벤트 조회 확인
+
+---
+
+## T-095: 검색 자동완성 (Autocomplete)
+
+**목표:** 검색창에서 타이핑 시 브랜드명·제품명 자동완성 드롭다운 표시.
+
+**선행 조건:** 없음
+
+**작업 내용:**
+
+1. `src/fashion_engine/api/products.py` — 자동완성 엔드포인트 추가:
+```python
+@router.get("/search/suggestions")
+async def search_suggestions(
+    q: str = Query(..., min_length=1, max_length=50),
+    limit: int = Query(8, le=20),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    브랜드명 + 제품명 조합 자동완성.
+    반환: [{ type: 'brand'|'product', label: str, slug?: str, product_key?: str }]
+    """
+```
+
+2. 쿼리 로직:
+   - `q`로 브랜드명 prefix 매칭 (최대 4개)
+   - `q`로 제품명 ilike 매칭 (최대 4개)
+   - 브랜드 먼저, 제품 후 순서로 반환
+   - 응답 캐시: `Cache-Control: max-age=60`
+
+3. `frontend/src/components/SearchBar.tsx` (또는 기존 검색 컴포넌트):
+   - 입력 300ms 디바운스 후 `/products/search/suggestions?q=` 호출
+   - 드롭다운 렌더링: 브랜드는 아이콘 + 이름, 제품은 이름 + 채널
+   - 키보드 탐색 (↑↓ Enter Esc)
+   - 선택 시 해당 페이지로 이동 (브랜드 → `/brands/{slug}`, 제품 → 검색결과)
+
+**완료 기준:**
+- "pal" 입력 → "Palace", "Palmes" 등 브랜드 자동완성 표시
+- "box logo" 입력 → 관련 제품명 자동완성 표시
+- 키보드 탐색 동작 확인
+
+---
+
+## T-096: 드롭 캘린더 페이지 (/drops/calendar)
+
+**목표:** 예정 드롭 및 세일 일정을 캘린더 형태로 시각화. intel_events 기반.
+
+**선행 조건:** intel_events 테이블에 `drops` 레이어 데이터 존재
+
+**작업 내용:**
+
+1. `src/fashion_engine/api/drops.py` — 캘린더 데이터 엔드포인트 추가:
+```python
+@router.get("/calendar")
+async def drops_calendar(
+    year: int = Query(...),
+    month: int = Query(..., ge=1, le=12),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    해당 월의 드롭/세일 이벤트를 날짜별로 그룹화해 반환.
+    반환: { "2026-03-15": [{ brand_name, title, event_type, source_url }], ... }
+    """
+    # intel_events WHERE layer='drops' AND event_date BETWEEN 월 시작~끝
+    # activity_feed WHERE event_type='new_drop' AND detected_at BETWEEN 월 시작~끝
+```
+
+2. `frontend/src/app/drops/calendar/page.tsx` 생성:
+   - 월 달력 그리드 (CSS Grid 7열)
+   - 각 날짜 셀에 이벤트 배지 (브랜드명 + 색상)
+   - 날짜 클릭 → 해당 날의 드롭 목록 슬라이드 패널
+   - 월 이동 (← →) 버튼
+   - 모바일: 달력 대신 날짜순 목록으로 fallback
+
+3. `frontend/src/lib/api.ts` — `getDropsCalendar(year, month)` 함수 추가
+
+**완료 기준:**
+- `/drops/calendar` 페이지 렌더링
+- intel_events drops 레이어 데이터 날짜별 표시 확인
+- 월 이동 동작 확인
+
+---
+
+## T-097: 세일 히트맵 (브랜드 × 채널)
+
+**목표:** 어느 브랜드가 어느 채널에서 세일 중인지 한눈에 파악하는 히트맵 뷰.
+
+**선행 조건:** T-081 완료 (products.discount_rate 존재)
+
+**작업 내용:**
+
+1. `src/fashion_engine/api/brands.py` — 히트맵 데이터 엔드포인트:
+```python
+@router.get("/heatmap")
+async def brands_heatmap(
+    tier: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    브랜드 × 채널 세일 히트맵.
+    반환: {
+      brands: [{ id, name, slug }],
+      channels: [{ id, name, country }],
+      cells: [{ brand_id, channel_id, discount_rate, product_count }]
+    }
+    """
+    # 세일 중인 products JOIN brands JOIN channels
+    # brand × channel 조합별 avg(discount_rate), count(products)
+```
+
+2. `frontend/src/app/brands/heatmap/page.tsx` 생성:
+   - X축: 채널 (국가별 색상 구분)
+   - Y축: 브랜드 (tier 기준 정렬)
+   - 셀 색상: 할인율에 따른 그라디언트 (흰색 → 빨간색)
+   - 셀 hover: 툴팁 (제품 수, 평균 할인율, [보러가기] 링크)
+   - 필터: 티어 선택, 채널 국가 필터
+
+3. 성능 고려:
+   - 데이터 양이 많으면 상위 30 브랜드 × 상위 20 채널로 제한
+   - `Cache-Control: max-age=300` (5분 캐시)
+
+**완료 기준:**
+- `/brands/heatmap` 페이지 렌더링
+- 세일 중인 브랜드×채널 조합 시각화 확인
+- hover 툴팁 동작 확인
+
+---
+
+## T-098: 가격 알림 — 특정 제품 모니터링
+
+**목표:** 사용자가 특정 제품을 "찜"하면 가격 인하/세일 시작 시 알림 발송.
+
+**선행 조건:** T-088 완료 (웹 푸시 인프라), activity_feed 운영 중
+
+**작업 내용:**
+
+1. `watchlist` 테이블 (이미 존재 여부 확인 후 필요 시 확장):
+```sql
+-- 기존 watchlist에 target_price 컬럼 추가
+ALTER TABLE watchlist ADD COLUMN target_price INTEGER;
+-- target_price: 이 가격 이하로 떨어지면 알림 (NULL = 세일 시작만 알림)
+```
+
+2. `src/fashion_engine/services/watch_agent.py` — 알림 트리거 로직:
+```python
+async def notify_watchlist_users(db, product_id: int, event_type: str, price_krw: int):
+    """
+    특정 제품의 세일 시작/가격 인하 시 해당 제품 watchlist 구독자에게 알림.
+    - target_price IS NULL → 세일 시작 이벤트 시 무조건 알림
+    - target_price IS NOT NULL → price_krw <= target_price 시에만 알림
+    """
+```
+
+3. `frontend/src/app/products/[key]/page.tsx` 또는 제품 카드:
+   - [알림 설정] 버튼 → 모달
+   - "세일 시작 시 알림" 토글
+   - "목표 가격 입력" 필드 (선택)
+   - 웹 푸시 구독 요청 포함
+
+4. 알림 발송:
+   - `scripts/watch_agent.py`에서 `activity_feed` 이벤트 감지 후 watchlist 조회
+   - 해당 제품 watchlist에 있는 push 구독자에게 발송
+   - 알림 내용: "Palace Box Logo Tee 세일 시작 — ₩62,300 (30% OFF)"
+
+**완료 기준:**
+- 제품 watchlist 등록 → 해당 제품 세일 시작 이벤트 발생 → 푸시 알림 수신 확인
+- target_price 설정 후 해당 가격 이하 도달 시 알림 확인
+
+---
+
+## T-099: 관리자 대시보드 고도화
+
+**목표:** 운영 현황을 한눈에 파악할 수 있는 관리자 대시보드 추가 지표.
+
+**선행 조건:** 없음 (독립 실행 가능)
+
+**작업 내용:**
+
+1. `GET /admin/intel-status` 기존 응답에 추가:
+```python
+{
+  # 기존 필드 유지
+  "activity_feed_24h": int,        # 최근 24시간 이벤트 수
+  "activity_feed_by_type": dict,   # { sale_start: N, new_drop: N, ... }
+  "gpt_parser_usage": {            # GPT 파서 사용 채널 수
+    "enabled_channels": int,
+    "last_24h_calls": int,
+  },
+  "oauth_active": bool,            # OAuth 서버 동작 여부
+  "top_active_brands": [           # 최근 72시간 activity 많은 브랜드 5개
+    { brand_name, event_count }
+  ],
+}
+```
+
+2. `frontend/src/app/admin/page.tsx` — 대시보드 섹션 추가:
+   - Activity Feed 현황 (24시간 이벤트 수, 타입별 분포 바 차트)
+   - 가장 활발한 브랜드 TOP 5
+   - OAuth 연결 상태 표시
+
+3. `GET /admin/crawl-runs` 응답에 `gpt_fallback_count` 추가:
+   - 해당 크롤런에서 GPT 파서 fallback 발동 횟수
+
+**완료 기준:**
+- `/admin` 페이지에서 새 지표 표시 확인
+- activity_feed 통계 정확성 확인
+
+---
+
+## T-100: 채널 커버리지 리포트 자동화
+
+**목표:** 크롤 불가 채널·수집률 저조 채널을 자동으로 감지해 관리자에게 보고.
+
+**선행 조건:** 없음
+
+**작업 내용:**
+
+1. `scripts/coverage_report.py` 생성:
+```python
+"""
+채널 커버리지 리포트.
+- 최근 7일간 수집 0건 채널 → dead_channels 목록
+- 수집률 급감 채널 (이전 7일 대비 50%+ 감소) → degraded_channels 목록
+- 신규 채널 후보 (discover_channels 결과 draft 상태) → draft_channels 목록
+
+결과를 Discord로 발송 또는 CSV로 저장.
+"""
+```
+
+2. `scripts/scheduler.py` — 주 1회 자동 실행 (일요일 09:00 기존 데이터 감사와 통합):
+```python
+schedule.every().sunday.at("09:00").do(run_coverage_report)
+```
+
+3. 리포트 형식:
+```
+📊 채널 커버리지 리포트 (2026-03-09)
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+❌ 수집 불가 채널: 3개
+  · shop.example.com (7일째 0건)
+  · ...
+
+⚠️ 수집률 저하 채널: 5개
+  · store.brand.com (이전 120건 → 현재 30건)
+  · ...
+
+📋 승인 대기 draft 채널: 8개
+```
+
+4. `GET /admin/coverage-report` 엔드포인트 추가 (최신 리포트 JSON 반환)
+
+**완료 기준:**
+- `uv run python scripts/coverage_report.py` 실행 → 리포트 출력
+- Discord 웹훅으로 자동 발송 확인
+- 스케줄러에 등록 확인
+
+---
+
+## 구현 순서 요약 (T-094~T-100)
+
+```
+즉시 (독립):
+  T-094 (Custom GPT 연동 검증) — 코드 작업 없음, 설정만
+  T-095 (검색 자동완성)
+  T-099 (관리자 대시보드 고도화)
+
+단기:
+  T-096 (드롭 캘린더)
+  T-097 (세일 히트맵)
+  T-100 (커버리지 리포트)
+
+선행 필요:
+  T-098 (가격 알림) — T-088 PWA 푸시 실동작 후
 ```

@@ -47,7 +47,16 @@ async def get_rate_to_krw(db: AsyncSession, currency: str) -> float | None:
         )
     ).scalar_one_or_none()
     if row:
-        return row.rate
+        rate = row.rate
+        fallback = _FALLBACK_RATES.get(currency.upper())
+        # sanity: DB 환율이 fallback 대비 5배 이상 차이나면 fallback 사용
+        if fallback and (rate > fallback * 5 or rate < fallback / 5):
+            logger.error(
+                "환율 이상값 감지: %s DB=%.4f fallback=%.1f → fallback 적용",
+                currency, rate, fallback,
+            )
+            return fallback
+        return rate
     fallback = _FALLBACK_RATES.get(currency.upper())
     if fallback:
         logger.warning(

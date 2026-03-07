@@ -42,6 +42,34 @@ CURRENCIES = [
 API_URL = "https://open.er-api.com/v6/latest/KRW"
 
 
+# 합리적 환율 범위 (1 외화 → KRW). 이 범위를 벗어나면 DB 저장 중단.
+_RATE_BOUNDS: dict[str, tuple[float, float]] = {
+    "USD": (1000, 2000),
+    "JPY": (6, 15),
+    "EUR": (1200, 2200),
+    "GBP": (1400, 2500),
+    "HKD": (120, 280),
+    "DKK": (150, 350),
+    "SEK": (100, 250),
+    "SGD": (800, 1500),
+    "CAD": (800, 1500),
+    "AUD": (700, 1400),
+    "TWD": (30, 60),
+    "CNY": (140, 280),
+}
+
+
+def _validate_rates(rates: dict[str, float]) -> None:
+    """비정상 환율 값이면 즉시 RuntimeError 발생."""
+    for currency, rate in rates.items():
+        bounds = _RATE_BOUNDS.get(currency)
+        if bounds and not (bounds[0] <= rate <= bounds[1]):
+            raise RuntimeError(
+                f"환율 이상값 감지: {currency} = {rate:.4f} "
+                f"(허용 범위: {bounds[0]}~{bounds[1]}) — DB 저장 중단"
+            )
+
+
 async def fetch_rates() -> dict[str, float]:
     """KRW 기준 환율 조회 → {USD: 0.000735, JPY: 0.1075, ...} 형태로 반환.
     단, DB에는 "1 외화 = X KRW" 형태로 역변환해서 저장.
@@ -68,6 +96,7 @@ async def run() -> None:
     await init_db()
 
     rates = await fetch_rates()
+    _validate_rates(rates)
     fetched_at = datetime.utcnow()
 
     async with AsyncSessionLocal() as db:

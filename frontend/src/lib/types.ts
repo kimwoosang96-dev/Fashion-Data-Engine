@@ -77,6 +77,7 @@ export interface Channel {
   country: string | null;
   instagram_url: string | null;
   poll_priority: number;
+  use_gpt_parser: boolean;
   is_active: boolean;
 }
 
@@ -213,6 +214,9 @@ export interface ProductRankingItem {
   total_channels: number;
   price_drop_pct: number | null;
   price_drop_krw: number | null;
+  sale_started_at: string | null;
+  hours_since_sale_start: number | null;
+  badges: string[];
 }
 
 export interface BrandRankingItem {
@@ -225,6 +229,8 @@ export interface BrandRankingItem {
   avg_discount_rate: number;
   max_discount_rate: number | null;
   active_channel_count: number;
+  event_count_72h: number;
+  latest_event_at: string | null;
 }
 
 export interface FashionNews {
@@ -430,6 +436,7 @@ export interface AdminDraftChannel {
   created_at: string;
   product_count: number;
   poll_priority: number;
+  use_gpt_parser: boolean;
 }
 
 export interface IntelEvent {

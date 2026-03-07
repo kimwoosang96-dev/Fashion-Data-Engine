@@ -1,5 +1,6 @@
 from datetime import datetime
-from pydantic import BaseModel
+from typing import Literal
+from pydantic import BaseModel, Field
 
 
 class ChannelOut(BaseModel):
@@ -11,6 +12,7 @@ class ChannelOut(BaseModel):
     country: str | None
     instagram_url: str | None
     poll_priority: int
+    use_gpt_parser: bool = False
     is_active: bool
 
     model_config = {"from_attributes": True}
@@ -252,6 +254,9 @@ class ProductRankingOut(BaseModel):
     total_channels: int
     price_drop_pct: float | None = None
     price_drop_krw: int | None = None
+    sale_started_at: datetime | None = None
+    hours_since_sale_start: float | None = None
+    badges: list[str] = Field(default_factory=list)
 
 
 class BrandRankingOut(BaseModel):
@@ -264,6 +269,8 @@ class BrandRankingOut(BaseModel):
     avg_discount_rate: float
     max_discount_rate: int | None
     active_channel_count: int
+    event_count_72h: int = 0
+    latest_event_at: datetime | None = None
 
 
 class MultiChannelProductOut(BaseModel):
@@ -504,6 +511,18 @@ class ActivityFeedItemOut(BaseModel):
     detected_at: datetime
 
 
+class FeedIngestIn(BaseModel):
+    event_type: Literal["sale_start", "new_drop", "price_cut", "sold_out", "restock"]
+    brand_slug: str | None = None
+    product_name: str
+    price_krw: int | None = None
+    discount_rate: int | None = None
+    source_url: str
+    image_url: str | None = None
+    notes: str | None = None
+    detected_at: datetime | None = None
+
+
 class AdminDraftChannelOut(BaseModel):
     id: int
     name: str
@@ -515,6 +534,7 @@ class AdminDraftChannelOut(BaseModel):
     created_at: datetime
     product_count: int
     poll_priority: int
+    use_gpt_parser: bool = False
 
 
 # ── ProductCatalog 스키마 ────────────────────────────────────────────────────

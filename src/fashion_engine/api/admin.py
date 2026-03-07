@@ -869,6 +869,7 @@ async def list_admin_channels(
             Channel.country,
             Channel.description,
             Channel.poll_priority,
+            Channel.use_gpt_parser,
             Channel.created_at,
             func.count(Product.id).label("product_count"),
         )
@@ -891,6 +892,7 @@ async def list_admin_channels(
             "country": row.country,
             "description": row.description,
             "poll_priority": int(row.poll_priority or 2),
+            "use_gpt_parser": bool(row.use_gpt_parser),
             "created_at": row.created_at,
             "product_count": int(row.product_count or 0),
         }
@@ -950,6 +952,23 @@ async def patch_admin_channel_webhook_secret(
     channel.webhook_secret = secret or None
     await db.commit()
     return {"ok": True, "id": channel.id, "has_webhook_secret": bool(channel.webhook_secret)}
+
+
+@router.patch("/channels/{channel_id}/use-gpt-parser")
+async def patch_admin_channel_use_gpt_parser(
+    channel_id: int,
+    payload: dict,
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    channel = (
+        await db.execute(select(Channel).where(Channel.id == channel_id))
+    ).scalar_one_or_none()
+    if not channel:
+        raise HTTPException(status_code=404, detail="channel not found")
+    channel.use_gpt_parser = bool(payload.get("use_gpt_parser"))
+    await db.commit()
+    return {"ok": True, "id": channel.id, "use_gpt_parser": channel.use_gpt_parser}
 
 
 # ── 크롤 모니터 ───────────────────────────────────────────────────────────────

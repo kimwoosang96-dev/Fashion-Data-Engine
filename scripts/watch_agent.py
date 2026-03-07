@@ -36,6 +36,7 @@ class FeedEventCandidate:
     source_url: str | None
     image_url: str | None
     detected_at: datetime
+    metadata_json: dict | None = None
 
 
 class WatchAgent:
@@ -85,7 +86,7 @@ class WatchAgent:
                 price_krw=item.price_krw,
                 discount_rate=item.discount_rate,
                 source_url=item.source_url,
-                metadata_json={"image_url": item.image_url} if item.image_url else None,
+                metadata_json=item.metadata_json or ({"image_url": item.image_url} if item.image_url else None),
                 detected_at=item.detected_at,
                 notified=False,
             )
@@ -125,6 +126,7 @@ class WatchAgent:
                 source_url=row.url,
                 image_url=row.image_url,
                 detected_at=row.sale_started_at or row.updated_at or started_at,
+                metadata_json={"image_url": row.image_url} if row.image_url else None,
             )
             for row in rows
         ]
@@ -158,6 +160,7 @@ class WatchAgent:
                 source_url=row.url,
                 image_url=row.image_url,
                 detected_at=row.created_at,
+                metadata_json={"image_url": row.image_url} if row.image_url else None,
             )
             for row in rows
         ]
@@ -230,6 +233,16 @@ class WatchAgent:
                 source_url=row.url,
                 image_url=row.image_url,
                 detected_at=row.detected_at or started_at,
+                metadata_json={
+                    "image_url": row.image_url,
+                    "prev_price_krw": int(row.prev_price) if row.prev_price is not None else None,
+                    "price_drop_krw": int(row.prev_price - row.latest_price)
+                    if row.prev_price is not None and row.latest_price is not None
+                    else None,
+                    "price_drop_pct": round(((row.prev_price - row.latest_price) * 100.0 / row.prev_price), 1)
+                    if row.prev_price not in (None, 0) and row.latest_price is not None
+                    else None,
+                },
             )
             for row in rows
         ]

@@ -12,6 +12,13 @@ function fmt(value: number) {
   return `₩${value.toLocaleString("ko-KR")}`;
 }
 
+function formatSaleStart(hours: number | null) {
+  if (hours == null) return null;
+  if (hours < 1) return "1시간 이내 세일 시작";
+  if (hours < 24) return `${Math.floor(hours)}시간 전 세일 시작`;
+  return `${Math.floor(hours / 24)}일 전 세일 시작`;
+}
+
 export default function RankingPage() {
   const [tab, setTab] = useState<RankingTab>("sale_hot");
   const [saleHot, setSaleHot] = useState<ProductRankingItem[]>([]);
@@ -43,7 +50,7 @@ export default function RankingPage() {
     <div className="space-y-6 p-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">랭킹</h1>
-        <p className="mt-1 text-sm text-gray-500">지금 가장 뜨거운 세일, 급락 상품, 브랜드 강도를 한 번에 봅니다.</p>
+        <p className="mt-1 text-sm text-gray-500">할인율보다 지금의 정보 가치가 높은 상품과 브랜드를 우선 보여줍니다.</p>
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -61,9 +68,9 @@ export default function RankingPage() {
               <tr>
                 <th className="px-4 py-3 text-left font-medium">순위</th>
                 <th className="px-4 py-3 text-left font-medium">브랜드</th>
+                <th className="px-4 py-3 text-right font-medium">72h 이벤트</th>
                 <th className="px-4 py-3 text-right font-medium">세일 제품</th>
                 <th className="px-4 py-3 text-right font-medium">평균 할인율</th>
-                <th className="px-4 py-3 text-right font-medium">최대 할인율</th>
                 <th className="px-4 py-3 text-right font-medium">채널 수</th>
               </tr>
             </thead>
@@ -79,9 +86,9 @@ export default function RankingPage() {
                       {item.tier ?? "tier 미분류"} · {item.origin_country ?? "국가 미상"}
                     </p>
                   </td>
+                  <td className="px-4 py-3 text-right font-semibold text-red-600">{item.event_count_72h}</td>
                   <td className="px-4 py-3 text-right font-semibold">{item.sale_product_count.toLocaleString("ko-KR")}</td>
                   <td className="px-4 py-3 text-right">{item.avg_discount_rate}%</td>
-                  <td className="px-4 py-3 text-right">{item.max_discount_rate != null ? `${item.max_discount_rate}%` : "—"}</td>
                   <td className="px-4 py-3 text-right text-gray-500">{item.active_channel_count}</td>
                 </tr>
               ))}
@@ -137,6 +144,11 @@ export default function RankingPage() {
                 )}
               </div>
               <div className="mt-3 flex flex-wrap gap-2 text-xs text-gray-500">
+                {item.badges.map((badge) => (
+                  <span key={badge} className="rounded-full bg-red-600 px-2 py-1 font-semibold text-white">
+                    {badge}
+                  </span>
+                ))}
                 <span className="rounded-full bg-gray-100 px-2 py-1">{item.total_channels}개 채널</span>
                 {tab === "price_drop" && item.price_drop_krw != null && (
                   <span className="rounded-full bg-red-50 px-2 py-1 text-red-600">
@@ -144,6 +156,11 @@ export default function RankingPage() {
                   </span>
                 )}
               </div>
+              {tab === "sale_hot" && item.hours_since_sale_start != null && (
+                <p className="mt-3 text-xs font-medium text-red-600">
+                  {formatSaleStart(item.hours_since_sale_start)}
+                </p>
+              )}
               <div className="mt-4 flex items-center justify-between text-sm">
                 <span className="text-gray-400">{item.channel_country ?? "국가 미상"}</span>
                 {item.product_key ? (

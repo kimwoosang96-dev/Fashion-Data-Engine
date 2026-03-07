@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     api_port: int = 8000
     api_debug: bool = True
     admin_bearer_token: str | None = None
+    gpt_actions_api_key: str | None = None
 
     discord_webhook_url: str | None = None
     intel_discord_webhook_url: str | None = None
@@ -26,6 +27,7 @@ class Settings(BaseSettings):
     push_vapid_public_key: str | None = None
     push_vapid_private_key: str | None = None
     push_vapid_subject: str = "mailto:admin@example.com"
+    openai_api_key: str | None = None
 
     @model_validator(mode="after")
     def validate_admin_token(self) -> "Settings":

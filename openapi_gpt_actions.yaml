@@ -1,0 +1,136 @@
+openapi: 3.1.0
+info:
+  title: Fashion Data Engine GPT Actions
+  version: "1.0.0"
+  description: Custom GPT가 패션 세일/신제품 정보를 activity_feed에 기록할 때 사용하는 API.
+servers:
+  - url: https://fashion-data-engine-production.up.railway.app
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+  schemas:
+    FeedIngestIn:
+      type: object
+      required:
+        - event_type
+        - product_name
+        - source_url
+      properties:
+        event_type:
+          type: string
+          enum: [sale_start, new_drop, price_cut, sold_out, restock]
+        brand_slug:
+          type: string
+          nullable: true
+        product_name:
+          type: string
+        price_krw:
+          type: integer
+          nullable: true
+        discount_rate:
+          type: integer
+          nullable: true
+        source_url:
+          type: string
+          format: uri
+        image_url:
+          type: string
+          format: uri
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        detected_at:
+          type: string
+          format: date-time
+          nullable: true
+    ActivityFeedItemOut:
+      type: object
+      properties:
+        id:
+          type: integer
+        event_type:
+          type: string
+        product_name:
+          type: string
+          nullable: true
+        brand_name:
+          type: string
+          nullable: true
+        channel_name:
+          type: string
+          nullable: true
+        price_krw:
+          type: integer
+          nullable: true
+        discount_rate:
+          type: integer
+          nullable: true
+        source_url:
+          type: string
+          nullable: true
+        image_url:
+          type: string
+          nullable: true
+        product_key:
+          type: string
+          nullable: true
+        detected_at:
+          type: string
+          format: date-time
+paths:
+  /feed:
+    get:
+      operationId: getFeed
+      summary: 최근 activity feed 조회
+      parameters:
+        - in: query
+          name: event_type
+          schema:
+            type: string
+            enum: [sale_start, new_drop, price_cut, sold_out, restock]
+        - in: query
+          name: brand_id
+          schema:
+            type: integer
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 30
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: activity feed 목록
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActivityFeedItemOut"
+  /feed/ingest:
+    post:
+      operationId: ingestFeedEvent
+      summary: Custom GPT가 발견한 이벤트를 activity_feed에 기록
+      security:
+        - ApiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FeedIngestIn"
+      responses:
+        "201":
+          description: 생성 성공
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActivityFeedItemOut"

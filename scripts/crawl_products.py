@@ -742,6 +742,8 @@ async def _crawl_one_channel(
                         country=channel.country,
                         cafe24_brand_categories=cafe24_categories,
                         new_only=new_only,
+                        channel_platform=channel.platform,
+                        use_gpt_parser=channel.use_gpt_parser,
                     ),
                     timeout=chan_timeout,
                 )

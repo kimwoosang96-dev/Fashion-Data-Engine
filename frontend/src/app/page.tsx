@@ -15,6 +15,13 @@ import { Input } from "@/components/ui/input";
 import Link from "next/link";
 import { SearchDropdown } from "@/components/SearchDropdown";
 
+function formatSaleStart(hours: number | null) {
+  if (hours == null) return null;
+  if (hours < 1) return "1시간 이내 세일 시작";
+  if (hours < 24) return `${Math.floor(hours)}시간 전 세일 시작`;
+  return `${Math.floor(hours / 24)}일 전 세일 시작`;
+}
+
 export default function DashboardPage() {
   const [saleProducts, setSaleProducts] = useState<SaleHighlight[]>([]);
   const [baseSaleProducts, setBaseSaleProducts] = useState<SaleHighlight[]>([]);
@@ -204,7 +211,7 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-lg font-bold text-gray-900">오늘의 HOT 세일 TOP 10</h2>
-              <p className="text-sm text-gray-500">할인율과 채널 수를 기준으로 매긴 실시간 랭킹</p>
+              <p className="text-sm text-gray-500">방금 시작한 세일과 지금의 정보 가치를 우선 반영한 랭킹</p>
             </div>
             <Link href="/ranking" className="text-sm font-medium text-blue-600 hover:underline">
               전체 랭킹 보기
@@ -230,6 +237,18 @@ export default function DashboardPage() {
                     <span className="text-xs text-gray-400 line-through">₩{item.original_price_krw.toLocaleString("ko-KR")}</span>
                   )}
                 </div>
+                <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
+                  {item.badges.map((badge) => (
+                    <span key={badge} className="rounded-full bg-red-600 px-2 py-1 font-semibold text-white">
+                      {badge}
+                    </span>
+                  ))}
+                </div>
+                {item.hours_since_sale_start != null && (
+                  <p className="mt-3 text-xs font-medium text-red-600">
+                    {formatSaleStart(item.hours_since_sale_start)}
+                  </p>
+                )}
                 <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
                   <span>{item.total_channels}개 채널</span>
                   {item.product_key ? (

@@ -19,6 +19,7 @@ import {
   patchAdminBrandInstagram,
   patchAdminChannelInstagram,
   patchAdminChannelPollPriority,
+  patchAdminChannelUseGptParser,
   patchAdminChannelWebhookSecret,
   activateAdminChannel,
   triggerChannelCrawl,
@@ -94,6 +95,8 @@ export default function AdminPage() {
   const [channelPollPriority, setChannelPollPriority] = useState<1 | 2 | 3>(2);
   const [channelIdForWebhook, setChannelIdForWebhook] = useState<number | "">("");
   const [channelWebhookSecret, setChannelWebhookSecret] = useState("");
+  const [channelIdForGptParser, setChannelIdForGptParser] = useState<number | "">("");
+  const [channelUseGptParser, setChannelUseGptParser] = useState(false);
   const [collabForm, setCollabForm] = useState({
     brand_a_slug: "",
     brand_b_slug: "",
@@ -306,6 +309,30 @@ export default function AdminPage() {
       setMsg("채널 webhook secret 저장 완료");
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "채널 webhook secret 저장 실패");
+    }
+  };
+
+  const saveChannelUseGptParser = async () => {
+    if (!token.trim() || !channelIdForGptParser) return;
+    try {
+      await patchAdminChannelUseGptParser(token.trim(), Number(channelIdForGptParser), channelUseGptParser);
+      setChannels((prev) =>
+        prev.map((row) =>
+          row.id === Number(channelIdForGptParser)
+            ? { ...row, use_gpt_parser: channelUseGptParser }
+            : row
+        )
+      );
+      setDraftChannels((prev) =>
+        prev.map((row) =>
+          row.id === Number(channelIdForGptParser)
+            ? { ...row, use_gpt_parser: channelUseGptParser }
+            : row
+        )
+      );
+      setMsg("GPT fallback 파서 설정 저장 완료");
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "GPT fallback 파서 설정 저장 실패");
     }
   };
 
@@ -939,7 +966,7 @@ export default function AdminPage() {
                       <p className="text-sm font-medium text-gray-900">{row.name}</p>
                       <p className="mt-1 text-xs text-gray-500 break-all">{row.url}</p>
                       <p className="mt-1 text-xs text-gray-500">
-                        {row.country ?? "-"} · {row.platform ?? "unknown"} · {row.channel_type ?? "미분류"} · 우선순위 P{row.poll_priority} · 제품 {row.product_count}개
+                        {row.country ?? "-"} · {row.platform ?? "unknown"} · {row.channel_type ?? "미분류"} · 우선순위 P{row.poll_priority} · GPT {row.use_gpt_parser ? "ON" : "OFF"} · 제품 {row.product_count}개
                       </p>
                       {row.description && (
                         <p className="mt-1 text-xs text-gray-600">{row.description}</p>
@@ -1016,6 +1043,45 @@ export default function AdminPage() {
               <button
                 type="button"
                 onClick={() => void saveChannelWebhookSecret()}
+                className="px-3 h-10 rounded-md border text-sm"
+              >
+                저장
+              </button>
+            </div>
+          </section>
+
+          <section className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
+            <h2 className="text-sm font-semibold">GPT Fallback Parser</h2>
+            <p className="text-xs text-gray-500">비정형 채널에서 GPT HTML 파서를 강제로 사용하도록 채널별로 지정합니다.</p>
+            <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-2 items-center">
+              <select
+                className="h-10 px-3 rounded-md border border-gray-200 bg-white text-sm"
+                value={channelIdForGptParser}
+                onChange={(e) => {
+                  const value = e.target.value ? Number(e.target.value) : "";
+                  setChannelIdForGptParser(value);
+                  const selected = channels.find((row) => row.id === Number(value));
+                  setChannelUseGptParser(Boolean(selected?.use_gpt_parser));
+                }}
+              >
+                <option value="">채널 선택</option>
+                {channels.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} ({c.use_gpt_parser ? "ON" : "OFF"})
+                  </option>
+                ))}
+              </select>
+              <select
+                className="h-10 px-3 rounded-md border border-gray-200 bg-white text-sm"
+                value={channelUseGptParser ? "on" : "off"}
+                onChange={(e) => setChannelUseGptParser(e.target.value === "on")}
+              >
+                <option value="off">OFF</option>
+                <option value="on">ON</option>
+              </select>
+              <button
+                type="button"
+                onClick={() => void saveChannelUseGptParser()}
                 className="px-3 h-10 rounded-md border text-sm"
               >
                 저장

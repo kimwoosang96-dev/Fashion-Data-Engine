@@ -11,10 +11,76 @@ from fashion_engine.crawler.product_crawler import ProductInfo
 from fashion_engine.models.brand import Brand
 from fashion_engine.models.channel import Channel
 from fashion_engine.models.exchange_rate import ExchangeRate
+from fashion_engine.models.activity_feed import ActivityFeed
+from fashion_engine.models.intel import IntelEvent
 from fashion_engine.models.price_history import PriceHistory
 from fashion_engine.models.product import Product
 
 logger = logging.getLogger(__name__)
+
+
+def _hours_since(value: datetime | None) -> float | None:
+    if value is None:
+        return None
+    seconds = (datetime.utcnow() - value).total_seconds()
+    return max(seconds / 3600.0, 0.0)
+
+
+def _urgency_score(discount_rate: int | None, sale_started_at: datetime | None) -> float:
+    if discount_rate is None:
+        return 0.0
+    hours = _hours_since(sale_started_at)
+    if hours is None:
+        return float(discount_rate)
+    return float(discount_rate) * (1.0 / (hours + 1.0))
+
+
+def _compute_badges(
+    *,
+    sale_started_at: datetime | None,
+    total_channels: int,
+    has_limited_signal: bool,
+) -> list[str]:
+    badges: list[str] = []
+    hours = _hours_since(sale_started_at)
+    if hours is not None and hours < 24:
+        badges.append("방금 세일")
+    if total_channels >= 3:
+        badges.append("멀티채널")
+    if has_limited_signal:
+        badges.append("한정판")
+    return badges
+
+
+async def _load_limited_signal_keys(
+    db: AsyncSession,
+    *,
+    product_keys: list[str | None],
+    brand_names: list[str | None],
+) -> set[str]:
+    clean_keys = [key for key in product_keys if key]
+    clean_brand_names = {name for name in brand_names if name}
+    rows = (
+        await db.execute(
+            select(IntelEvent.product_key, IntelEvent.brand_id, Brand.name)
+            .join(Brand, Brand.id == IntelEvent.brand_id, isouter=True)
+            .where(
+                IntelEvent.is_active == True,  # noqa: E712
+                (
+                    IntelEvent.layer.in_(["drops", "collabs"])
+                    | IntelEvent.event_type.in_(["drop", "collab"])
+                ),
+            )
+        )
+    ).all()
+    limited: set[str] = set()
+    for product_key, _brand_id, brand_name in rows:
+        if product_key and product_key in clean_keys:
+            limited.add(product_key)
+            continue
+        if brand_name and brand_name in clean_brand_names:
+            limited.add(f"brand:{brand_name}")
+    return limited
 
 # ── 환율 조회 ────────────────────────────────────────────────────────────
 
@@ -728,7 +794,7 @@ async def get_product_ranking(
 
     if ranking_type == "sale_hot":
         dedup_key = func.coalesce(Product.product_key, cast(Product.id, String))
-        ranked = (
+        ranked_rows = (
             select(
                 Product.product_key.label("product_key"),
                 Product.name.label("product_name"),
@@ -740,6 +806,7 @@ async def get_product_ranking(
                 Product.price_krw.label("price_krw"),
                 Product.original_price_krw.label("original_price_krw"),
                 Product.discount_rate.label("discount_rate"),
+                Product.sale_started_at.label("sale_started_at"),
                 func.coalesce(channel_count_sub.c.total_channels, 1).label("total_channels"),
                 func.row_number()
                 .over(
@@ -756,138 +823,146 @@ async def get_product_ranking(
                 Product.is_active == True,
                 Product.price_krw.is_not(None),
             )
-            .subquery()
         )
+        ranked = ranked_rows.subquery()
         rows = (
             await db.execute(
-                select(ranked)
-                .where(ranked.c.product_rank == 1)
-                .order_by(
-                    ranked.c.discount_rate.desc().nullslast(),
-                    ranked.c.total_channels.desc(),
-                    ranked.c.price_krw.asc(),
-                )
-                .limit(limit)
+                select(ranked).where(ranked.c.product_rank == 1)
             )
         ).all()
-        return [
-            {
-                "product_key": row.product_key,
-                "product_name": row.product_name,
-                "brand_name": row.brand_name,
-                "image_url": row.image_url,
-                "channel_name": row.channel_name,
-                "channel_country": row.channel_country,
-                "product_url": row.product_url,
-                "price_krw": int(row.price_krw),
-                "original_price_krw": int(row.original_price_krw) if row.original_price_krw else None,
-                "discount_rate": row.discount_rate,
-                "total_channels": int(row.total_channels or 1),
-                "price_drop_pct": None,
-                "price_drop_krw": None,
-            }
-            for row in rows
-        ]
+        limited_signal_keys = await _load_limited_signal_keys(
+            db,
+            product_keys=[row.product_key for row in rows],
+            brand_names=[row.brand_name for row in rows],
+        )
+        payload = []
+        for row in rows:
+            hours_since = _hours_since(row.sale_started_at)
+            total_channels = int(row.total_channels or 1)
+            has_limited_signal = bool(
+                (row.product_key and row.product_key in limited_signal_keys)
+                or (row.brand_name and f"brand:{row.brand_name}" in limited_signal_keys)
+            )
+            payload.append(
+                {
+                    "product_key": row.product_key,
+                    "product_name": row.product_name,
+                    "brand_name": row.brand_name,
+                    "image_url": row.image_url,
+                    "channel_name": row.channel_name,
+                    "channel_country": row.channel_country,
+                    "product_url": row.product_url,
+                    "price_krw": int(row.price_krw),
+                    "original_price_krw": int(row.original_price_krw) if row.original_price_krw else None,
+                    "discount_rate": row.discount_rate,
+                    "total_channels": total_channels,
+                    "price_drop_pct": None,
+                    "price_drop_krw": None,
+                    "sale_started_at": row.sale_started_at,
+                    "hours_since_sale_start": round(hours_since, 1) if hours_since is not None else None,
+                    "badges": _compute_badges(
+                        sale_started_at=row.sale_started_at,
+                        total_channels=total_channels,
+                        has_limited_signal=has_limited_signal,
+                    ),
+                    "_urgency_score": _urgency_score(row.discount_rate, row.sale_started_at),
+                }
+            )
+        payload.sort(
+            key=lambda item: (
+                item["_urgency_score"],
+                item["discount_rate"] or 0,
+                item["total_channels"],
+                -(item["price_krw"] or 0),
+            ),
+            reverse=True,
+        )
+        return [{k: v for k, v in item.items() if k != "_urgency_score"} for item in payload[:limit]]
 
     if ranking_type == "price_drop":
-        threshold = datetime.utcnow() - timedelta(days=7)
-        recent_sub = (
-            select(
-                Product.id.label("product_id"),
-                Product.product_key.label("product_key"),
-                Product.name.label("product_name"),
-                Product.url.label("product_url"),
-                Product.image_url.label("image_url"),
-                Channel.name.label("channel_name"),
-                Channel.country.label("channel_country"),
-                Brand.name.label("brand_name"),
-                PriceHistory.price.label("price_krw"),
-                PriceHistory.original_price.label("original_price_krw"),
-                PriceHistory.discount_rate.label("discount_rate"),
-                func.row_number()
-                .over(
-                    partition_by=Product.id,
-                    order_by=PriceHistory.crawled_at.desc(),
-                )
-                .label("rn"),
-            )
-            .join(Product, Product.id == PriceHistory.product_id)
-            .join(Channel, Channel.id == Product.channel_id)
-            .join(Brand, Brand.id == Product.brand_id, isouter=True)
-            .where(
-                Product.is_active == True,
-                Product.product_key.isnot(None),
-                PriceHistory.crawled_at >= threshold,
-            )
-            .subquery()
-        )
-        latest = recent_sub.alias("latest")
-        prev = recent_sub.alias("prev")
-        drop_expr = ((prev.c.price_krw - latest.c.price_krw) * 100.0 / prev.c.price_krw)
-        ranked = (
-            select(
-                latest.c.product_key,
-                latest.c.product_name,
-                latest.c.brand_name,
-                latest.c.image_url,
-                latest.c.channel_name,
-                latest.c.channel_country,
-                latest.c.product_url,
-                latest.c.price_krw,
-                latest.c.original_price_krw,
-                latest.c.discount_rate,
-                func.coalesce(channel_count_sub.c.total_channels, 1).label("total_channels"),
-                drop_expr.label("price_drop_pct"),
-                (prev.c.price_krw - latest.c.price_krw).label("price_drop_krw"),
-                func.row_number()
-                .over(
-                    partition_by=latest.c.product_key,
-                    order_by=(drop_expr.desc(), latest.c.price_krw.asc()),
-                )
-                .label("product_rank"),
-            )
-            .join(
-                prev,
-                (prev.c.product_id == latest.c.product_id) & (prev.c.rn == 2),
-            )
-            .join(channel_count_sub, channel_count_sub.c.product_key == latest.c.product_key, isouter=True)
-            .where(
-                latest.c.rn == 1,
-                prev.c.price_krw.isnot(None),
-                latest.c.price_krw.isnot(None),
-                prev.c.price_krw > latest.c.price_krw,
-            )
-            .subquery()
-        )
         rows = (
             await db.execute(
-                select(ranked)
-                .where(ranked.c.product_rank == 1)
-                .order_by(
-                    ranked.c.price_drop_pct.desc(),
-                    ranked.c.price_drop_krw.desc(),
+                select(
+                    ActivityFeed,
+                    Product.product_key,
+                    Product.original_price_krw,
+                    Product.sale_started_at,
+                    Channel.name.label("channel_name"),
+                    Channel.country.label("channel_country"),
+                    Brand.name.label("brand_name"),
+                    func.coalesce(channel_count_sub.c.total_channels, 1).label("total_channels"),
                 )
-                .limit(limit)
+                .join(Product, Product.id == ActivityFeed.product_id)
+                .join(Channel, Channel.id == Product.channel_id)
+                .join(Brand, Brand.id == Product.brand_id, isouter=True)
+                .join(channel_count_sub, channel_count_sub.c.product_key == Product.product_key, isouter=True)
+                .where(
+                    ActivityFeed.event_type == "price_cut",
+                    Product.is_active == True,
+                    Product.product_key.isnot(None),
+                )
+                .order_by(ActivityFeed.detected_at.desc(), ActivityFeed.id.desc())
+                .limit(limit * 5)
             )
         ).all()
-        return [
-            {
-                "product_key": row.product_key,
-                "product_name": row.product_name,
-                "brand_name": row.brand_name,
-                "image_url": row.image_url,
-                "channel_name": row.channel_name,
-                "channel_country": row.channel_country,
-                "product_url": row.product_url,
-                "price_krw": int(row.price_krw),
-                "original_price_krw": int(row.original_price_krw) if row.original_price_krw else None,
-                "discount_rate": row.discount_rate,
-                "total_channels": int(row.total_channels or 1),
-                "price_drop_pct": round(float(row.price_drop_pct), 1) if row.price_drop_pct is not None else None,
-                "price_drop_krw": int(row.price_drop_krw) if row.price_drop_krw is not None else None,
-            }
-            for row in rows
-        ]
+        limited_signal_keys = await _load_limited_signal_keys(
+            db,
+            product_keys=[row.product_key for row in rows],
+            brand_names=[row.brand_name for row in rows],
+        )
+        seen_keys: set[str] = set()
+        payload: list[dict] = []
+        for row in rows:
+            product_key = row.product_key
+            if not product_key or product_key in seen_keys:
+                continue
+            seen_keys.add(product_key)
+            meta = row.ActivityFeed.metadata_json or {}
+            price_drop_pct = meta.get("price_drop_pct")
+            price_drop_krw = meta.get("price_drop_krw")
+            total_channels = int(row.total_channels or 1)
+            has_limited_signal = bool(
+                product_key in limited_signal_keys
+                or (row.brand_name and f"brand:{row.brand_name}" in limited_signal_keys)
+            )
+            payload.append(
+                {
+                    "product_key": product_key,
+                    "product_name": row.ActivityFeed.product_name or "",
+                    "brand_name": row.brand_name,
+                    "image_url": (meta.get("image_url") if isinstance(meta, dict) else None),
+                    "channel_name": row.channel_name,
+                    "channel_country": row.channel_country,
+                    "product_url": row.ActivityFeed.source_url or "",
+                    "price_krw": int(row.ActivityFeed.price_krw) if row.ActivityFeed.price_krw is not None else 0,
+                    "original_price_krw": int(row.original_price_krw) if row.original_price_krw else None,
+                    "discount_rate": row.ActivityFeed.discount_rate,
+                    "total_channels": total_channels,
+                    "price_drop_pct": float(price_drop_pct) if price_drop_pct is not None else None,
+                    "price_drop_krw": int(price_drop_krw) if price_drop_krw is not None else None,
+                    "sale_started_at": row.sale_started_at,
+                    "hours_since_sale_start": round(_hours_since(row.sale_started_at), 1)
+                    if row.sale_started_at
+                    else None,
+                    "badges": _compute_badges(
+                        sale_started_at=row.sale_started_at,
+                        total_channels=total_channels,
+                        has_limited_signal=has_limited_signal,
+                    ),
+                    "_detected_at": row.ActivityFeed.detected_at,
+                }
+            )
+            if len(payload) >= limit:
+                break
+        payload.sort(
+            key=lambda item: (
+                item["_detected_at"],
+                item["price_drop_pct"] or 0.0,
+                item["price_drop_krw"] or 0,
+            ),
+            reverse=True,
+        )
+        return [{k: v for k, v in item.items() if k != "_detected_at"} for item in payload[:limit]]
 
     raise ValueError(f"unknown ranking_type: {ranking_type}")
 
@@ -896,6 +971,37 @@ async def get_brand_sale_ranking(
     db: AsyncSession,
     limit: int = 50,
 ) -> list[dict]:
+    cutoff = datetime.utcnow() - timedelta(hours=72)
+    sale_stats = (
+        select(
+            Product.brand_id.label("brand_id"),
+            func.count(Product.id).label("sale_product_count"),
+            func.avg(Product.discount_rate).label("avg_discount_rate"),
+            func.max(Product.discount_rate).label("max_discount_rate"),
+            func.count(func.distinct(Product.channel_id)).label("active_channel_count"),
+        )
+        .where(
+            Product.brand_id.is_not(None),
+            Product.is_sale == True,
+            Product.is_active == True,
+            Product.discount_rate.is_not(None),
+        )
+        .group_by(Product.brand_id)
+        .subquery()
+    )
+    event_stats = (
+        select(
+            ActivityFeed.brand_id.label("brand_id"),
+            func.count(ActivityFeed.id).label("event_count_72h"),
+            func.max(ActivityFeed.detected_at).label("latest_event_at"),
+        )
+        .where(
+            ActivityFeed.brand_id.is_not(None),
+            ActivityFeed.detected_at >= cutoff,
+        )
+        .group_by(ActivityFeed.brand_id)
+        .subquery()
+    )
     rows = (
         await db.execute(
             select(
@@ -904,21 +1010,19 @@ async def get_brand_sale_ranking(
                 Brand.slug.label("brand_slug"),
                 Brand.tier.label("tier"),
                 Brand.origin_country.label("origin_country"),
-                func.count(Product.id).label("sale_product_count"),
-                func.avg(Product.discount_rate).label("avg_discount_rate"),
-                func.max(Product.discount_rate).label("max_discount_rate"),
-                func.count(func.distinct(Product.channel_id)).label("active_channel_count"),
+                func.coalesce(sale_stats.c.sale_product_count, 0).label("sale_product_count"),
+                func.coalesce(sale_stats.c.avg_discount_rate, 0).label("avg_discount_rate"),
+                sale_stats.c.max_discount_rate.label("max_discount_rate"),
+                func.coalesce(sale_stats.c.active_channel_count, 0).label("active_channel_count"),
+                func.coalesce(event_stats.c.event_count_72h, 0).label("event_count_72h"),
+                event_stats.c.latest_event_at.label("latest_event_at"),
             )
-            .join(Product, Product.brand_id == Brand.id)
-            .where(
-                Product.is_sale == True,
-                Product.is_active == True,
-                Product.discount_rate.is_not(None),
-            )
-            .group_by(Brand.id, Brand.name, Brand.slug, Brand.tier, Brand.origin_country)
+            .join(sale_stats, sale_stats.c.brand_id == Brand.id)
+            .outerjoin(event_stats, event_stats.c.brand_id == Brand.id)
             .order_by(
-                desc(func.count(Product.id)),
-                desc(func.avg(Product.discount_rate)),
+                desc(func.coalesce(event_stats.c.event_count_72h, 0)),
+                desc(event_stats.c.latest_event_at),
+                desc(func.coalesce(sale_stats.c.sale_product_count, 0)),
                 Brand.name.asc(),
             )
             .limit(limit)
@@ -935,6 +1039,8 @@ async def get_brand_sale_ranking(
             "avg_discount_rate": round(float(row.avg_discount_rate or 0), 1),
             "max_discount_rate": int(row.max_discount_rate) if row.max_discount_rate is not None else None,
             "active_channel_count": int(row.active_channel_count or 0),
+            "event_count_72h": int(row.event_count_72h or 0),
+            "latest_event_at": row.latest_event_at,
         }
         for row in rows
     ]

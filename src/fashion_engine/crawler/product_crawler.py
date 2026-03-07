@@ -282,6 +282,8 @@ class ProductCrawler:
         country: str | None = None,
         cafe24_brand_categories: list[tuple[str, str]] | None = None,
         new_only: bool = False,
+        channel_platform: str | None = None,
+        use_gpt_parser: bool = False,
     ) -> ChannelProductResult:
         """채널 URL에서 전체 제품 목록 수집."""
         await asyncio.sleep(random.uniform(0, 3))
@@ -338,6 +340,7 @@ class ProductCrawler:
                     result.crawl_strategy = "cafe24-html"
                 else:
                     detected_platform = self._detect_platform_from_url(channel_url)
+                    platform_hint = channel_platform or detected_platform
                     single_brand_products = await self._try_cafe24_single_brand(
                         channel_url=channel_url,
                         currency=currency,
@@ -374,11 +377,24 @@ class ProductCrawler:
                             result.products = extra_products
                             result.crawl_strategy = extra_strategy
                         else:
-                            result.error = (
-                                "No products found "
-                                "(non-Shopify/Cafe24/WooCommerce/MakeShop/STORES.jp or empty store)"
-                            )
-                            result.error_type = "not_supported"
+                            should_try_gpt = bool(use_gpt_parser or platform_hint in (None, "", "unknown"))
+                            if should_try_gpt:
+                                gpt_products = await self._try_gpt_parser_products(channel_url, currency)
+                                if gpt_products:
+                                    result.products = gpt_products
+                                    result.crawl_strategy = "gpt-parser"
+                                else:
+                                    result.error = (
+                                        "No products found "
+                                        "(non-Shopify/Cafe24/WooCommerce/MakeShop/STORES.jp or GPT fallback empty)"
+                                    )
+                                    result.error_type = "not_supported"
+                            else:
+                                result.error = (
+                                    "No products found "
+                                    "(non-Shopify/Cafe24/WooCommerce/MakeShop/STORES.jp or empty store)"
+                                )
+                                result.error_type = "not_supported"
         except Exception as e:
             result.error = str(e)[:200]
             http_status = e.response.status_code if isinstance(e, httpx.HTTPStatusError) else None
@@ -1209,6 +1225,121 @@ class ProductCrawler:
             normalized_key=normalized_key,
             match_confidence=match_confidence,
         )
+
+    async def _fetch_gpt_fallback_html(self, channel_url: str) -> tuple[str, str] | None:
+        assert self._client is not None
+        base = channel_url.rstrip("/")
+        candidates = [
+            base,
+            f"{base}/collections/all",
+            f"{base}/shop/all_items",
+            f"{base}/items/all",
+            f"{base}/product/list.html?cate_no=1",
+        ]
+        seen: set[str] = set()
+        for url in candidates:
+            if url in seen:
+                continue
+            seen.add(url)
+            try:
+                resp = await self._client.get(url, headers={"User-Agent": random.choice(USER_AGENTS)}, timeout=self._timeout)
+            except Exception:
+                continue
+            if resp.status_code != 200 or not resp.text.strip():
+                continue
+            return url, resp.text
+        return None
+
+    async def _try_gpt_parser_products(
+        self,
+        channel_url: str,
+        currency: str,
+    ) -> list[ProductInfo]:
+        try:
+            from fashion_engine.crawler.gpt_parser import parse_products_from_html
+        except Exception as exc:
+            logger.warning("GPT parser import 실패 [%s]: %s", channel_url, exc)
+            return []
+
+        fetched = await self._fetch_gpt_fallback_html(channel_url)
+        if not fetched:
+            return []
+        page_url, html = fetched
+        try:
+            parsed = await parse_products_from_html(page_url, html)
+        except Exception as exc:
+            logger.warning("GPT parser 실행 실패 [%s]: %s", channel_url, exc)
+            return []
+
+        products: list[ProductInfo] = []
+        seen_urls: set[str] = set()
+        default_vendor = urlparse(channel_url).netloc.replace("www.", "").strip() or "unknown"
+        for item in parsed.products:
+            if not isinstance(item, dict):
+                continue
+            title = str(item.get("name") or "").strip()
+            if not title or self._is_title_denied(title):
+                continue
+            product_url = urljoin(channel_url, str(item.get("url") or "").strip())
+            if not product_url or product_url in seen_urls:
+                continue
+            seen_urls.add(product_url)
+            vendor = str(item.get("brand") or default_vendor).strip() or default_vendor
+            brand_slug = slugify(vendor) if vendor else "unknown"
+            handle = (
+                urlparse(product_url).path.rstrip("/").split("/")[-1].strip()
+                or slugify(title)
+                or "unknown"
+            )
+            try:
+                price = float(item.get("price") or 0)
+            except (TypeError, ValueError):
+                continue
+            if price <= 0:
+                continue
+            try:
+                original_price = float(item.get("original_price")) if item.get("original_price") not in (None, "") else None
+            except (TypeError, ValueError):
+                original_price = None
+            tags_text = "gpt-fallback"
+            normalized_key, match_confidence = self._build_normalized_key(
+                brand_slug=brand_slug,
+                sku=None,
+                title=title,
+                tags=["gpt-fallback"],
+            )
+            gender, subcategory = classify_gender_and_subcategory(
+                product_type=None,
+                title=title,
+                tags=tags_text,
+            )
+            products.append(
+                ProductInfo(
+                    title=title,
+                    vendor=vendor,
+                    handle=handle,
+                    product_type=None,
+                    price=price,
+                    compare_at_price=original_price,
+                    currency=str(item.get("currency") or currency or "USD").upper(),
+                    sku=None,
+                    image_url=(urljoin(channel_url, str(item.get("image_url"))) if item.get("image_url") else None),
+                    tags=json.dumps(["gpt-fallback"], ensure_ascii=False),
+                    product_url=product_url,
+                    product_key=f"{brand_slug}:{handle}",
+                    is_available=True,
+                    gender=gender,
+                    subcategory=subcategory,
+                    normalized_key=normalized_key,
+                    match_confidence=match_confidence,
+                )
+            )
+        logger.info(
+            "GPT fallback parser 수집 완료 url=%s products=%s",
+            channel_url,
+            len(products),
+        )
+        return products
 
     def _parse_woocommerce_product(
         self,

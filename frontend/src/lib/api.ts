@@ -227,6 +227,12 @@ export const patchAdminChannelWebhookSecret = (token: string, channelId: number,
     token,
     { method: "PATCH", body: JSON.stringify({ webhook_secret: webhookSecret ?? null }) }
   );
+export const patchAdminChannelUseGptParser = (token: string, channelId: number, useGptParser: boolean) =>
+  adminFetch<{ ok: boolean; id: number; use_gpt_parser: boolean }>(
+    `/admin/channels/${channelId}/use-gpt-parser`,
+    token,
+    { method: "PATCH", body: JSON.stringify({ use_gpt_parser: useGptParser }) }
+  );
 export const getAdminCollabs = (token: string, limit = 200, offset = 0) =>
   adminFetch<AdminCollabItem[]>(
     `/admin/collabs?limit=${limit}&offset=${offset}`,

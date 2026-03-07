@@ -1,11 +1,20 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from fashion_engine.api.schemas import ActivityFeedItemOut
+from fashion_engine.api.schemas import ActivityFeedItemOut, FeedIngestIn
+from fashion_engine.config import settings
 from fashion_engine.database import get_db
 from fashion_engine.services import feed_service
 
 router = APIRouter(prefix="/feed", tags=["feed"])
+
+
+async def require_gpt_actions_api_key(x_api_key: str | None = Header(None)) -> None:
+    expected = (settings.gpt_actions_api_key or "").strip()
+    if not expected:
+        raise HTTPException(status_code=503, detail="GPT actions API key not configured")
+    if x_api_key != expected:
+        raise HTTPException(status_code=401, detail="Invalid API key")
 
 
 @router.get("", response_model=list[ActivityFeedItemOut])
@@ -23,3 +32,26 @@ async def list_activity_feed(
         limit=limit,
         offset=offset,
     )
+
+
+@router.post("/ingest", response_model=ActivityFeedItemOut, status_code=201)
+async def ingest_activity_feed(
+    payload: FeedIngestIn,
+    _: None = Depends(require_gpt_actions_api_key),
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        return await feed_service.ingest_activity_feed(
+            db,
+            event_type=payload.event_type,
+            product_name=payload.product_name,
+            source_url=payload.source_url,
+            brand_slug=payload.brand_slug,
+            price_krw=payload.price_krw,
+            discount_rate=payload.discount_rate,
+            image_url=payload.image_url,
+            notes=payload.notes,
+            detected_at=payload.detected_at,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

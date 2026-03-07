@@ -16,6 +16,10 @@ wheels/
 data/fashion.db
 data/*.db
 
+# 실행 로그 / 프로브 산출물
+logs/*.log
+reports/*.csv
+
 # Playwright 브라우저 캐시
 .playwright/
 

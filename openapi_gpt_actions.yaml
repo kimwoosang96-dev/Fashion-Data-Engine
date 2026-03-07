@@ -7,10 +7,14 @@ servers:
   - url: https://fashion-data-engine-production.up.railway.app
 components:
   securitySchemes:
-    ApiKeyAuth:
-      type: apiKey
-      in: header
-      name: X-API-Key
+    OAuth2:
+      type: oauth2
+      flows:
+        authorizationCode:
+          authorizationUrl: https://fashion-data-engine-production.up.railway.app/oauth/authorize
+          tokenUrl: https://fashion-data-engine-production.up.railway.app/oauth/token
+          scopes:
+            feed:write: activity_feed에 이벤트 기록
   schemas:
     FeedIngestIn:
       type: object
@@ -120,7 +124,7 @@ paths:
       operationId: ingestFeedEvent
       summary: Custom GPT가 발견한 이벤트를 activity_feed에 기록
       security:
-        - ApiKeyAuth: []
+        - OAuth2: [feed:write]
       requestBody:
         required: true
         content:

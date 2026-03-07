@@ -57,9 +57,10 @@ async def _load_rows() -> list[tuple]:
                     SELECT
                         ph.id,
                         p.channel_id,
+                        p.product_key,
                         c.name,
                         c.country,
-                        CAST(ph.price AS INTEGER) AS price_krw
+                        ph.price AS price_krw
                     FROM price_history ph
                     JOIN products p ON p.id = ph.product_id
                     JOIN channels c ON c.id = p.channel_id
@@ -73,9 +74,14 @@ async def _load_rows() -> list[tuple]:
 
 def _detect_ids(rows: list[tuple]) -> list[int]:
     by_channel: dict[int, list[int]] = defaultdict(list)
+    by_key: dict[str, list[int]] = defaultdict(list)
     for r in rows:
-        by_channel[int(r.channel_id)].append(int(r.price_krw))
+        price = int(r.price_krw)
+        by_channel[int(r.channel_id)].append(price)
+        if r.product_key:
+            by_key[str(r.product_key)].append(price)
     medians = {cid: float(median(vals)) if vals else 0.0 for cid, vals in by_channel.items()}
+    max_by_key = {pkey: max(vals) for pkey, vals in by_key.items() if vals}
 
     ids: list[int] = []
     for r in rows:
@@ -83,7 +89,9 @@ def _detect_ids(rows: list[tuple]) -> list[int]:
         price = int(r.price_krw)
         cmin = _country_threshold(r.country)
         median_floor = int(medians[cid] * 0.01) if medians[cid] > 0 else 0
-        if price < cmin or (median_floor > 0 and price < median_floor):
+        key_max = max_by_key.get(str(r.product_key)) if r.product_key else None
+        key_outlier = bool(key_max and key_max >= 10_000 and price < int(key_max * 0.2))
+        if price < cmin or (median_floor > 0 and price < median_floor) or key_outlier:
             ids.append(int(r.id))
     return sorted(set(ids))
 

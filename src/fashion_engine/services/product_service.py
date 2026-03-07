@@ -70,6 +70,82 @@ async def find_brand_by_vendor(db: AsyncSession, vendor: str) -> Brand | None:
     ).scalar_one_or_none()
 
 
+async def find_brands_by_vendors(
+    db: AsyncSession,
+    vendors: list[str],
+) -> dict[str, Brand | None]:
+    """vendor 목록을 slug로 정규화해 일괄 조회한다."""
+    slug_to_vendor: dict[str, str] = {}
+    for vendor in vendors:
+        if not vendor:
+            continue
+        slug = slugify(vendor)
+        if slug:
+            slug_to_vendor.setdefault(slug, vendor)
+
+    if not slug_to_vendor:
+        return {}
+
+    rows = (
+        await db.execute(select(Brand).where(Brand.slug.in_(list(slug_to_vendor.keys()))))
+    ).scalars().all()
+    brand_by_slug = {brand.slug: brand for brand in rows}
+    return {
+        vendor: brand_by_slug.get(slugify(vendor))
+        for vendor in vendors
+        if vendor
+    }
+
+
+async def get_existing_products_by_urls(
+    db: AsyncSession,
+    urls: list[str],
+) -> dict[str, Product]:
+    """url 목록의 기존 Product를 한 번에 조회한다."""
+    clean_urls = [url for url in urls if url]
+    if not clean_urls:
+        return {}
+
+    rows = (
+        await db.execute(select(Product).where(Product.url.in_(clean_urls)))
+    ).scalars().all()
+    return {row.url: row for row in rows}
+
+
+async def get_prev_prices_by_product_ids(
+    db: AsyncSession,
+    product_ids: list[int],
+) -> dict[int, int]:
+    """제품별 최신 KRW 가격을 한 번에 조회한다."""
+    clean_ids = [pid for pid in product_ids if pid]
+    if not clean_ids:
+        return {}
+
+    latest_ph = (
+        select(
+            PriceHistory.product_id,
+            func.max(PriceHistory.crawled_at).label("latest"),
+        )
+        .where(
+            PriceHistory.currency == "KRW",
+            PriceHistory.product_id.in_(clean_ids),
+        )
+        .group_by(PriceHistory.product_id)
+        .subquery()
+    )
+    rows = (
+        await db.execute(
+            select(PriceHistory.product_id, PriceHistory.price)
+            .join(
+                latest_ph,
+                (PriceHistory.product_id == latest_ph.c.product_id)
+                & (PriceHistory.crawled_at == latest_ph.c.latest),
+            )
+        )
+    ).all()
+    return {int(product_id): int(price) for product_id, price in rows}
+
+
 # ── 제품 upsert ───────────────────────────────────────────────────────────
 
 async def upsert_product(
@@ -77,6 +153,7 @@ async def upsert_product(
     channel_id: int,
     info: ProductInfo,
     brand_id: int | None = None,
+    existing: Product | None = None,
 ) -> tuple["Product", bool, bool, str | None]:
     """
     url 기준으로 제품 upsert.
@@ -87,9 +164,10 @@ async def upsert_product(
     """
     is_sale = info.compare_at_price is not None and info.compare_at_price > info.price
 
-    existing = (
-        await db.execute(select(Product).where(Product.url == info.product_url))
-    ).scalar_one_or_none()
+    if existing is None:
+        existing = (
+            await db.execute(select(Product).where(Product.url == info.product_url))
+        ).scalar_one_or_none()
 
     if existing:
         prev_sale = existing.is_sale
@@ -160,7 +238,7 @@ async def record_price(
         discount_rate = round((1 - info.price / info.compare_at_price) * 100)
 
     price_krw_int = round(float(info.price) * rate_to_krw)
-    MIN_KRW = 100
+    MIN_KRW = 1_000
     MAX_KRW = 50_000_000
     if price_krw_int < MIN_KRW or price_krw_int > MAX_KRW:
         logger.warning(
@@ -671,6 +749,7 @@ async def get_multi_channel_products(
             .group_by(Product.product_key)
             .having(func.count(func.distinct(Product.channel_id)) >= min_channels)
             .having(func.min(latest_price.c.price_krw).isnot(None))
+            .having(func.min(latest_price.c.price_krw) >= 10_000)
             .order_by(
                 desc(func.max(latest_price.c.price_krw) - func.min(latest_price.c.price_krw))
                 if sort == "spread"

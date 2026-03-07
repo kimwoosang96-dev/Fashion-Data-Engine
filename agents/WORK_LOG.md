@@ -586,3 +586,4 @@ WARNING 총 3개 / ERROR 총 1개
 - 2026-03-07 15:59:50 | agent:codex-dev | task:T-20260307-089 | action:log | message:T-089 착수: railway.json 공용 최소 설정으로 축소하고 DEPLOYMENT.md에 Config File Path 필수 경고 추가 시작
 
 - 2026-03-07 16:00:19 | agent:codex-dev | task:T-20260307-089 | action:complete | message:SCHEDULER_WORKER_CRASH_FIX_01 완료: railway.json을 공용 기본 설정(builder + restart 정책만 유지)으로 되돌리고, API/Worker startCommand는 railway.api.json/railway.worker.json에만 남기도록 정리. DEPLOYMENT.md에 Config File Path 수동 설정 필수 경고 추가
+- 2026-03-07 16:26:00 | agent:codex-dev | task:T-20260307-088 | action:log | message:T-088 진행 업데이트: Railway PostgreSQL에서 이전 세션이 남긴 idle-in-transaction 락 세션 5개 정리 후 DIGAWEL 단일 재검증 Run#18 성공(564개, ProductCatalog updated=510). `crawl_products.py` 저장 경로에 vendor/url/latest-price 일괄 조회 적용 및 `--no-intel` 시 per-product derived intel event 생성을 스킵하도록 정리. JP 전체 재크롤 Run#19 재시작, 현재 12/48 완료(new=9 updated=1841 error=5).

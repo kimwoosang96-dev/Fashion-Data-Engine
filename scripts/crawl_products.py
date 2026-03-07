@@ -34,13 +34,14 @@ from fashion_engine.database import init_db, AsyncSessionLocal
 from fashion_engine.models.channel import Channel
 from fashion_engine.models.channel_brand import ChannelBrand
 from fashion_engine.models.brand import Brand
-from fashion_engine.models.price_history import PriceHistory
 from fashion_engine.models.product import Product
 from fashion_engine.models.crawl_run import CrawlRun, CrawlChannelLog
 from fashion_engine.crawler.product_crawler import ProductCrawler, ChannelProductResult
 from fashion_engine.services.product_service import (
     get_rate_to_krw,
-    find_brand_by_vendor,
+    find_brands_by_vendors,
+    get_existing_products_by_urls,
+    get_prev_prices_by_product_ids,
     upsert_product,
     record_price,
 )
@@ -71,23 +72,11 @@ _CHANNEL_TIMEOUT_SECS: dict[str, int] = {
 }
 
 
-async def _get_prev_price_krw(db, product_id: int) -> int | None:
-    """직전 크롤의 KRW 가격 조회."""
-    result = await db.execute(
-        select(PriceHistory)
-        .where(PriceHistory.product_id == product_id)
-        .where(PriceHistory.currency == "KRW")
-        .order_by(PriceHistory.crawled_at.desc())
-        .limit(1)
-    )
-    row = result.scalar_one_or_none()
-    return int(row.price) if row else None
-
-
 async def _crawl_one_channel(
     channel: Channel,
     run_id: int,
     no_alerts: bool,
+    no_intel: bool,
     threshold: float,
     sem: asyncio.Semaphore,
     run_lock: asyncio.Lock,
@@ -174,21 +163,38 @@ async def _crawl_one_channel(
                         updated_count = 0
                         sale_count = 0
                     else:
+                        vendor_names = sorted({info.vendor for info in result.products if info.vendor})
+                        brand_by_vendor = await find_brands_by_vendors(db, vendor_names)
+                        existing_by_url = await get_existing_products_by_urls(
+                            db,
+                            [info.product_url for info in result.products],
+                        )
+                        prev_price_by_product_id = (
+                            await get_prev_prices_by_product_ids(
+                                db,
+                                [row.id for row in existing_by_url.values()],
+                            )
+                            if (not no_alerts and settings.discord_webhook_url)
+                            else {}
+                        )
+
                         for info in result.products:
-                            brand = await find_brand_by_vendor(db, info.vendor)
+                            brand = brand_by_vendor.get(info.vendor or "")
                             brand_id = brand.id if brand else None
 
-                            existing_row = (
-                                await db.execute(
-                                    select(Product).where(Product.url == info.product_url)
-                                )
-                            ).scalar_one_or_none()
-                            prev_price_krw = None
-                            if existing_row:
-                                prev_price_krw = await _get_prev_price_krw(db, existing_row.id)
+                            existing_row = existing_by_url.get(info.product_url)
+                            prev_price_krw = (
+                                prev_price_by_product_id.get(existing_row.id)
+                                if existing_row
+                                else None
+                            )
 
                             product, is_new, sale_just_started, availability_transition = await upsert_product(
-                                db, channel.id, info, brand_id=brand_id
+                                db,
+                                channel.id,
+                                info,
+                                brand_id=brand_id,
+                                existing=existing_row,
                             )
                             await record_price(db, product.id, info, rate_to_krw=rate)
 
@@ -203,7 +209,7 @@ async def _crawl_one_channel(
                             else:
                                 updated_count += 1
 
-                            if sale_just_started:
+                            if sale_just_started and not no_intel:
                                 discount_rate: float | None = None
                                 if (
                                     info.compare_at_price
@@ -230,7 +236,7 @@ async def _crawl_one_channel(
                                         "compare_at_price": info.compare_at_price,
                                     },
                                 )
-                            if availability_transition in {"sold_out", "restock"}:
+                            if availability_transition in {"sold_out", "restock"} and not no_intel:
                                 await upsert_derived_product_event(
                                     db,
                                     event_type=availability_transition,
@@ -393,6 +399,7 @@ def main(
     channel_type: str = typer.Option(
         "", help="채널 타입 필터 (edit-shop / brand-store / 빈 문자열=전체)"
     ),
+    country: str = typer.Option("", help="국가 코드 필터 (예: JP, KR, US)"),
     channel_id: int = typer.Option(0, help="특정 채널 ID만 크롤링 (0=비활성)"),
     channel_name: str = typer.Option("", help="특정 채널명만 크롤링 (부분 일치)"),
     no_alerts: bool = typer.Option(False, "--no-alerts", help="Discord 알림 비활성화"),
@@ -406,6 +413,7 @@ def main(
         run(
             limit,
             channel_type or None,
+            country.strip().upper() or None,
             channel_id if channel_id > 0 else None,
             channel_name.strip() or None,
             no_alerts,
@@ -419,6 +427,7 @@ def main(
 async def run(
     limit: int,
     channel_type: str | None,
+    country: str | None,
     channel_id: int | None,
     channel_name: str | None,
     no_alerts: bool,
@@ -444,6 +453,8 @@ async def run(
             query = query.filter(Channel.name.ilike(f"%{channel_name}%"))
         if channel_type:
             query = query.filter(Channel.channel_type == channel_type)
+        if country:
+            query = query.filter(Channel.country == country)
         channels = list((await db.execute(query)).scalars().all())
 
     channels = [c for c in channels if c.channel_type not in SKIP_TYPES]
@@ -474,7 +485,7 @@ async def run(
     run_lock = asyncio.Lock()
 
     tasks = [
-        _crawl_one_channel(ch, run_id, no_alerts, threshold, sem, run_lock)
+        _crawl_one_channel(ch, run_id, no_alerts, no_intel, threshold, sem, run_lock)
         for ch in channels
     ]
     raw_results = await asyncio.gather(*tasks, return_exceptions=True)

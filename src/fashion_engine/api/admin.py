@@ -51,7 +51,13 @@ def _auth_bearer(authorization: str | None) -> None:
     if not authorization:
         raise HTTPException(status_code=401, detail="Authorization header required")
     scheme, _, token = authorization.partition(" ")
-    if scheme.lower() != "bearer" or token != settings.admin_bearer_token:
+    expected = settings.admin_bearer_token
+    if expected is None:
+        # ADMIN_BEARER_TOKEN 미설정 — 로컬 개발(api_debug=True)에서만 허용
+        if not settings.api_debug:
+            raise HTTPException(status_code=503, detail="Admin token not configured")
+        return
+    if scheme.lower() != "bearer" or token != expected:
         raise HTTPException(status_code=401, detail="Invalid admin token")
 
 
@@ -915,7 +921,10 @@ async def stream_crawl_run(
     db: AsyncSession = Depends(get_db),
 ):
     # SSE는 Authorization 헤더를 쓸 수 없어 쿼리 파라미터로 인증
-    if token != settings.admin_bearer_token:
+    expected = settings.admin_bearer_token
+    if expected is None and settings.api_debug:
+        pass  # 로컬 개발 허용
+    elif token != expected:
         raise HTTPException(status_code=401, detail="Invalid admin token")
     """SSE — 크롤 실행 중 실시간 진행상황 스트리밍 (3초 폴링)."""
 

@@ -287,6 +287,9 @@ class ProductCrawler:
         result = ChannelProductResult(channel_url=channel_url)
 
         try:
+            shopify_currency = await self._get_shopify_currency(channel_url)
+            if shopify_currency:
+                currency = shopify_currency.upper()
             products = await self._try_shopify_products(channel_url, currency)
             if products:
                 result.products = products

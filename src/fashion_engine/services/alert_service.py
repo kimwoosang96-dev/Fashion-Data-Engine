@@ -174,6 +174,49 @@ async def send_heartbeat_alert(
     return await _send_embed({"embeds": [embed]})
 
 
+async def send_coverage_report_alert(report: Any) -> bool:
+    fields = [
+        {
+            "name": "❌ 수집 불가 채널",
+            "value": "\n".join(
+                f"· {row.channel_name} ({row.note})" for row in report.dead_channels[:8]
+            ) or "없음",
+            "inline": False,
+        },
+        {
+            "name": "⚠️ 수집률 급감 채널",
+            "value": "\n".join(
+                f"· {row.channel_name} ({row.previous_count} → {row.recent_count})"
+                for row in report.degraded_channels[:8]
+            ) or "없음",
+            "inline": False,
+        },
+        {
+            "name": "📝 Draft 채널",
+            "value": "\n".join(
+                f"· {row.channel_name}" for row in report.draft_channels[:8]
+            ) or "없음",
+            "inline": False,
+        },
+    ]
+    if getattr(report, "output_path", None):
+        fields.append(
+            {
+                "name": "CSV",
+                "value": str(report.output_path),
+                "inline": False,
+            }
+        )
+
+    embed = {
+        "title": "📊 채널 커버리지 리포트",
+        "description": getattr(report, "generated_at", datetime.utcnow()).strftime("%Y-%m-%d %H:%M UTC"),
+        "color": 0x5865F2,
+        "fields": fields,
+    }
+    return await _send_embed({"embeds": [embed]})
+
+
 async def send_test_alert() -> bool:
     """Discord 연결 테스트용 알림."""
     payload = AlertPayload(

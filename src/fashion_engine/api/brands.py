@@ -1,6 +1,8 @@
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from collections import defaultdict
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,6 +24,10 @@ from fashion_engine.api.schemas import (
     CollabOut,
     BrandDirectorOut,
     BrandRankingOut,
+    BrandsHeatmapOut,
+    BrandsHeatmapBrandOut,
+    BrandsHeatmapChannelOut,
+    BrandsHeatmapCellOut,
 )
 
 router = APIRouter(prefix="/brands", tags=["brands"])
@@ -112,6 +118,92 @@ async def get_brand_ranking(
     db: AsyncSession = Depends(get_db),
 ):
     return await product_service.get_brand_sale_ranking(db, limit=limit)
+
+
+@router.get("/heatmap", response_model=BrandsHeatmapOut)
+async def brands_heatmap(
+    tier: str | None = Query(None),
+    country: str | None = Query(None),
+    response: Response = None,
+    db: AsyncSession = Depends(get_db),
+):
+    if tier and tier not in VALID_TIERS:
+        raise HTTPException(status_code=400, detail=f"유효하지 않은 tier. 허용값: {', '.join(sorted(VALID_TIERS))}")
+    if response is not None:
+        response.headers["Cache-Control"] = "public, max-age=300"
+
+    rows = (
+        await db.execute(
+            select(
+                Brand.id.label("brand_id"),
+                Brand.name.label("brand_name"),
+                Brand.slug.label("brand_slug"),
+                Brand.tier.label("brand_tier"),
+                Channel.id.label("channel_id"),
+                Channel.name.label("channel_name"),
+                Channel.country.label("channel_country"),
+                func.avg(Product.discount_rate).label("avg_discount_rate"),
+                func.count(Product.id).label("product_count"),
+            )
+            .join(Product, Product.brand_id == Brand.id)
+            .join(Channel, Product.channel_id == Channel.id)
+            .where(
+                Product.is_sale == True,  # noqa: E712
+                Product.is_active == True,  # noqa: E712
+                Product.discount_rate.is_not(None),
+            )
+            .group_by(Brand.id, Channel.id)
+            .order_by(func.count(Product.id).desc(), func.avg(Product.discount_rate).desc())
+        )
+    ).all()
+
+    if tier:
+        rows = [row for row in rows if row.brand_tier == tier]
+    if country:
+        rows = [row for row in rows if row.channel_country == country]
+
+    brand_totals: dict[int, int] = defaultdict(int)
+    channel_totals: dict[int, int] = defaultdict(int)
+    for row in rows:
+        brand_totals[int(row.brand_id)] += int(row.product_count or 0)
+        channel_totals[int(row.channel_id)] += int(row.product_count or 0)
+
+    top_brand_ids = {brand_id for brand_id, _ in sorted(brand_totals.items(), key=lambda item: (-item[1], item[0]))[:30]}
+    top_channel_ids = {channel_id for channel_id, _ in sorted(channel_totals.items(), key=lambda item: (-item[1], item[0]))[:20]}
+
+    filtered_rows = [
+        row
+        for row in rows
+        if row.brand_id in top_brand_ids and row.channel_id in top_channel_ids
+    ]
+
+    brands_map: dict[int, BrandsHeatmapBrandOut] = {}
+    channels_map: dict[int, BrandsHeatmapChannelOut] = {}
+    cells: list[BrandsHeatmapCellOut] = []
+    for row in filtered_rows:
+        brands_map[int(row.brand_id)] = BrandsHeatmapBrandOut(
+            id=int(row.brand_id),
+            name=row.brand_name,
+            slug=row.brand_slug,
+            tier=row.brand_tier,
+        )
+        channels_map[int(row.channel_id)] = BrandsHeatmapChannelOut(
+            id=int(row.channel_id),
+            name=row.channel_name,
+            country=row.channel_country,
+        )
+        cells.append(
+            BrandsHeatmapCellOut(
+                brand_id=int(row.brand_id),
+                channel_id=int(row.channel_id),
+                discount_rate=float(row.avg_discount_rate or 0),
+                product_count=int(row.product_count or 0),
+            )
+        )
+
+    brands = sorted(brands_map.values(), key=lambda item: ((item.tier or "zzz"), item.name.lower()))
+    channels = sorted(channels_map.values(), key=lambda item: (item.country or "ZZ", item.name.lower()))
+    return BrandsHeatmapOut(brands=brands, channels=channels, cells=cells)
 
 
 @router.get("/{slug}", response_model=BrandOut)

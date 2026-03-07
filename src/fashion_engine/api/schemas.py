@@ -240,6 +240,15 @@ class ProductKeyOut(BaseModel):
     product_key: str
 
 
+class SearchSuggestionOut(BaseModel):
+    type: Literal["brand", "product"]
+    label: str
+    slug: str | None = None
+    product_key: str | None = None
+    channel_name: str | None = None
+    product_url: str | None = None
+
+
 class ProductRankingOut(BaseModel):
     product_key: str | None
     product_name: str
@@ -367,6 +376,39 @@ class DropOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class DropsCalendarEntryOut(BaseModel):
+    brand_name: str | None = None
+    title: str
+    event_type: str
+    source_url: str | None = None
+
+
+class BrandsHeatmapBrandOut(BaseModel):
+    id: int
+    name: str
+    slug: str
+    tier: str | None = None
+
+
+class BrandsHeatmapChannelOut(BaseModel):
+    id: int
+    name: str
+    country: str | None = None
+
+
+class BrandsHeatmapCellOut(BaseModel):
+    brand_id: int
+    channel_id: int
+    discount_rate: float
+    product_count: int
+
+
+class BrandsHeatmapOut(BaseModel):
+    brands: list[BrandsHeatmapBrandOut]
+    channels: list[BrandsHeatmapChannelOut]
+    cells: list[BrandsHeatmapCellOut]
+
+
 class CrawlChannelLogOut(BaseModel):
     id: int
     channel_id: int
@@ -394,6 +436,7 @@ class CrawlRunOut(BaseModel):
     new_products: int
     updated_products: int
     error_channels: int
+    gpt_fallback_count: int = 0
 
     model_config = {"from_attributes": True}
 

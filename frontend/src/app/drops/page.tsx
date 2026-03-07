@@ -45,6 +45,9 @@ export default function DropsPage() {
       <div>
         <h1 className="text-2xl font-bold">드롭</h1>
         <p className="text-sm text-gray-500 mt-1">신제품 발매 및 예정 드롭</p>
+        <Link href="/drops/calendar" className="mt-2 inline-block text-sm font-medium text-blue-600 hover:underline">
+          캘린더 보기
+        </Link>
       </div>
 
       {/* Search */}

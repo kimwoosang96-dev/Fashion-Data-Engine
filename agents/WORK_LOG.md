@@ -9,6 +9,13 @@
 
 ## 기록
 
+- 2026-03-08 14:20:00 | agent:codex-dev | task:T-20260308-111 | action:complete | message:SEARCH_AUTOCOMPLETE_01 완료: `/products/search/suggestions` API와 대시보드 자동완성 드롭다운을 debounce/키보드 탐색 방식으로 구현하고 프론트 빌드 검증을 마쳤다.
+- 2026-03-08 14:21:00 | agent:codex-dev | task:T-20260308-112 | action:complete | message:DROPS_CALENDAR_01 완료: `/drops/calendar` API와 `/drops/calendar` 페이지를 추가해 intel drops/new_drop 이벤트를 월별 달력과 모바일 목록으로 시각화했다.
+- 2026-03-08 14:22:00 | agent:codex-dev | task:T-20260308-113 | action:complete | message:BRAND_SALE_HEATMAP_01 완료: `/brands/heatmap` API와 히트맵 페이지를 추가하고 티어/국가 필터, hover 툴팁, 상위 30×20 제한을 반영했다.
+- 2026-03-08 14:23:00 | agent:codex-dev | task:T-20260308-114 | action:complete | message:ADMIN_INTEL_DASHBOARD_01 완료: `/admin/intel-status`와 `/admin/crawl-runs`를 확장해 activity_feed/GPT/OAuth 지표를 추가하고 Admin UI에 카드와 분포 막대를 반영했다.
+- 2026-03-08 14:24:00 | agent:codex-dev | task:T-20260308-115 | action:complete | message:COVERAGE_REPORT_01 완료: `scripts/coverage_report.py`, Discord 리포트 포맷, scheduler 주간 잡을 추가했다. `scheduler.py --dry-run` 검증은 성공했고 로컬 SQLite smoke test는 기존 DB lock 때문에 제한됐다.
+- 2026-03-08 14:25:00 | agent:codex-dev | task:T-20260308-110 | action:log | message:GPT_ACTIONS_OAUTH_VERIFY_01은 코드 준비 완료 상태다. Custom GPT Actions UI와 Railway 운영 주소에서 실제 승인/토큰 교환/ingest 기록 생성은 수동 검증이 남아 active로 유지한다.
+- 2026-03-08 14:26:00 | agent:codex-dev | task:T-20260308-116 | action:log | message:PRODUCT_PRICE_ALERT_01은 제품별 target_price와 웹 푸시 실수신 검증이 필요하다. 현재 PWA_PUSH_01 실브라우저 검증이 선행되어야 하므로 이번 턴에는 착수하지 않고 의존성 상태로 남긴다.
 - 2026-03-08 02:24:00 | agent:codex-dev | task:T-20260308-105 | action:log | message:PWA_PUSH_01 구현분 반영: pywebpush 의존성, push_subscriptions 모델/API, service worker/manifest, /feed 구독 UI, watch_agent 푸시 발송 경로 추가. 브라우저 실수신 검증은 VAPID 키 설정 후 남음.
 - 2026-03-08 01:12:00 | agent:codex-dev | task:T-20260308-104 | action:complete | message:WEBHOOK_COMMUNITY_01 완료: Shopify webhook HMAC 검증 엔드포인트와 채널별 webhook secret 저장 경로를 추가하고, DCinside HTML 파서 기반 커뮤니티 수집 스크립트를 구현했다.
 - 2026-03-08 00:56:00 | agent:codex-dev | task:T-20260308-103 | action:complete | message:FAST_POLL_SCHEDULER_01 완료: channels.poll_priority 컬럼, crawl_products `--fast-poll/--new-only/--dry-run`, scheduler 2시간/1시간 주기, admin 우선순위 조정 UI/API를 추가하고 dry-run/build 검증을 마쳤다.

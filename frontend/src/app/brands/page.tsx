@@ -68,6 +68,9 @@ export default function BrandsPage() {
       <div>
         <h1 className="text-2xl font-bold">브랜드</h1>
         <p className="text-sm text-gray-500 mt-1">신상품 판매 여부 강조</p>
+        <Link href="/brands/heatmap" className="mt-2 inline-block text-sm font-medium text-blue-600 hover:underline">
+          세일 히트맵 보기
+        </Link>
       </div>
 
       {/* 필터 행 1: 텍스트 검색 + 티어 + 국가 */}

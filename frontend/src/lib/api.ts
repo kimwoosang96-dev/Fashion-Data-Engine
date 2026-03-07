@@ -7,7 +7,7 @@ import type {
   FashionNews, CollabItem, BrandDirector, DirectorsByBrand, AdminCollabItem, AdminAuditItem, MultiChannelProduct,
   CrawlRunOut, CrawlRunDetail, ChannelNoteOut, ActivityFeedItem, AdminDraftChannel,
   IntelEvent, IntelEventsPage, IntelMapPoint, IntelTimelineOut, AdminIntelStatus,
-  PushPublicKey,
+  PushPublicKey, SearchSuggestion, DropsCalendarEntry, BrandsHeatmapData,
 } from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -40,6 +40,10 @@ export const getSaleProducts = (limit = 50, brand?: string) =>
 
 export const searchProducts = (q: string) =>
   apiFetch<Product[]>(`/products/search?q=${encodeURIComponent(q)}&limit=20`);
+export const getSearchSuggestions = (q: string, limit = 8) =>
+  apiFetch<SearchSuggestion[]>(
+    `/products/search/suggestions?q=${encodeURIComponent(q)}&limit=${limit}`
+  );
 export const getRelatedSearches = (q: string, limit = 8) =>
   apiFetch<string[]>(
     `/products/related-searches?q=${encodeURIComponent(q)}&limit=${limit}`
@@ -108,6 +112,12 @@ export const getBrandCollabs = (slug: string) =>
   apiFetch<CollabItem[]>(`/brands/${encodeURIComponent(slug)}/collabs`);
 export const getBrandRanking = (limit = 50) =>
   apiFetch<BrandRankingItem[]>(`/brands/ranking?limit=${limit}`);
+export const getBrandsHeatmap = (tier?: string, country?: string) => {
+  const q = new URLSearchParams();
+  if (tier) q.set("tier", tier);
+  if (country) q.set("country", country);
+  return apiFetch<BrandsHeatmapData>(`/brands/heatmap${q.toString() ? `?${q.toString()}` : ""}`);
+};
 
 // ── Channels ──────────────────────────────────────────────────────────────
 export const getChannels = () => apiFetch<Channel[]>("/channels/");
@@ -142,6 +152,8 @@ export const deletePurchase = (id: number) =>
 export const getUpcomingDrops = () => apiFetch<Drop[]>("/drops/upcoming");
 export const getDrops = (status?: string) =>
   apiFetch<Drop[]>(`/drops/${status ? `?status=${status}` : ""}`);
+export const getDropsCalendar = (year: number, month: number) =>
+  apiFetch<Record<string, DropsCalendarEntry[]>>(`/drops/calendar?year=${year}&month=${month}`);
 
 // ── Admin ────────────────────────────────────────────────────────────────
 export const getAdminStats = (token: string) =>

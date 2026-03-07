@@ -525,6 +525,7 @@ export default function AdminPage() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
                 <Stat label="이벤트 총계" value={intelStatus.events_total} />
                 <Stat label="24시간 이벤트" value={intelStatus.events_last_24h} />
+                <Stat label="Feed 24h" value={intelStatus.activity_feed_24h} />
                 <Stat
                   label="Freshness(분)"
                   value={intelStatus.freshness_minutes ?? "-"}
@@ -532,6 +533,18 @@ export default function AdminPage() {
                 <Stat
                   label="최근 런 상태"
                   value={intelStatus.latest_run.status ?? "-"}
+                />
+                <Stat
+                  label="OAuth"
+                  value={intelStatus.oauth_active ? "active" : "disabled"}
+                />
+                <Stat
+                  label="GPT 채널"
+                  value={intelStatus.gpt_parser_usage.enabled_channels}
+                />
+                <Stat
+                  label="GPT 호출(24h)"
+                  value={intelStatus.gpt_parser_usage.last_24h_calls}
                 />
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
@@ -541,6 +554,46 @@ export default function AdminPage() {
                     <p className="font-semibold">{v}</p>
                   </div>
                 ))}
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <section className="rounded-xl border border-gray-200 p-3">
+                  <h3 className="text-xs font-semibold text-gray-700">Activity Feed 분포</h3>
+                  <div className="mt-3 space-y-2">
+                    {Object.entries(intelStatus.activity_feed_by_type).map(([type, count]) => (
+                      <div key={type}>
+                        <div className="mb-1 flex items-center justify-between text-xs text-gray-500">
+                          <span>{type}</span>
+                          <span>{count}</span>
+                        </div>
+                        <div className="h-2 rounded-full bg-gray-100">
+                          <div
+                            className="h-2 rounded-full bg-gray-900"
+                            style={{
+                              width: `${Math.max(8, (count / Math.max(intelStatus.activity_feed_24h, 1)) * 100)}%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                    {Object.keys(intelStatus.activity_feed_by_type).length === 0 && (
+                      <p className="text-xs text-gray-400">최근 24시간 activity_feed 이벤트가 없습니다.</p>
+                    )}
+                  </div>
+                </section>
+                <section className="rounded-xl border border-gray-200 p-3">
+                  <h3 className="text-xs font-semibold text-gray-700">최근 72시간 활발한 브랜드</h3>
+                  <div className="mt-3 space-y-2">
+                    {intelStatus.top_active_brands.map((item) => (
+                      <div key={item.brand_name} className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2 text-sm">
+                        <span className="font-medium text-gray-900">{item.brand_name}</span>
+                        <span className="text-gray-500">{item.event_count}건</span>
+                      </div>
+                    ))}
+                    {intelStatus.top_active_brands.length === 0 && (
+                      <p className="text-xs text-gray-400">집계 가능한 브랜드 이벤트가 없습니다.</p>
+                    )}
+                  </div>
+                </section>
               </div>
             </div>
           )}
@@ -837,6 +890,7 @@ export default function AdminPage() {
                       <th className="px-4 py-2 text-left">상태</th>
                       <th className="px-4 py-2 text-right">진행</th>
                       <th className="px-4 py-2 text-right">신규</th>
+                      <th className="px-4 py-2 text-right">GPT</th>
                       <th className="px-4 py-2 text-right">에러</th>
                     </tr>
                   </thead>
@@ -862,6 +916,7 @@ export default function AdminPage() {
                           {run.done_channels}/{run.total_channels}
                         </td>
                         <td className="px-4 py-2 text-right text-emerald-600">+{run.new_products}</td>
+                        <td className="px-4 py-2 text-right text-violet-600">{run.gpt_fallback_count}</td>
                         <td className="px-4 py-2 text-right text-red-500">{run.error_channels}</td>
                       </tr>
                     ))}

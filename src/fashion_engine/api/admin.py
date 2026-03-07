@@ -26,6 +26,7 @@ from fashion_engine.models.product import Product
 from fashion_engine.models.product_catalog import ProductCatalog
 from fashion_engine.models.crawl_run import CrawlRun, CrawlChannelLog
 from fashion_engine.models.channel_note import ChannelNote
+from fashion_engine.models.activity_feed import ActivityFeed
 from fashion_engine.models.intel import IntelEvent, IntelIngestRun
 from fashion_engine.api.schemas import (
     CrawlRunOut,
@@ -188,6 +189,45 @@ async def get_admin_intel_status(
     for key in ["sale_start", "sold_out", "restock", "sales_spike"]:
         derived.setdefault(key, 0)
 
+    activity_feed_24h = (
+        await db.execute(
+            select(func.count(ActivityFeed.id)).where(ActivityFeed.detected_at >= cutoff)
+        )
+    ).scalar_one()
+    activity_feed_type_rows = (
+        await db.execute(
+            select(ActivityFeed.event_type, func.count(ActivityFeed.id))
+            .where(ActivityFeed.detected_at >= cutoff)
+            .group_by(ActivityFeed.event_type)
+            .order_by(func.count(ActivityFeed.id).desc())
+        )
+    ).all()
+    gpt_enabled_channels = (
+        await db.execute(
+            select(func.count(Channel.id)).where(Channel.use_gpt_parser == True)  # noqa: E712
+        )
+    ).scalar_one()
+    gpt_calls_last_24h = (
+        await db.execute(
+            select(func.count(CrawlChannelLog.id))
+            .where(
+                CrawlChannelLog.strategy == "gpt-parser",
+                CrawlChannelLog.crawled_at >= cutoff,
+            )
+        )
+    ).scalar_one()
+    top_active_brand_rows = (
+        await db.execute(
+            select(Brand.name, func.count(ActivityFeed.id).label("event_count"))
+            .join(Brand, Brand.id == ActivityFeed.brand_id)
+            .where(ActivityFeed.detected_at >= now_utc - timedelta(hours=72))
+            .group_by(Brand.id, Brand.name)
+            .order_by(func.count(ActivityFeed.id).desc(), Brand.name.asc())
+            .limit(5)
+        )
+    ).all()
+    activity_feed_by_type = {event_type: int(count) for event_type, count in activity_feed_type_rows}
+
     return {
         "latest_run": {
             "id": latest_run.id if latest_run else None,
@@ -205,6 +245,17 @@ async def get_admin_intel_status(
         "freshness_minutes": freshness_minutes,
         "layers": [{"layer": layer, "count": int(count)} for layer, count in layer_rows],
         "derived_24h": derived,
+        "activity_feed_24h": int(activity_feed_24h or 0),
+        "activity_feed_by_type": activity_feed_by_type,
+        "gpt_parser_usage": {
+            "enabled_channels": int(gpt_enabled_channels or 0),
+            "last_24h_calls": int(gpt_calls_last_24h or 0),
+        },
+        "oauth_active": settings.admin_bearer_token is not None,
+        "top_active_brands": [
+            {"brand_name": brand_name, "event_count": int(event_count or 0)}
+            for brand_name, event_count in top_active_brand_rows
+        ],
     }
 
 
@@ -981,12 +1032,41 @@ async def get_crawl_runs(
     db: AsyncSession = Depends(get_db),
 ):
     """최근 크롤 실행 목록."""
+    gpt_counts = (
+        select(
+            CrawlChannelLog.run_id.label("run_id"),
+            func.count(CrawlChannelLog.id).label("gpt_fallback_count"),
+        )
+        .where(CrawlChannelLog.strategy == "gpt-parser")
+        .group_by(CrawlChannelLog.run_id)
+        .subquery()
+    )
     rows = (
         await db.execute(
-            select(CrawlRun).order_by(desc(CrawlRun.started_at)).limit(limit)
+            select(
+                CrawlRun,
+                func.coalesce(gpt_counts.c.gpt_fallback_count, 0).label("gpt_fallback_count"),
+            )
+            .outerjoin(gpt_counts, gpt_counts.c.run_id == CrawlRun.id)
+            .order_by(desc(CrawlRun.started_at))
+            .limit(limit)
         )
-    ).scalars().all()
-    return rows
+    ).all()
+    return [
+        CrawlRunOut(
+            id=run.id,
+            started_at=run.started_at,
+            finished_at=run.finished_at,
+            status=run.status,
+            total_channels=run.total_channels,
+            done_channels=run.done_channels,
+            new_products=run.new_products,
+            updated_products=run.updated_products,
+            error_channels=run.error_channels,
+            gpt_fallback_count=int(gpt_fallback_count or 0),
+        )
+        for run, gpt_fallback_count in rows
+    ]
 
 
 @router.get("/crawl-runs/{run_id}", response_model=CrawlRunDetail)

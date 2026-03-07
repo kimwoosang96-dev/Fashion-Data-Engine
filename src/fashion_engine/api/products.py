@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fashion_engine.database import get_db
@@ -11,6 +11,7 @@ from fashion_engine.api.schemas import (
     MultiChannelProductOut,
     ProductKeyOut,
     ProductRankingOut,
+    SearchSuggestionOut,
 )
 
 router = APIRouter(prefix="/products", tags=["products"])
@@ -51,6 +52,18 @@ async def search_products(
 ):
     """제품명 검색."""
     return await product_service.search_products(db, q=q, limit=limit)
+
+
+@router.get("/search/suggestions", response_model=list[SearchSuggestionOut])
+async def search_suggestions(
+    q: str = Query(..., min_length=1, max_length=50),
+    limit: int = Query(8, ge=1, le=20),
+    response: Response = None,
+    db: AsyncSession = Depends(get_db),
+):
+    if response is not None:
+        response.headers["Cache-Control"] = "public, max-age=60"
+    return await product_service.search_suggestions(db, q=q, limit=limit)
 
 
 @router.get("/sales-highlights", response_model=list[SaleHighlightOut])

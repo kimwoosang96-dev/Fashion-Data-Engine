@@ -1,15 +1,16 @@
 "use client";
 import { useEffect, useState, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 import {
   getSaleHighlights,
   getChannels,
   getBrands,
   getProductRanking,
   searchProducts,
+  getSearchSuggestions,
   getRelatedSearches,
-  searchBrands,
 } from "@/lib/api";
-import type { Product, Channel, Brand, SaleHighlight, ProductRankingItem } from "@/lib/types";
+import type { Product, Channel, Brand, SaleHighlight, ProductRankingItem, SearchSuggestion } from "@/lib/types";
 import { ProductCard } from "@/components/ProductCard";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
@@ -23,16 +24,18 @@ function formatSaleStart(hours: number | null) {
 }
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [saleProducts, setSaleProducts] = useState<SaleHighlight[]>([]);
   const [baseSaleProducts, setBaseSaleProducts] = useState<SaleHighlight[]>([]);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [hotRanking, setHotRanking] = useState<ProductRankingItem[]>([]);
   const [searchResults, setSearchResults] = useState<Product[] | null>(null);
-  const [brandSuggestions, setBrandSuggestions] = useState<Brand[]>([]);
+  const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
   const [relatedSearches, setRelatedSearches] = useState<string[]>([]);
   const [query, setQuery] = useState("");
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const searchBoxRef = useRef<HTMLDivElement>(null);
 
@@ -58,38 +61,70 @@ export default function DashboardPage() {
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, []);
 
-  const handleSearch = useCallback(async (q: string) => {
-    setQuery(q);
-    if (!q.trim()) {
-      setSearchResults(null);
-      setBrandSuggestions([]);
-      setRelatedSearches([]);
-      setSaleProducts(baseSaleProducts);
-      setDropdownOpen(false);
-      return;
-    }
-    const [products, brandsFound, related] = await Promise.all([
-      searchProducts(q),
-      searchBrands(q),
-      getRelatedSearches(q, 8),
-    ]);
-    setSearchResults(products);
-    setBrandSuggestions(brandsFound);
-    setRelatedSearches(related);
-    setDropdownOpen(true);
-  }, [baseSaleProducts]);
-
-  const handleBrandClick = useCallback(async (brand: Brand) => {
-    const filtered = await searchProducts(brand.name);
+  const executeSearch = useCallback(async (term: string) => {
+    const filtered = await searchProducts(term);
     setSearchResults(filtered);
-    setBrandSuggestions([]);
-    setQuery(brand.name);
+    setSuggestions([]);
+    setRelatedSearches([]);
+    setQuery(term);
     setDropdownOpen(false);
   }, []);
 
+  const handleSearchChange = useCallback((q: string) => {
+    setQuery(q);
+    if (!q.trim()) {
+      setSearchResults(null);
+      setSuggestions([]);
+      setRelatedSearches([]);
+      setSaleProducts(baseSaleProducts);
+      setDropdownOpen(false);
+      setActiveSuggestionIndex(0);
+      return;
+    }
+    setDropdownOpen(true);
+  }, [baseSaleProducts]);
+
+  useEffect(() => {
+    const trimmed = query.trim();
+    if (!trimmed) return;
+    const timer = window.setTimeout(() => {
+      void Promise.all([
+        getSearchSuggestions(trimmed, 8),
+        getRelatedSearches(trimmed, 8),
+      ]).then(([nextSuggestions, related]) => {
+        setSuggestions(nextSuggestions);
+        setRelatedSearches(related);
+        setActiveSuggestionIndex(0);
+        setDropdownOpen(nextSuggestions.length > 0);
+      }).catch(() => {
+        setSuggestions([]);
+      });
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+
+  const handleSuggestionSelect = useCallback((item: SearchSuggestion) => {
+    if (item.type === "brand" && item.slug) {
+      setDropdownOpen(false);
+      router.push(`/brands/${encodeURIComponent(item.slug)}`);
+      return;
+    }
+    void executeSearch(item.label);
+  }, [executeSearch, router]);
+
+  const handleSearchSubmit = useCallback(() => {
+    if (!query.trim()) return;
+    const activeItem = suggestions[activeSuggestionIndex];
+    if (dropdownOpen && activeItem) {
+      handleSuggestionSelect(activeItem);
+      return;
+    }
+    void executeSearch(query.trim());
+  }, [activeSuggestionIndex, dropdownOpen, executeSearch, handleSuggestionSelect, query, suggestions]);
+
   const handleProductClick = useCallback((product: Product) => {
     setSearchResults([product]);
-    setBrandSuggestions([]);
+    setSuggestions([]);
     setDropdownOpen(false);
     setQuery(product.name);
   }, []);
@@ -129,15 +164,34 @@ export default function DashboardPage() {
         <Input
           placeholder="제품 검색..."
           value={query}
-          onChange={(e) => handleSearch(e.target.value)}
+          onChange={(e) => handleSearchChange(e.target.value)}
+          onFocus={() => setDropdownOpen(suggestions.length > 0)}
+          onKeyDown={(e) => {
+            if (e.key === "ArrowDown") {
+              e.preventDefault();
+              if (!suggestions.length) return;
+              setDropdownOpen(true);
+              setActiveSuggestionIndex((prev) => (prev + 1) % suggestions.length);
+            } else if (e.key === "ArrowUp") {
+              e.preventDefault();
+              if (!suggestions.length) return;
+              setDropdownOpen(true);
+              setActiveSuggestionIndex((prev) => (prev - 1 + suggestions.length) % suggestions.length);
+            } else if (e.key === "Enter") {
+              e.preventDefault();
+              handleSearchSubmit();
+            } else if (e.key === "Escape") {
+              setDropdownOpen(false);
+            }
+          }}
           className="bg-white"
         />
         {dropdownOpen && query.trim() && (
           <SearchDropdown
-            brandResults={brandSuggestions}
-            productResults={searchResults ?? []}
-            onBrandClick={handleBrandClick}
-            onProductClick={handleProductClick}
+            suggestions={suggestions}
+            activeIndex={activeSuggestionIndex}
+            onHover={setActiveSuggestionIndex}
+            onSelect={handleSuggestionSelect}
           />
         )}
         {query.trim() && relatedSearches.length > 0 && (
@@ -146,7 +200,10 @@ export default function DashboardPage() {
               <button
                 key={term}
                 type="button"
-                onClick={() => handleSearch(term)}
+                onClick={() => {
+                  setQuery(term);
+                  void executeSearch(term);
+                }}
                 className="text-xs rounded-full border border-gray-200 bg-white px-2.5 py-1 text-gray-600 hover:border-gray-300 hover:text-gray-900"
               >
                 {term}

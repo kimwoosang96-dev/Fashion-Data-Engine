@@ -26,6 +26,7 @@ sys.path.insert(0, str(ROOT / "src"))
 import crawl_products  # noqa: E402
 import crawl_drops  # noqa: E402
 import crawl_news  # noqa: E402
+import coverage_report  # noqa: E402
 import data_audit  # noqa: E402
 import ingest_intel_events  # noqa: E402
 import manage_partitions  # noqa: E402
@@ -175,6 +176,22 @@ async def run_data_audit_job() -> None:
         LOGGER.exception("[JOB] data-audit failed")
 
 
+async def run_coverage_report_job() -> None:
+    try:
+        LOGGER.info("[JOB] coverage-report started")
+        path = ROOT / "reports" / f"coverage_report_{datetime.now().strftime('%Y-%m-%d')}.csv"
+        report = await coverage_report.run(output_path=str(path), send_discord=True)
+        LOGGER.info(
+            "[JOB] coverage-report completed dead=%s degraded=%s draft=%s output=%s",
+            len(report.dead_channels),
+            len(report.degraded_channels),
+            len(report.draft_channels),
+            report.output_path,
+        )
+    except Exception:
+        LOGGER.exception("[JOB] coverage-report failed")
+
+
 async def run_intel_mirror_job() -> None:
     if not settings.intel_ingest_enabled:
         LOGGER.info("[JOB] intel-mirror skipped (INTEL_INGEST_ENABLED=false)")
@@ -282,6 +299,12 @@ def register_jobs(scheduler: AsyncIOScheduler) -> None:
         replace_existing=True,
     )
     scheduler.add_job(
+        run_coverage_report_job,
+        CronTrigger(day_of_week="sun", hour=9, minute=5),
+        id="coverage_weekly_sun_0905",
+        replace_existing=True,
+    )
+    scheduler.add_job(
         run_intel_mirror_job,
         CronTrigger(hour="0,6,12,18", minute=10),
         id="intel_mirror_4x_daily",
@@ -301,9 +324,9 @@ def register_jobs(scheduler: AsyncIOScheduler) -> None:
     )
     scheduler.add_job(
         run_scheduler_heartbeat_job,
-        CronTrigger(hour=9, minute=5),
+        CronTrigger(hour=9, minute=10),
         kwargs={"scheduler": scheduler},
-        id="scheduler_heartbeat_daily_0905",
+        id="scheduler_heartbeat_daily_0910",
         replace_existing=True,
     )
 

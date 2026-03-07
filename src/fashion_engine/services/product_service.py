@@ -3,7 +3,7 @@ from decimal import Decimal
 import logging
 
 from slugify import slugify
-from sqlalchemy import select, func, desc, cast, String
+from sqlalchemy import select, func, desc, cast, String, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -492,6 +492,78 @@ async def search_products(
         .limit(limit)
     )
     return list(result.scalars().all())
+
+
+async def search_suggestions(
+    db: AsyncSession,
+    q: str,
+    limit: int = 8,
+) -> list[dict]:
+    query = q.strip()
+    if not query:
+        return []
+
+    brand_limit = max(1, min(limit // 2, 4))
+    product_limit = max(1, min(limit - brand_limit, 4))
+    prefix = f"{query}%"
+    contains = f"%{query}%"
+
+    brand_rows = (
+        await db.execute(
+            select(Brand.slug, Brand.name)
+            .where(
+                or_(
+                    Brand.name.ilike(prefix),
+                    Brand.name_ko.ilike(prefix),
+                    Brand.slug.ilike(prefix),
+                )
+            )
+            .order_by(Brand.name.asc())
+            .limit(brand_limit)
+        )
+    ).all()
+
+    product_rows = (
+        await db.execute(
+            select(
+                Product.product_key,
+                Product.name,
+                Product.url,
+                Channel.name.label("channel_name"),
+            )
+            .join(Channel, Product.channel_id == Channel.id)
+            .where(
+                Product.is_active == True,  # noqa: E712
+                Product.name.ilike(contains),
+            )
+            .order_by(Product.name.asc(), Channel.name.asc())
+            .limit(product_limit)
+        )
+    ).all()
+
+    suggestions: list[dict] = [
+        {
+            "type": "brand",
+            "label": brand_name,
+            "slug": slug,
+            "product_key": None,
+            "channel_name": None,
+            "product_url": None,
+        }
+        for slug, brand_name in brand_rows
+    ]
+    suggestions.extend(
+        {
+            "type": "product",
+            "label": name,
+            "slug": None,
+            "product_key": product_key,
+            "channel_name": channel_name,
+            "product_url": product_url,
+        }
+        for product_key, name, product_url, channel_name in product_rows
+    )
+    return suggestions[:limit]
 
 
 async def get_sale_highlights(

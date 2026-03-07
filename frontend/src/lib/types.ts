@@ -219,6 +219,15 @@ export interface ProductRankingItem {
   badges: string[];
 }
 
+export interface SearchSuggestion {
+  type: "brand" | "product";
+  label: string;
+  slug: string | null;
+  product_key: string | null;
+  channel_name: string | null;
+  product_url: string | null;
+}
+
 export interface BrandRankingItem {
   brand_id: number;
   brand_name: string;
@@ -390,6 +399,7 @@ export interface CrawlRunOut {
   new_products: number;
   updated_products: number;
   error_channels: number;
+  gpt_fallback_count: number;
 }
 
 export interface CrawlRunDetail extends CrawlRunOut {
@@ -512,4 +522,28 @@ export interface AdminIntelStatus {
   freshness_minutes: number | null;
   layers: Array<{ layer: string; count: number }>;
   derived_24h: Record<string, number>;
+  activity_feed_24h: number;
+  activity_feed_by_type: Record<string, number>;
+  gpt_parser_usage: {
+    enabled_channels: number;
+    last_24h_calls: number;
+  };
+  oauth_active: boolean;
+  top_active_brands: Array<{
+    brand_name: string;
+    event_count: number;
+  }>;
+}
+
+export interface DropsCalendarEntry {
+  brand_name: string | null;
+  title: string;
+  event_type: string;
+  source_url: string | null;
+}
+
+export interface BrandsHeatmapData {
+  brands: Array<{ id: number; name: string; slug: string; tier: string | null }>;
+  channels: Array<{ id: number; name: string; country: string | null }>;
+  cells: Array<{ brand_id: number; channel_id: number; discount_rate: number; product_count: number }>;
 }

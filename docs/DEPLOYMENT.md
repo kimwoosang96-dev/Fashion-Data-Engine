@@ -1,11 +1,17 @@
 # 배포 가이드 (Railway + Vercel)
 
+## 필수 경고
+
+- `railway.json`은 공용 기본 설정 파일입니다. `startCommand`나 `healthcheckPath`를 넣지 않습니다.
+- API 서비스는 반드시 `Config File Path = railway.api.json` 이어야 합니다.
+- Worker 서비스는 반드시 `Config File Path = railway.worker.json` 이어야 합니다.
+- 둘 중 하나라도 Config File Path를 비워두면 Railway가 잘못된 파일을 읽어 `502` 또는 `CRASHED` 상태가 재발할 수 있습니다.
+
 ## 1) 백엔드 Railway (Web Service)
 
 - 서비스 타입: `Web Service`
 - 리포지토리 루트 사용
 - 권장 Config File Path: `railway.api.json`
-- 대체 방식: Config File Path를 비우면 루트 `railway.json`이 동일한 API 설정으로 동작
 - Start Command: `uv run alembic upgrade head && uv run uvicorn fashion_engine.api.main:app --host 0.0.0.0 --port ${PORT}`
 - Health Check Path: `/health`
 - Health Check Timeout: `120`
@@ -16,6 +22,7 @@ Dashboard 설정 순서:
 2. `Settings` → `Deploy`
 3. `Config as Code` 또는 `Config File Path` 항목에서 API 서비스는 `railway.api.json` 지정
 4. 저장 후 재배포
+5. `Config File Path`가 비어 있지 않은지 다시 확인
 
 필수 환경변수:
 
@@ -44,6 +51,7 @@ Dashboard 설정 순서:
 2. `Settings` → `Deploy`
 3. `Config File Path`를 `railway.worker.json`으로 지정
 4. 저장 후 재배포
+5. `Config File Path`가 비어 있지 않은지 다시 확인
 
 필수 환경변수:
 

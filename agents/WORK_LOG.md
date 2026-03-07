@@ -580,3 +580,9 @@ WARNING 총 3개 / ERROR 총 1개
 - 2026-03-07 15:16:49 | agent:codex-dev | task:T-20260307-087 | action:log | message:catalog_service.py에 기존 미커밋 변경이 이미 존재해 T-087 구현/커밋을 보류함. 현재 변경 내용 확인 후 사용자 지시가 필요함
 
 - 2026-03-07 15:20:30 | agent:codex-dev | task:T-20260307-087 | action:complete | message:CATALOG_BOOL_OR_DEPLOY_01 완료: catalog_service에 PostgreSQL BOOL_OR + COALESCE 반영, SQLite fallback 및 last-crawl datetime 정규화 보완, build_product_catalog --since-last-crawl dry-run 검증 완료. Railway CLI 부재로 재배포 확인은 이 세션에서 미수행
+
+- 2026-03-07 15:44:07 | agent:codex-dev | task:T-20260307-088 | action:log | message:T-088 착수: JPY 가격 오염 정리(정리 스크립트, 경쟁 페이지 하한 필터, Shopify 실제 통화 조회, MIN_KRW 상향) 구현 시작
+
+- 2026-03-07 15:59:50 | agent:codex-dev | task:T-20260307-089 | action:log | message:T-089 착수: railway.json 공용 최소 설정으로 축소하고 DEPLOYMENT.md에 Config File Path 필수 경고 추가 시작
+
+- 2026-03-07 16:00:19 | agent:codex-dev | task:T-20260307-089 | action:complete | message:SCHEDULER_WORKER_CRASH_FIX_01 완료: railway.json을 공용 기본 설정(builder + restart 정책만 유지)으로 되돌리고, API/Worker startCommand는 railway.api.json/railway.worker.json에만 남기도록 정리. DEPLOYMENT.md에 Config File Path 수동 설정 필수 경고 추가

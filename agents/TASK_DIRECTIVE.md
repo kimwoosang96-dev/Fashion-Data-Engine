@@ -11,11 +11,12 @@ PM/개발 작업 통제를 위한 단일 기준 문서입니다.
 
 ## 진행 중 작업
 <!-- ACTIVE_TASKS_START -->
-_none_
+- [ ] T-20260307-088 | COMPETE_JPY_PRICE_FIX_01: 경쟁 페이지 JPY 환율 미적용 가격 대량 오염 수정 | owner:codex-dev | priority:P1 | status:todo | created:2026-03-07 | details:근본 원인: 일본 채널(unexpected-store/faze-one 등) 가격이 ¥JPY→KRW 환율 미적용으로 대량 저장. min:max 비율이 전부 ~9배(JPY/KRW 환율)로 일치. 수정 순서: (1) `cleanup_price_data.py`에 동일 product_key 내 max_price의 20% 미만 이상치 삭제 기능 추가. (2) `get_multi_channel_products()` min_price >= 10,000 하한 필터 추가. (3) `crawl_channel()`에서 `_get_shopify_currency()` 실제 호출(재발 방지). (4) JP country 채널 재크롤. (5) MIN_KRW 100→1,000 상향.
 <!-- ACTIVE_TASKS_END -->
 
 ## 최근 완료 작업
 <!-- COMPLETED_TASKS_START -->
+- [x] T-20260307-089 | SCHEDULER_WORKER_CRASH_FIX_01: scheduler-worker CRASHED — railway.json 기본 설정 충돌 해결 | owner:codex-dev | priority:P1 | status:done | created:2026-03-07 | completed:2026-03-07 | details:SCHEDULER_WORKER_CRASH_FIX_01 완료: railway.json을 공용 기본 설정(builder + restart 정책만 유지)으로 되돌리고, API/Worker startCommand는 railway.api.json/railway.worker.json에만 남기도록 정리. DEPLOYMENT.md에 Config File Path 수동 설정 필수 경고 추가
 - [x] T-20260307-087 | CATALOG_BOOL_OR_DEPLOY_01: catalog_service.py BOOL_OR 개선 커밋 및 배포 | owner:codex-dev | priority:P3 | status:done | created:2026-03-07 | completed:2026-03-07 | details:CATALOG_BOOL_OR_DEPLOY_01 완료: catalog_service에 PostgreSQL BOOL_OR + COALESCE 반영, SQLite fallback 및 last-crawl datetime 정규화 보완, build_product_catalog --since-last-crawl dry-run 검증 완료. Railway CLI 부재로 재배포 확인은 이 세션에서 미수행
 - [x] T-20260307-086 | HEALTH_DB_PING_01: /health 엔드포인트 DB 연결 상태 포함 | owner:codex-dev | priority:P2 | status:done | created:2026-03-07 | completed:2026-03-07 | details:HEALTH_DB_PING_01 완료: /health 엔드포인트에 AsyncSessionLocal + SELECT 1 DB ping 추가, 연결 실패 시 HTTP 503 database unavailable 반환, 정상 시 status/database 필드 응답
 - [x] T-20260307-085 | SCHEDULER_HEARTBEAT_01: 스케줄러 일일 heartbeat Discord 알림 | owner:codex-dev | priority:P2 | status:done | created:2026-03-07 | completed:2026-03-07 | details:SCHEDULER_HEARTBEAT_01 완료: alert_service에 send_heartbeat_alert 추가, scheduler에 매일 09:05 KST heartbeat 잡 등록, 마지막 완료 크롤 시각과 다음 예정 작업 목록을 Discord로 전송하도록 구현

@@ -7,9 +7,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import aliased
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
@@ -19,7 +18,6 @@ from fashion_engine.models.activity_feed import ActivityFeed  # noqa: E402
 from fashion_engine.models.brand import Brand  # noqa: E402
 from fashion_engine.models.channel import Channel  # noqa: E402
 from fashion_engine.models.crawl_run import CrawlRun  # noqa: E402
-from fashion_engine.models.price_history import PriceHistory  # noqa: E402
 from fashion_engine.models.product import Product  # noqa: E402
 from fashion_engine.services.push_service import send_push_for_feed_items  # noqa: E402
 
@@ -165,88 +163,6 @@ class WatchAgent:
             for row in rows
         ]
 
-    async def detect_price_cut(
-        self,
-        db: AsyncSession,
-        *,
-        channel_id: int,
-        started_at: datetime,
-    ) -> list[FeedEventCandidate]:
-        ranked = (
-            select(
-                PriceHistory.product_id.label("product_id"),
-                PriceHistory.price.label("price_krw"),
-                PriceHistory.crawled_at.label("crawled_at"),
-                func.row_number()
-                .over(
-                    partition_by=PriceHistory.product_id,
-                    order_by=PriceHistory.crawled_at.desc(),
-                )
-                .label("rn"),
-            )
-            .join(Product, Product.id == PriceHistory.product_id)
-            .where(
-                Product.channel_id == channel_id,
-                Product.price_updated_at.is_not(None),
-                Product.price_updated_at >= started_at,
-            )
-            .subquery()
-        )
-        latest = aliased(ranked)
-        prev = aliased(ranked)
-        rows = (
-            await db.execute(
-                select(
-                    Product.id,
-                    Product.brand_id,
-                    Product.name,
-                    Product.url,
-                    Product.image_url,
-                    Product.discount_rate,
-                    latest.c.price_krw.label("latest_price"),
-                    prev.c.price_krw.label("prev_price"),
-                    latest.c.crawled_at.label("detected_at"),
-                )
-                .join(latest, latest.c.product_id == Product.id)
-                .join(prev, prev.c.product_id == Product.id)
-                .where(
-                    Product.channel_id == channel_id,
-                    latest.c.rn == 1,
-                    prev.c.rn == 2,
-                    prev.c.price_krw.is_not(None),
-                    latest.c.price_krw.is_not(None),
-                    prev.c.price_krw > latest.c.price_krw,
-                    ((prev.c.price_krw - latest.c.price_krw) * 100.0 / prev.c.price_krw) >= 10.0,
-                )
-                .order_by(latest.c.crawled_at.desc(), Product.id.desc())
-            )
-        ).all()
-        return [
-            FeedEventCandidate(
-                event_type="price_cut",
-                product_id=row.id,
-                channel_id=channel_id,
-                brand_id=row.brand_id,
-                product_name=row.name,
-                price_krw=int(row.latest_price) if row.latest_price is not None else None,
-                discount_rate=row.discount_rate,
-                source_url=row.url,
-                image_url=row.image_url,
-                detected_at=row.detected_at or started_at,
-                metadata_json={
-                    "image_url": row.image_url,
-                    "prev_price_krw": int(row.prev_price) if row.prev_price is not None else None,
-                    "price_drop_krw": int(row.prev_price - row.latest_price)
-                    if row.prev_price is not None and row.latest_price is not None
-                    else None,
-                    "price_drop_pct": round(((row.prev_price - row.latest_price) * 100.0 / row.prev_price), 1)
-                    if row.prev_price not in (None, 0) and row.latest_price is not None
-                    else None,
-                },
-            )
-            for row in rows
-        ]
-
     async def run(self, db: AsyncSession, *, channel_id: int, crawl_run_id: int) -> tuple[int, list[ActivityFeed]]:
         crawl_run = await db.get(CrawlRun, crawl_run_id)
         if not crawl_run:
@@ -256,7 +172,6 @@ class WatchAgent:
         candidates: list[FeedEventCandidate] = []
         candidates.extend(await self.detect_sale_start(db, channel_id=channel_id, started_at=started_at))
         candidates.extend(await self.detect_new_drops(db, channel_id=channel_id, started_at=started_at))
-        candidates.extend(await self.detect_price_cut(db, channel_id=channel_id, started_at=started_at))
         inserted, created_rows = await self._insert_candidates(db, started_at=started_at, candidates=candidates)
         return inserted, created_rows
 

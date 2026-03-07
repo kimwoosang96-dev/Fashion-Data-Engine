@@ -26,13 +26,13 @@ def _hours_since(value: datetime | None) -> float | None:
     return max(seconds / 3600.0, 0.0)
 
 
-def _urgency_score(discount_rate: int | None, sale_started_at: datetime | None) -> float:
-    if discount_rate is None:
-        return 0.0
-    hours = _hours_since(sale_started_at)
-    if hours is None:
-        return float(discount_rate)
-    return float(discount_rate) * (1.0 / (hours + 1.0))
+def _urgency_score_sql(db: AsyncSession, discount_rate_col, sale_started_at_col):
+    bind = db.get_bind()
+    if bind.dialect.name == "sqlite":
+        hours_since_expr = (func.julianday(func.current_timestamp()) - func.julianday(sale_started_at_col)) * 24.0
+    else:
+        hours_since_expr = func.extract("epoch", func.now() - sale_started_at_col) / 3600.0
+    return discount_rate_col * (1.0 / (func.coalesce(hours_since_expr, 0.0) + 1.0))
 
 
 def _compute_badges(
@@ -794,6 +794,7 @@ async def get_product_ranking(
 
     if ranking_type == "sale_hot":
         dedup_key = func.coalesce(Product.product_key, cast(Product.id, String))
+        urgency_score = _urgency_score_sql(db, Product.discount_rate, Product.sale_started_at)
         ranked_rows = (
             select(
                 Product.product_key.label("product_key"),
@@ -807,6 +808,7 @@ async def get_product_ranking(
                 Product.original_price_krw.label("original_price_krw"),
                 Product.discount_rate.label("discount_rate"),
                 Product.sale_started_at.label("sale_started_at"),
+                urgency_score.label("urgency_score"),
                 func.coalesce(channel_count_sub.c.total_channels, 1).label("total_channels"),
                 func.row_number()
                 .over(
@@ -827,7 +829,15 @@ async def get_product_ranking(
         ranked = ranked_rows.subquery()
         rows = (
             await db.execute(
-                select(ranked).where(ranked.c.product_rank == 1)
+                select(ranked)
+                .where(ranked.c.product_rank == 1)
+                .order_by(
+                    ranked.c.urgency_score.desc().nullslast(),
+                    ranked.c.sale_started_at.desc().nullslast(),
+                    ranked.c.total_channels.desc(),
+                    ranked.c.price_krw.asc(),
+                )
+                .limit(max(limit * 5, 100))
             )
         ).all()
         limited_signal_keys = await _load_limited_signal_keys(
@@ -865,19 +875,9 @@ async def get_product_ranking(
                         total_channels=total_channels,
                         has_limited_signal=has_limited_signal,
                     ),
-                    "_urgency_score": _urgency_score(row.discount_rate, row.sale_started_at),
                 }
             )
-        payload.sort(
-            key=lambda item: (
-                item["_urgency_score"],
-                item["discount_rate"] or 0,
-                item["total_channels"],
-                -(item["price_krw"] or 0),
-            ),
-            reverse=True,
-        )
-        return [{k: v for k, v in item.items() if k != "_urgency_score"} for item in payload[:limit]]
+        return payload[:limit]
 
     if ranking_type == "price_drop":
         rows = (

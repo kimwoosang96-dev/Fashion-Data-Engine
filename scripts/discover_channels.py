@@ -56,21 +56,17 @@ async def discover_channels(query: str, count: int) -> list[dict]:
         raise RuntimeError("openai 패키지가 필요합니다. `uv sync` 후 다시 실행하세요.") from exc
 
     client = AsyncOpenAI()
-    response = await client.responses.create(
+    response = await client.chat.completions.create(
         model="gpt-4o",
-        input=[
+        messages=[
             {
                 "role": "user",
-                "content": [
-                    {
-                        "type": "input_text",
-                        "text": PROMPT_TEMPLATE.format(query=query, count=count),
-                    }
-                ],
+                "content": PROMPT_TEMPLATE.format(query=query, count=count),
             }
         ],
+        response_format={"type": "json_object"},
     )
-    text = getattr(response, "output_text", "").strip()
+    text = (response.choices[0].message.content or "").strip()
     if not text:
         return []
     data = json.loads(text)

@@ -18,7 +18,6 @@ from fashion_engine.models.activity_feed import ActivityFeed
 from fashion_engine.models.channel import Channel
 from fashion_engine.models.product import Product
 from fashion_engine.services.product_service import (
-    build_price_history_row,
     find_brands_by_vendors,
     get_rate_to_krw,
     upsert_product,
@@ -157,10 +156,6 @@ async def receive_shopify_webhook(
         brand_id=brand.id if brand else None,
         existing=existing,
     )
-    if history_row := build_price_history_row(product.id, info, rate):
-        from fashion_engine.models.price_history import PriceHistory
-
-        db.add(PriceHistory(**history_row))
 
     event_type = "new_drop" if is_new else ("sale_start" if sale_just_started else None)
     if event_type:

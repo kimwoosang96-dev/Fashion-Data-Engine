@@ -38,13 +38,11 @@ from fashion_engine.database import init_db, AsyncSessionLocal
 from fashion_engine.models.channel import Channel
 from fashion_engine.models.channel_brand import ChannelBrand
 from fashion_engine.models.brand import Brand
-from fashion_engine.models.price_history import PriceHistory
 from fashion_engine.models.product import Product
 from fashion_engine.models.crawl_run import CrawlRun, CrawlChannelLog
 from fashion_engine.models.activity_feed import ActivityFeed
 from fashion_engine.crawler.product_crawler import ProductCrawler, ChannelProductResult
 from fashion_engine.services.product_service import (
-    build_price_history_row,
     build_product_upsert_row,
     get_rate_to_krw,
     find_brands_by_vendors,
@@ -56,6 +54,7 @@ from fashion_engine.services.channel_service import update_platform
 from fashion_engine.services.catalog_service import build_catalog_incremental
 from watch_agent import run_channel_watch
 from fashion_engine.services.intel_service import upsert_derived_product_event
+from fashion_engine.services.push_service import send_push_for_feed_items
 from fashion_engine.services.alert_service import (
     AlertPayload,
     new_product_alert,
@@ -86,7 +85,6 @@ _POSTGRES_CRAWL_TIMEOUT_SQL = (
     "SET LOCAL statement_timeout = '120s'",
 )
 _PRODUCT_BULK_CHUNK_SIZE = 500
-_PRICE_HISTORY_BULK_CHUNK_SIZE = 1000
 
 
 async def _apply_crawl_db_timeouts(db) -> None:
@@ -136,6 +134,7 @@ class PendingAlertJob:
 @dataclass
 class ChannelPostCommitWork:
     derived_events: list[PendingDerivedEvent] = field(default_factory=list)
+    feed_events: list[ActivityFeed] = field(default_factory=list)
     alert_jobs: list[PendingAlertJob] = field(default_factory=list)
 
 
@@ -293,6 +292,42 @@ def _build_derived_event(
     )
 
 
+def _build_price_cut_feed_event(
+    *,
+    product_id: int,
+    channel_id: int,
+    brand_id: int | None,
+    info,
+    current_krw: int,
+    prev_price_krw: int,
+) -> ActivityFeed | None:
+    if prev_price_krw <= 0 or current_krw >= prev_price_krw:
+        return None
+    drop_krw = prev_price_krw - current_krw
+    drop_pct = round((drop_krw * 100.0) / prev_price_krw, 1)
+    return ActivityFeed(
+        event_type="price_cut",
+        product_id=product_id,
+        channel_id=channel_id,
+        brand_id=brand_id,
+        product_name=info.title,
+        price_krw=current_krw,
+        discount_rate=round((1 - info.price / info.compare_at_price) * 100)
+        if info.compare_at_price and info.compare_at_price > info.price
+        else None,
+        source_url=info.product_url,
+        metadata_json={
+            "image_url": info.image_url,
+            "prev_price_krw": prev_price_krw,
+            "price_drop_krw": drop_krw,
+            "price_drop_pct": drop_pct,
+            "source": "crawl_save",
+        },
+        detected_at=datetime.utcnow(),
+        notified=False,
+    )
+
+
 async def _save_channel_products_sqlite(
     db,
     *,
@@ -338,12 +373,7 @@ async def _save_channel_products_sqlite(
             brand_id=brand_id,
             existing=existing_row,
         )
-        price_row = build_price_history_row(product.id, info, rate)
-        if price_row is not None:
-            db.add(PriceHistory(**price_row))
-            current_krw = int(price_row["price"])
-        else:
-            current_krw = round(float(info.price) * rate)
+        current_krw = product.price_krw or round(float(info.price) * rate)
 
         is_sale = (
             info.compare_at_price is not None
@@ -405,6 +435,21 @@ async def _save_channel_products_sqlite(
             )
             if alert_job:
                 outcome.post_commit_work.alert_jobs.append(alert_job)
+        if (
+            prev_price_krw
+            and current_krw > 0
+            and current_krw < prev_price_krw * (1 - threshold)
+        ):
+            feed_event = _build_price_cut_feed_event(
+                product_id=product.id,
+                channel_id=channel.id,
+                brand_id=brand_id,
+                info=info,
+                current_krw=current_krw,
+                prev_price_krw=prev_price_krw,
+            )
+            if feed_event:
+                outcome.post_commit_work.feed_events.append(feed_event)
 
     return outcome
 
@@ -463,6 +508,7 @@ async def _save_channel_products_postgres(
             "brand_id": brand_id,
             "brand_slug": brand_slug,
             "prev_price_krw": prev_price_krw,
+            "current_krw": row.get("price_krw") or round(float(info.price) * rate),
             "is_new": is_new,
             "sale_just_started": sale_just_started,
             "availability_transition": availability_transition,
@@ -508,16 +554,10 @@ async def _save_channel_products_postgres(
         upserted_rows = (await db.execute(upsert_stmt)).all()
         product_id_by_url.update({row.url: row.id for row in upserted_rows})
 
-    price_rows: list[dict] = []
     for product_url, meta in meta_by_url.items():
         info = meta["info"]
         product_id = product_id_by_url[product_url]
-        price_row = build_price_history_row(product_id, info, rate, crawled_at=row_now)
-        if price_row is not None:
-            price_rows.append(price_row)
-            current_krw = int(price_row["price"])
-        else:
-            current_krw = round(float(info.price) * rate)
+        current_krw = meta["current_krw"]
 
         if meta["sale_just_started"] and not no_intel:
             discount_rate = None
@@ -568,9 +608,21 @@ async def _save_channel_products_postgres(
             )
             if alert_job:
                 outcome.post_commit_work.alert_jobs.append(alert_job)
-
-    for chunk in _chunk_rows(price_rows, _PRICE_HISTORY_BULK_CHUNK_SIZE):
-        await db.execute(pg_insert(PriceHistory).values(chunk))
+        if (
+            meta["prev_price_krw"]
+            and current_krw > 0
+            and current_krw < meta["prev_price_krw"] * (1 - threshold)
+        ):
+            feed_event = _build_price_cut_feed_event(
+                product_id=product_id,
+                channel_id=channel.id,
+                brand_id=meta["brand_id"],
+                info=info,
+                current_krw=current_krw,
+                prev_price_krw=meta["prev_price_krw"],
+            )
+            if feed_event:
+                outcome.post_commit_work.feed_events.append(feed_event)
 
     return outcome
 
@@ -580,6 +632,18 @@ async def run_channel_post_commit_pipeline(
     channel: Channel,
     work: ChannelPostCommitWork,
 ) -> None:
+    created_feed_rows: list[ActivityFeed] = []
+    if work.feed_events:
+        try:
+            async with AsyncSessionLocal() as db:
+                await _apply_crawl_db_timeouts(db)
+                for item in work.feed_events:
+                    db.add(item)
+                await db.commit()
+                created_feed_rows = work.feed_events
+        except Exception as exc:
+            logger.warning("channel post-commit feed failed channel=%s: %s", channel.name, exc)
+
     if work.derived_events:
         try:
             async with AsyncSessionLocal() as db:
@@ -641,6 +705,12 @@ async def run_channel_post_commit_pipeline(
                     await price_drop_alert(job.payload)
         except Exception as exc:
             logger.warning("channel post-commit alerts failed channel=%s: %s", channel.name, exc)
+    if created_feed_rows:
+        try:
+            async with AsyncSessionLocal() as push_db:
+                await send_push_for_feed_items(push_db, created_feed_rows)
+        except Exception as exc:
+            logger.warning("channel post-commit push failed channel=%s: %s", channel.name, exc)
 
 
 async def run_channel_watch_pipeline(
@@ -1073,7 +1143,7 @@ async def run(
         if isinstance(raw, Exception):
             continue
         work = raw.get("post_commit_work")
-        if work and (work.derived_events or work.alert_jobs):
+        if work and (work.derived_events or work.feed_events or work.alert_jobs):
             await run_channel_post_commit_pipeline(channel=ch, work=work)
         if not no_watch and not raw.get("error"):
             await run_channel_watch_pipeline(channel=ch, run_id=run_id)

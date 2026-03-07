@@ -63,32 +63,28 @@ async def parse_products_from_html(
     if not cleaned_html:
         return GPTParseResult(products=[], model=model)
 
-    response = await client.responses.create(
+    response = await client.chat.completions.create(
         model=model,
-        input=[
+        messages=[
             {
                 "role": "user",
-                "content": [
-                    {
-                        "type": "input_text",
-                        "text": (
-                            "다음 쇼핑몰 HTML에서 현재 판매 중인 제품만 추출하라.\n"
-                            "반드시 JSON으로만 응답:\n"
-                            '{"products":[{"name":"", "brand":"", "price":0, "currency":"USD", '
-                            '"original_price":null, "url":"https://...", "image_url":null, "is_sale":false}]}\n'
-                            f"URL: {url}\n"
-                            f"HTML:\n{cleaned_html}"
-                        ),
-                    }
-                ],
+                "content": (
+                    "다음 쇼핑몰 HTML에서 현재 판매 중인 제품만 추출하라.\n"
+                    "반드시 JSON으로만 응답:\n"
+                    '{"products":[{"name":"", "brand":"", "price":0, "currency":"USD", '
+                    '"original_price":null, "url":"https://...", "image_url":null, "is_sale":false}]}\n'
+                    f"URL: {url}\n"
+                    f"HTML:\n{cleaned_html}"
+                ),
             }
         ],
+        response_format={"type": "json_object"},
     )
-    text = getattr(response, "output_text", "").strip()
+    text = (response.choices[0].message.content or "").strip()
     products = _extract_products(text) if text else []
-    usage = getattr(response, "usage", None)
-    prompt_tokens = getattr(usage, "input_tokens", None)
-    completion_tokens = getattr(usage, "output_tokens", None)
+    usage = response.usage
+    prompt_tokens = getattr(usage, "prompt_tokens", None)
+    completion_tokens = getattr(usage, "completion_tokens", None)
     total_tokens = getattr(usage, "total_tokens", None)
 
     logger.info(

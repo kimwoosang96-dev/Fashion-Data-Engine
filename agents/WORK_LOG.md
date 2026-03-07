@@ -562,3 +562,21 @@ WARNING 총 3개 / ERROR 총 1개
 - 2026-03-03 00:00:00 | agent:codex-dev | task:T-20260303-075 | action:complete | message:INTEL_HUB_DERIVED_EVENTS_01 완료: upsert_product()에 availability_transition 반환 추가, crawl_products.py에 sale_start/sold_out/restock 파생 이벤트 훅 연결. derived_spike 잡 구현(실행 500건 삽입). scheduler intel_ingest_0730 잡 활성화. /admin/intel-status API + Admin UI 반영.
 - 2026-03-03 00:00:00 | agent:codex-dev | task:T-20260303-076 | action:complete | message:INTEL_HUB_DERIVED_EVENTS_FIX_01 완료: _pick_sales_spike_candidates() 7d baseline delta 조건(sale_count>=15, ratio_delta>=0.15 OR discount_delta>=0.10) 추가. _calc_sale_start_severity()(discount_rate 기반 critical/high/medium/low) 및 calc_confidence_score() 유틸 추가. upsert_derived_product_event() geo_precision 명시 설정. crawl_products.py sale_start details에 discount_rate 전달.
 - 2026-03-03 00:00:00 | agent:claude-pm | task:- | action:log | message:Phase 26 마무리: IntelMap CDN→npm(maplibre-gl@4.7.1) 전환, intel/page.tsx useSearchParams Suspense 경계 수정, 빌드 검증 완료. CLAUDE.md/MEMORY.md/WORK_LOG.md 전체 최신화.
+
+- 2026-03-07 15:14:01 | agent:codex-dev | task:T-20260307-081 | action:log | message:T-081~T-086 구현 착수: Railway 설정, health DB ping, admin 토큰 가드, init_db 제거, 파티션 자동 생성, heartbeat 알림 반영 시작
+
+- 2026-03-07 15:16:27 | agent:codex-dev | task:T-20260307-081 | action:complete | message:RAILWAY_CONFIG_CODIFY_01 완료: railway.json에 API startCommand/healthcheck 복원, docs/DEPLOYMENT.md에 railway.api.json/railway.worker.json Config File Path 설정 절차와 재배포 방법 반영
+
+- 2026-03-07 15:16:31 | agent:codex-dev | task:T-20260307-082 | action:complete | message:PARTITION_AUTO_CREATE_01 완료: scripts/manage_partitions.py 추가, 다음 해 및 2028 파티션 idempotent 생성 로직 구현, scheduler에 매년 12월 1일 03:30 유지보수 잡과 startup 즉시 실행 반영
+
+- 2026-03-07 15:16:35 | agent:codex-dev | task:T-20260307-083 | action:complete | message:REMOVE_INIT_DB_01 완료: API lifespan에서 init_db 호출 제거, database.py 주석을 로컬 SQLite 전용으로 정리, AGENTS.md와 DEPLOYMENT.md에 alembic upgrade head 선행 실행 가이드 추가
+
+- 2026-03-07 15:16:39 | agent:codex-dev | task:T-20260307-084 | action:complete | message:ADMIN_TOKEN_GUARD_01 완료: admin_bearer_token 기본값을 제거하고, API_DEBUG=false + PostgreSQL 환경에서 change-me 또는 빈 토큰이면 RuntimeError로 서버 시작 차단하도록 model_validator 추가
+
+- 2026-03-07 15:16:42 | agent:codex-dev | task:T-20260307-085 | action:complete | message:SCHEDULER_HEARTBEAT_01 완료: alert_service에 send_heartbeat_alert 추가, scheduler에 매일 09:05 KST heartbeat 잡 등록, 마지막 완료 크롤 시각과 다음 예정 작업 목록을 Discord로 전송하도록 구현
+
+- 2026-03-07 15:16:46 | agent:codex-dev | task:T-20260307-086 | action:complete | message:HEALTH_DB_PING_01 완료: /health 엔드포인트에 AsyncSessionLocal + SELECT 1 DB ping 추가, 연결 실패 시 HTTP 503 database unavailable 반환, 정상 시 status/database 필드 응답
+
+- 2026-03-07 15:16:49 | agent:codex-dev | task:T-20260307-087 | action:log | message:catalog_service.py에 기존 미커밋 변경이 이미 존재해 T-087 구현/커밋을 보류함. 현재 변경 내용 확인 후 사용자 지시가 필요함
+
+- 2026-03-07 15:20:30 | agent:codex-dev | task:T-20260307-087 | action:complete | message:CATALOG_BOOL_OR_DEPLOY_01 완료: catalog_service에 PostgreSQL BOOL_OR + COALESCE 반영, SQLite fallback 및 last-crawl datetime 정규화 보완, build_product_catalog --since-last-crawl dry-run 검증 완료. Railway CLI 부재로 재배포 확인은 이 세션에서 미수행

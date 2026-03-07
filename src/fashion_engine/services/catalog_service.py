@@ -8,9 +8,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fashion_engine.database import AsyncSessionLocal
 
 
-def _catalog_sql(since: datetime | None) -> tuple[str, dict]:
+def _catalog_sql(since: datetime | None, dialect_name: str) -> tuple[str, dict]:
     params: dict = {"since": since}
     since_filter = "AND p.updated_at > :since" if since is not None else ""
+    sale_agg_sql = (
+        "BOOL_OR(lp.is_sale) AS is_sale_anywhere"
+        if dialect_name == "postgresql"
+        else "MAX(CASE WHEN lp.is_sale THEN 1 ELSE 0 END) AS is_sale_anywhere"
+    )
 
     sql = f"""
         WITH changed_keys AS (
@@ -87,7 +92,7 @@ def _catalog_sql(since: datetime | None) -> tuple[str, dict]:
                 k.nkey,
                 MIN(CAST(lp.price AS INTEGER)) AS min_price_krw,
                 MAX(CAST(lp.price AS INTEGER)) AS max_price_krw,
-                MAX(CASE WHEN lp.is_sale THEN 1 ELSE 0 END) AS is_sale_anywhere
+                {sale_agg_sql}
             FROM keyed k
             LEFT JOIN latest_price lp ON lp.product_id = k.product_id
             GROUP BY k.nkey
@@ -114,7 +119,7 @@ def _catalog_sql(since: datetime | None) -> tuple[str, dict]:
             a.listing_count,
             pa.min_price_krw,
             pa.max_price_krw,
-            CASE WHEN pa.is_sale_anywhere = 1 THEN 1 ELSE 0 END,
+            COALESCE(pa.is_sale_anywhere, FALSE),
             a.first_seen_at,
             CURRENT_TIMESTAMP
         FROM agg a
@@ -164,7 +169,8 @@ async def _count_keys(db: AsyncSession, since: datetime | None) -> int:
 
 async def _build_catalog(db: AsyncSession, since: datetime | None) -> int:
     affected = await _count_keys(db, since)
-    sql, params = _catalog_sql(since)
+    dialect_name = db.bind.dialect.name if db.bind is not None else "sqlite"
+    sql, params = _catalog_sql(since, dialect_name=dialect_name)
     await db.execute(text(sql), params)
     await db.commit()
     return affected
@@ -197,4 +203,9 @@ async def get_last_done_crawl_finished_at(db: AsyncSession) -> datetime | None:
             {"status": "done"},
         )
     ).first()
-    return row[0] if row else None
+    if not row:
+        return None
+    value = row[0]
+    if isinstance(value, str):
+        return datetime.fromisoformat(value)
+    return value

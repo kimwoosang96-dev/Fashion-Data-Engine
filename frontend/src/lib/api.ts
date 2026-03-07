@@ -214,6 +214,12 @@ export const patchAdminChannelInstagram = (token: string, channelId: number, ins
     token,
     { method: "PATCH", body: JSON.stringify({ instagram_url: instagramUrl ?? null }) }
   );
+export const patchAdminChannelPollPriority = (token: string, channelId: number, pollPriority: 1 | 2 | 3) =>
+  adminFetch<{ ok: boolean; id: number; poll_priority: number }>(
+    `/admin/channels/${channelId}/poll-priority`,
+    token,
+    { method: "PATCH", body: JSON.stringify({ poll_priority: pollPriority }) }
+  );
 export const getAdminCollabs = (token: string, limit = 200, offset = 0) =>
   adminFetch<AdminCollabItem[]>(
     `/admin/collabs?limit=${limit}&offset=${offset}`,

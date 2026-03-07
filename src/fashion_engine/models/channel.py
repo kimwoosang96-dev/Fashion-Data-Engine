@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import String, Boolean, DateTime, Text
+from sqlalchemy import String, Boolean, DateTime, Text, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from fashion_engine.database import Base
@@ -24,6 +24,7 @@ class Channel(Base):
     country: Mapped[str | None] = mapped_column(String(50))                          # 'KR', 'US', 'JP', ...
     description: Mapped[str | None] = mapped_column(Text)
     instagram_url: Mapped[str | None] = mapped_column(String(500))
+    poll_priority: Mapped[int] = mapped_column(Integer, default=2, index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

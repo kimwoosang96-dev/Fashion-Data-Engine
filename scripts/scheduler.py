@@ -95,16 +95,67 @@ async def run_product_crawl_job() -> None:
         await crawl_products.run(
             limit=0,
             channel_type=None,
+            country=None,
             channel_id=None,
             channel_name=None,
+            fast_poll=False,
+            new_only=False,
+            dry_run=False,
             no_alerts=False,
             skip_catalog=False,
             no_intel=False,
+            no_watch=False,
             concurrency=2,
         )
         LOGGER.info("[JOB] products completed")
     except Exception:
         LOGGER.exception("[JOB] products failed")
+
+
+async def run_fast_poll_job() -> None:
+    try:
+        LOGGER.info("[JOB] fast-poll started")
+        await crawl_products.run(
+            limit=50,
+            channel_type=None,
+            country=None,
+            channel_id=None,
+            channel_name=None,
+            fast_poll=True,
+            new_only=False,
+            dry_run=False,
+            no_alerts=False,
+            skip_catalog=True,
+            no_intel=False,
+            no_watch=False,
+            concurrency=2,
+        )
+        LOGGER.info("[JOB] fast-poll completed")
+    except Exception:
+        LOGGER.exception("[JOB] fast-poll failed")
+
+
+async def run_new_products_job() -> None:
+    try:
+        LOGGER.info("[JOB] new-products started")
+        await crawl_products.run(
+            limit=50,
+            channel_type=None,
+            country=None,
+            channel_id=None,
+            channel_name=None,
+            fast_poll=False,
+            new_only=True,
+            dry_run=False,
+            no_alerts=False,
+            skip_catalog=True,
+            no_intel=False,
+            no_watch=False,
+            concurrency=2,
+        )
+        LOGGER.info("[JOB] new-products completed")
+    except Exception:
+        LOGGER.exception("[JOB] new-products failed")
 
 
 async def run_data_audit_job() -> None:
@@ -204,6 +255,18 @@ def register_jobs(scheduler: AsyncIOScheduler) -> None:
         run_drop_crawl_job,
         CronTrigger(hour=7, minute=10),
         id="drops_daily_0710",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        run_fast_poll_job,
+        CronTrigger(hour="*/2", minute=20),
+        id="fast_poll_every_2h",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        run_new_products_job,
+        CronTrigger(minute=40),
+        id="new_products_hourly",
         replace_existing=True,
     )
     scheduler.add_job(

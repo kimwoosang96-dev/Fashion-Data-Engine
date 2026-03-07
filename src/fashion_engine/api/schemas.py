@@ -10,6 +10,7 @@ class ChannelOut(BaseModel):
     platform: str | None
     country: str | None
     instagram_url: str | None
+    poll_priority: int
     is_active: bool
 
     model_config = {"from_attributes": True}
@@ -399,6 +400,7 @@ class ChannelSignalOut(BaseModel):
     name: str
     channel_type: str | None
     country: str | None
+    poll_priority: int
     product_count: int
     active_count: int
     inactive_count: int
@@ -512,6 +514,7 @@ class AdminDraftChannelOut(BaseModel):
     description: str | None
     created_at: datetime
     product_count: int
+    poll_priority: int
 
 
 # ── ProductCatalog 스키마 ────────────────────────────────────────────────────

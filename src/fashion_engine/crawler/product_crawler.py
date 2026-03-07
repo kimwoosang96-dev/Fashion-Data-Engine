@@ -281,6 +281,7 @@ class ProductCrawler:
         channel_url: str,
         country: str | None = None,
         cafe24_brand_categories: list[tuple[str, str]] | None = None,
+        new_only: bool = False,
     ) -> ChannelProductResult:
         """채널 URL에서 전체 제품 목록 수집."""
         await asyncio.sleep(random.uniform(0, 3))
@@ -291,6 +292,16 @@ class ProductCrawler:
             shopify_currency = await self._get_shopify_currency(channel_url)
             if shopify_currency:
                 currency = shopify_currency.upper()
+            if new_only:
+                products = await self._try_shopify_new_products(channel_url, currency)
+                if products:
+                    result.products = products
+                    result.crawl_strategy = "shopify-new-json"
+                else:
+                    result.error = "No products found via Shopify /products/new.json"
+                    result.error_type = "zero_products"
+                return result
+
             products = await self._try_shopify_products(channel_url, currency)
             if products:
                 result.products = products
@@ -413,6 +424,32 @@ class ProductCrawler:
             if len(page_products) < 100:
                 break
 
+        return products
+
+    async def _try_shopify_new_products(
+        self,
+        channel_url: str,
+        currency: str,
+    ) -> list[ProductInfo]:
+        """Shopify 신규 상품 목록 전용 엔드포인트를 1회 조회한다."""
+        assert self._client is not None
+        base = channel_url.rstrip("/")
+        url = f"{base}/products/new.json?limit=100&page=1"
+        shopify_sem = _get_shopify_sem()
+
+        try:
+            async with shopify_sem:
+                resp = await self._fetch_with_retry(url)
+                data = resp.json()
+        except Exception:
+            return []
+
+        page_products = data.get("products", [])
+        products: list[ProductInfo] = []
+        for p in page_products:
+            info = self._parse_product(p, base, currency)
+            if info:
+                products.append(info)
         return products
 
     async def _discover_cafe24_brand_categories(

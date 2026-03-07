@@ -363,6 +363,7 @@ async def get_channel_signals(
                 Channel.name,
                 Channel.channel_type,
                 Channel.country,
+                Channel.poll_priority,
                 func.count(Product.id).label("product_count"),
                 func.count(case((Product.is_active == True, 1), else_=None)).label("active_count"),
                 func.count(case((Product.is_active == False, 1), else_=None)).label("inactive_count"),
@@ -425,6 +426,7 @@ async def get_channel_signals(
                 "name": row.name,
                 "channel_type": row.channel_type,
                 "country": row.country,
+                "poll_priority": int(row.poll_priority or 2),
                 "product_count": product_count,
                 "active_count": active_count,
                 "inactive_count": inactive_count,
@@ -866,6 +868,7 @@ async def list_admin_channels(
             Channel.platform,
             Channel.country,
             Channel.description,
+            Channel.poll_priority,
             Channel.created_at,
             func.count(Product.id).label("product_count"),
         )
@@ -887,6 +890,7 @@ async def list_admin_channels(
             "platform": row.platform,
             "country": row.country,
             "description": row.description,
+            "poll_priority": int(row.poll_priority or 2),
             "created_at": row.created_at,
             "product_count": int(row.product_count or 0),
         }
@@ -908,6 +912,26 @@ async def activate_admin_channel(
     channel.is_active = True
     await db.commit()
     return {"ok": True, "id": channel.id, "is_active": channel.is_active}
+
+
+@router.patch("/channels/{channel_id}/poll-priority")
+async def patch_admin_channel_poll_priority(
+    channel_id: int,
+    payload: dict,
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    value = payload.get("poll_priority")
+    if value not in (1, 2, 3):
+        raise HTTPException(status_code=400, detail="poll_priority must be 1, 2, or 3")
+    channel = (
+        await db.execute(select(Channel).where(Channel.id == channel_id))
+    ).scalar_one_or_none()
+    if not channel:
+        raise HTTPException(status_code=404, detail="channel not found")
+    channel.poll_priority = int(value)
+    await db.commit()
+    return {"ok": True, "id": channel.id, "poll_priority": channel.poll_priority}
 
 
 # ── 크롤 모니터 ───────────────────────────────────────────────────────────────

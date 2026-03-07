@@ -18,6 +18,7 @@ import {
   getChannels,
   patchAdminBrandInstagram,
   patchAdminChannelInstagram,
+  patchAdminChannelPollPriority,
   activateAdminChannel,
   triggerChannelCrawl,
   triggerAdminCrawl,
@@ -88,6 +89,8 @@ export default function AdminPage() {
   const [brandInsta, setBrandInsta] = useState("");
   const [channelIdForInsta, setChannelIdForInsta] = useState<number | "">("");
   const [channelInsta, setChannelInsta] = useState("");
+  const [channelIdForPriority, setChannelIdForPriority] = useState<number | "">("");
+  const [channelPollPriority, setChannelPollPriority] = useState<1 | 2 | 3>(2);
   const [collabForm, setCollabForm] = useState({
     brand_a_slug: "",
     brand_b_slug: "",
@@ -255,6 +258,37 @@ export default function AdminPage() {
       setMsg("채널 인스타그램 URL 저장 완료");
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "채널 인스타그램 저장 실패");
+    }
+  };
+
+  const saveChannelPollPriority = async () => {
+    if (!token.trim() || !channelIdForPriority) return;
+    try {
+      await patchAdminChannelPollPriority(token.trim(), Number(channelIdForPriority), channelPollPriority);
+      setChannels((prev) =>
+        prev.map((row) =>
+          row.id === Number(channelIdForPriority)
+            ? { ...row, poll_priority: channelPollPriority }
+            : row
+        )
+      );
+      setChannelSignals((prev) =>
+        prev.map((row) =>
+          row.channel_id === Number(channelIdForPriority)
+            ? { ...row, poll_priority: channelPollPriority }
+            : row
+        )
+      );
+      setDraftChannels((prev) =>
+        prev.map((row) =>
+          row.id === Number(channelIdForPriority)
+            ? { ...row, poll_priority: channelPollPriority }
+            : row
+        )
+      );
+      setMsg("채널 fast poll 우선순위 저장 완료");
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "채널 우선순위 저장 실패");
     }
   };
 
@@ -888,7 +922,7 @@ export default function AdminPage() {
                       <p className="text-sm font-medium text-gray-900">{row.name}</p>
                       <p className="mt-1 text-xs text-gray-500 break-all">{row.url}</p>
                       <p className="mt-1 text-xs text-gray-500">
-                        {row.country ?? "-"} · {row.platform ?? "unknown"} · {row.channel_type ?? "미분류"} · 제품 {row.product_count}개
+                        {row.country ?? "-"} · {row.platform ?? "unknown"} · {row.channel_type ?? "미분류"} · 우선순위 P{row.poll_priority} · 제품 {row.product_count}개
                       </p>
                       {row.description && (
                         <p className="mt-1 text-xs text-gray-600">{row.description}</p>
@@ -907,6 +941,41 @@ export default function AdminPage() {
             )}
           </section>
 
+          <section className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
+            <h2 className="text-sm font-semibold">Fast Poll 우선순위</h2>
+            <p className="text-xs text-gray-500">1=고빈도 fast poll 대상, 2=기본, 3=낮음</p>
+            <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-2 items-center">
+              <select
+                className="h-10 px-3 rounded-md border border-gray-200 bg-white text-sm"
+                value={channelIdForPriority}
+                onChange={(e) => setChannelIdForPriority(e.target.value ? Number(e.target.value) : "")}
+              >
+                <option value="">채널 선택</option>
+                {channels.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} (P{c.poll_priority})
+                  </option>
+                ))}
+              </select>
+              <select
+                className="h-10 px-3 rounded-md border border-gray-200 bg-white text-sm"
+                value={channelPollPriority}
+                onChange={(e) => setChannelPollPriority(Number(e.target.value) as 1 | 2 | 3)}
+              >
+                <option value={1}>1 (high)</option>
+                <option value={2}>2 (normal)</option>
+                <option value={3}>3 (low)</option>
+              </select>
+              <button
+                type="button"
+                onClick={() => void saveChannelPollPriority()}
+                className="px-3 h-10 rounded-md border text-sm"
+              >
+                저장
+              </button>
+            </div>
+          </section>
+
           {channelSignals.length > 0 ? (
             <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
               <table className="w-full text-sm">
@@ -914,6 +983,7 @@ export default function AdminPage() {
                   <tr>
                     <th className="text-left px-4 py-3">채널</th>
                     <th className="text-left px-4 py-3">국가</th>
+                    <th className="text-right px-4 py-3">P</th>
                     <th className="text-right px-4 py-3">제품</th>
                     <th className="text-right px-4 py-3">활성</th>
                     <th className="text-right px-4 py-3">비활성</th>
@@ -932,6 +1002,7 @@ export default function AdminPage() {
                           <p className="text-xs text-gray-400">{row.channel_type ?? "-"}</p>
                         </td>
                         <td className="px-4 py-3 text-gray-500">{row.country ?? "-"}</td>
+                        <td className="px-4 py-3 text-right text-gray-600">{row.poll_priority}</td>
                         <td className="px-4 py-3 text-right">{row.product_count}</td>
                         <td className="px-4 py-3 text-right">{row.active_count}</td>
                         <td className="px-4 py-3 text-right">{row.inactive_count}</td>

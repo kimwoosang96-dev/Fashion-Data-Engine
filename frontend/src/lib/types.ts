@@ -76,6 +76,7 @@ export interface Channel {
   platform: string | null;
   country: string | null;
   instagram_url: string | null;
+  poll_priority: number;
   is_active: boolean;
 }
 
@@ -319,6 +320,7 @@ export interface ChannelSignalOut {
   name: string;
   channel_type: string | null;
   country: string | null;
+  poll_priority: number;
   product_count: number;
   active_count: number;
   inactive_count: number;
@@ -423,6 +425,7 @@ export interface AdminDraftChannel {
   description: string | null;
   created_at: string;
   product_count: number;
+  poll_priority: number;
 }
 
 export interface IntelEvent {

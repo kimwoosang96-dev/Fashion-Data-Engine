@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 import logging
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
@@ -30,7 +30,7 @@ import typer
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from rich.console import Console
 from rich.table import Table
-from sqlalchemy import select, text
+from sqlalchemy import desc, func, select, text
 from sqlalchemy.exc import DBAPIError
 
 from fashion_engine.config import settings
@@ -41,6 +41,7 @@ from fashion_engine.models.brand import Brand
 from fashion_engine.models.price_history import PriceHistory
 from fashion_engine.models.product import Product
 from fashion_engine.models.crawl_run import CrawlRun, CrawlChannelLog
+from fashion_engine.models.activity_feed import ActivityFeed
 from fashion_engine.crawler.product_crawler import ProductCrawler, ChannelProductResult
 from fashion_engine.services.product_service import (
     build_price_history_row,
@@ -156,6 +157,49 @@ def _dedupe_product_infos(products: list) -> list:
 
 def _chunk_rows(rows: list[dict], chunk_size: int) -> list[list[dict]]:
     return [rows[idx:idx + chunk_size] for idx in range(0, len(rows), chunk_size)]
+
+
+async def _load_fast_poll_sale_counts(db, channel_ids: list[int]) -> dict[int, int]:
+    if not channel_ids:
+        return {}
+    cutoff = datetime.utcnow() - timedelta(days=14)
+    rows = (
+        await db.execute(
+            select(
+                ActivityFeed.channel_id,
+                func.count(ActivityFeed.id).label("event_count"),
+            )
+            .where(
+                ActivityFeed.channel_id.in_(channel_ids),
+                ActivityFeed.event_type == "sale_start",
+                ActivityFeed.detected_at >= cutoff,
+            )
+            .group_by(ActivityFeed.channel_id)
+        )
+    ).all()
+    return {int(channel_id): int(event_count or 0) for channel_id, event_count in rows}
+
+
+def _render_target_channels(channels: list[Channel], sale_counts: dict[int, int] | None = None) -> None:
+    table = Table(title="대상 채널", show_lines=True)
+    table.add_column("ID", justify="right", style="dim")
+    table.add_column("채널", style="cyan")
+    table.add_column("타입", style="white")
+    table.add_column("플랫폼", style="magenta")
+    table.add_column("국가", style="dim")
+    table.add_column("P", justify="right", style="yellow")
+    table.add_column("최근 세일", justify="right", style="green")
+    for channel in channels:
+        table.add_row(
+            str(channel.id),
+            channel.name,
+            channel.channel_type or "-",
+            channel.platform or "-",
+            channel.country or "-",
+            str(channel.poll_priority),
+            str((sale_counts or {}).get(channel.id, 0)),
+        )
+    console.print(table)
 
 
 def _build_alert_job(
@@ -655,6 +699,7 @@ async def _crawl_one_channel(
     run_id: int,
     no_alerts: bool,
     no_intel: bool,
+    new_only: bool,
     threshold: float,
     sem: asyncio.Semaphore,
     run_lock: asyncio.Lock,
@@ -696,6 +741,7 @@ async def _crawl_one_channel(
                         channel.url,
                         country=channel.country,
                         cafe24_brand_categories=cafe24_categories,
+                        new_only=new_only,
                     ),
                     timeout=chan_timeout,
                 )
@@ -867,6 +913,9 @@ def main(
     country: str = typer.Option("", help="국가 코드 필터 (예: JP, KR, US)"),
     channel_id: int = typer.Option(0, help="특정 채널 ID만 크롤링 (0=비활성)"),
     channel_name: str = typer.Option("", help="특정 채널명만 크롤링 (부분 일치)"),
+    fast_poll: bool = typer.Option(False, "--fast-poll", help="poll_priority=1 채널만 빠르게 순회"),
+    new_only: bool = typer.Option(False, "--new-only", help="Shopify /products/new.json 1회 조회만 수행"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="대상 채널만 출력하고 종료"),
     no_alerts: bool = typer.Option(False, "--no-alerts", help="Discord 알림 비활성화"),
     skip_catalog: bool = typer.Option(False, "--skip-catalog", help="크롤 완료 후 catalog 증분 빌드 생략"),
     no_intel: bool = typer.Option(False, "--no-intel", help="크롤 완료 후 intel ingest 자동 실행 비활성화"),
@@ -882,6 +931,9 @@ def main(
             country.strip().upper() or None,
             channel_id if channel_id > 0 else None,
             channel_name.strip() or None,
+            fast_poll,
+            new_only,
+            dry_run,
             no_alerts,
             skip_catalog,
             no_intel,
@@ -897,6 +949,9 @@ async def run(
     country: str | None,
     channel_id: int | None,
     channel_name: str | None,
+    fast_poll: bool,
+    new_only: bool,
+    dry_run: bool,
     no_alerts: bool,
     skip_catalog: bool,
     no_intel: bool,
@@ -904,6 +959,10 @@ async def run(
     concurrency: int = 5,
 ) -> None:
     console.print("[bold blue]Fashion Data Engine — 제품 가격 크롤링[/bold blue]\n")
+    if fast_poll:
+        console.print("[cyan]fast poll 모드: poll_priority=1 채널 우선[/cyan]")
+    if new_only:
+        console.print("[cyan]new-only 모드: Shopify /products/new.json 1회 조회[/cyan]")
     if settings.discord_webhook_url and not no_alerts:
         console.print("[green]Discord 알림 활성화[/green]")
     elif not no_alerts:
@@ -913,6 +972,7 @@ async def run(
 
     await init_db()
 
+    sale_counts: dict[int, int] = {}
     async with AsyncSessionLocal() as db:
         query = select(Channel).where(Channel.is_active == True)  # noqa: E712
         if channel_id:
@@ -923,15 +983,38 @@ async def run(
             query = query.filter(Channel.channel_type == channel_type)
         if country:
             query = query.filter(Channel.country == country)
+        if fast_poll:
+            query = query.filter(Channel.poll_priority == 1)
+        if new_only:
+            query = query.filter(Channel.platform == "shopify")
         channels = list((await db.execute(query)).scalars().all())
+        if fast_poll:
+            sale_counts = await _load_fast_poll_sale_counts(db, [c.id for c in channels])
 
     channels = [c for c in channels if c.channel_type not in SKIP_TYPES]
 
-    # brand-store 먼저, 그 다음 edit-shop 순으로 우선순위 정렬
-    channels.sort(key=lambda c: _CHANNEL_PRIORITY.get(c.channel_type, 2))
+    if fast_poll:
+        channels.sort(
+            key=lambda c: (
+                -sale_counts.get(c.id, 0),
+                c.poll_priority,
+                _CHANNEL_PRIORITY.get(c.channel_type, 2),
+                c.name.lower(),
+            )
+        )
+        if not limit:
+            limit = 50
+    else:
+        # brand-store 먼저, 그 다음 edit-shop 순으로 우선순위 정렬
+        channels.sort(key=lambda c: (_CHANNEL_PRIORITY.get(c.channel_type, 2), c.name.lower()))
 
     if limit:
         channels = channels[:limit]
+
+    if dry_run:
+        console.print(f"[bold]dry-run[/bold] 대상 채널 {len(channels)}개")
+        _render_target_channels(channels, sale_counts if fast_poll else None)
+        return
 
     console.print(f"대상 채널: {len(channels)}개\n")
 
@@ -954,7 +1037,7 @@ async def run(
     run_lock = asyncio.Lock()
 
     tasks = [
-        _crawl_one_channel(ch, run_id, no_alerts, no_intel, threshold, sem, run_lock)
+        _crawl_one_channel(ch, run_id, no_alerts, no_intel, new_only, threshold, sem, run_lock)
         for ch in channels
     ]
     raw_results = await asyncio.gather(*tasks, return_exceptions=True)

@@ -743,20 +743,22 @@ if __name__ == "__main__":
 
 ---
 
-## T-094: Custom GPT / OpenClaw OAuth 연동 검증
+## T-094: Custom GPT Actions OAuth 연동 검증
 
-**목표:** 구현된 OAuth2 서버가 실제 Custom GPT Actions 및 OpenClaw와 정상 연동되는지 검증.
+**목표:** 구현된 OAuth2 서버가 Custom GPT Actions와 정상 연동되는지 검증.
+
+> OpenClaw는 2026년 2월 기준 CVE-2026-25253(토큰 탈취), ClawJacked(원격 에이전트 탈취) 등
+> 심각한 보안 취약점이 발견됐습니다. 개인 데이터가 있는 맥북에는 설치하지 않습니다.
+> 인텔 수집은 Custom GPT Actions만 사용합니다.
 
 **선행 조건:** Railway 배포 완료, `ADMIN_BEARER_TOKEN` 설정됨
 
 **작업 내용:**
 
 1. **Railway 배포 확인:**
-   - `/oauth/authorize` 엔드포인트 접근 확인
-   - `/oauth/token` 엔드포인트 응답 확인
    ```bash
-   curl https://fashion-data-engine-production.up.railway.app/oauth/authorize \
-     "?client_id=test&redirect_uri=https://example.com&response_type=code"
+   curl "https://fashion-data-engine-production.up.railway.app/oauth/authorize\
+?client_id=test&redirect_uri=https://example.com&response_type=code"
    # → HTML 승인 폼 반환 확인
    ```
 
@@ -784,11 +786,6 @@ if __name__ == "__main__":
 
    브라우징으로 직접 확인한 정보만 기록. 추측 금지.
    ```
-
-4. **OpenClaw 연동 (선택):**
-   - OpenClaw 설치 후 HTTP 스킬 추가
-   - Bearer 토큰 획득: OAuth 흐름 완료 후 발급된 토큰 사용
-   - `/feed/ingest` POST 스킬 정의
 
 **완료 기준:**
 - Custom GPT에서 `POST /feed/ingest` 호출 → Railway DB `activity_feed` 레코드 생성 확인

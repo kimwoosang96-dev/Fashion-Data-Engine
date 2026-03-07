@@ -21,6 +21,7 @@ from fashion_engine.api.intel import router as intel_router
 from fashion_engine.api.feed import router as feed_router
 from fashion_engine.api.push import router as push_router
 from fashion_engine.api.webhooks import router as webhooks_router
+from fashion_engine.api.oauth import router as oauth_router
 
 
 @asynccontextmanager
@@ -57,6 +58,7 @@ app.include_router(intel_router)
 app.include_router(feed_router)
 app.include_router(push_router)
 app.include_router(webhooks_router)
+app.include_router(oauth_router)
 
 
 @app.get("/")

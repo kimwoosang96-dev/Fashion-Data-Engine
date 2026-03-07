@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Security
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fashion_engine.api.schemas import ActivityFeedItemOut, FeedIngestIn
@@ -8,13 +9,17 @@ from fashion_engine.services import feed_service
 
 router = APIRouter(prefix="/feed", tags=["feed"])
 
+_bearer = HTTPBearer(auto_error=False)
 
-async def require_gpt_actions_api_key(x_api_key: str | None = Header(None)) -> None:
-    expected = (settings.gpt_actions_api_key or "").strip()
+
+async def require_bearer(
+    creds: HTTPAuthorizationCredentials | None = Security(_bearer),
+) -> None:
+    expected = (settings.admin_bearer_token or "").strip()
     if not expected:
-        raise HTTPException(status_code=503, detail="GPT actions API key not configured")
-    if x_api_key != expected:
-        raise HTTPException(status_code=401, detail="Invalid API key")
+        raise HTTPException(status_code=503, detail="ADMIN_BEARER_TOKEN not configured")
+    if creds is None or creds.credentials != expected:
+        raise HTTPException(status_code=401, detail="Invalid or missing Bearer token")
 
 
 @router.get("", response_model=list[ActivityFeedItemOut])
@@ -37,7 +42,7 @@ async def list_activity_feed(
 @router.post("/ingest", response_model=ActivityFeedItemOut, status_code=201)
 async def ingest_activity_feed(
     payload: FeedIngestIn,
-    _: None = Depends(require_gpt_actions_api_key),
+    _: None = Depends(require_bearer),
     db: AsyncSession = Depends(get_db),
 ):
     try:

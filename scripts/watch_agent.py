@@ -21,6 +21,7 @@ from fashion_engine.models.channel import Channel  # noqa: E402
 from fashion_engine.models.crawl_run import CrawlRun  # noqa: E402
 from fashion_engine.models.price_history import PriceHistory  # noqa: E402
 from fashion_engine.models.product import Product  # noqa: E402
+from fashion_engine.services.push_service import send_push_for_feed_items  # noqa: E402
 
 
 @dataclass
@@ -63,8 +64,9 @@ class WatchAgent:
         *,
         started_at: datetime,
         candidates: list[FeedEventCandidate],
-    ) -> int:
+    ) -> tuple[int, list[ActivityFeed]]:
         inserted = 0
+        created_rows: list[ActivityFeed] = []
         for item in candidates:
             if await self._event_exists(
                 db,
@@ -74,23 +76,23 @@ class WatchAgent:
                 started_at=started_at,
             ):
                 continue
-            db.add(
-                ActivityFeed(
-                    event_type=item.event_type,
-                    product_id=item.product_id,
-                    channel_id=item.channel_id,
-                    brand_id=item.brand_id,
-                    product_name=item.product_name,
-                    price_krw=item.price_krw,
-                    discount_rate=item.discount_rate,
-                    source_url=item.source_url,
-                    metadata_json={"image_url": item.image_url} if item.image_url else None,
-                    detected_at=item.detected_at,
-                    notified=False,
-                )
+            row = ActivityFeed(
+                event_type=item.event_type,
+                product_id=item.product_id,
+                channel_id=item.channel_id,
+                brand_id=item.brand_id,
+                product_name=item.product_name,
+                price_krw=item.price_krw,
+                discount_rate=item.discount_rate,
+                source_url=item.source_url,
+                metadata_json={"image_url": item.image_url} if item.image_url else None,
+                detected_at=item.detected_at,
+                notified=False,
             )
+            db.add(row)
+            created_rows.append(row)
             inserted += 1
-        return inserted
+        return inserted, created_rows
 
     async def detect_sale_start(
         self,
@@ -232,26 +234,29 @@ class WatchAgent:
             for row in rows
         ]
 
-    async def run(self, db: AsyncSession, *, channel_id: int, crawl_run_id: int) -> int:
+    async def run(self, db: AsyncSession, *, channel_id: int, crawl_run_id: int) -> tuple[int, list[ActivityFeed]]:
         crawl_run = await db.get(CrawlRun, crawl_run_id)
         if not crawl_run:
-            return 0
+            return 0, []
         started_at = crawl_run.started_at
 
         candidates: list[FeedEventCandidate] = []
         candidates.extend(await self.detect_sale_start(db, channel_id=channel_id, started_at=started_at))
         candidates.extend(await self.detect_new_drops(db, channel_id=channel_id, started_at=started_at))
         candidates.extend(await self.detect_price_cut(db, channel_id=channel_id, started_at=started_at))
-        inserted = await self._insert_candidates(db, started_at=started_at, candidates=candidates)
-        return inserted
+        inserted, created_rows = await self._insert_candidates(db, started_at=started_at, candidates=candidates)
+        return inserted, created_rows
 
 
 async def run_channel_watch(channel_id: int, crawl_run_id: int) -> int:
     await init_db()
     async with AsyncSessionLocal() as db:
         agent = WatchAgent()
-        inserted = await agent.run(db, channel_id=channel_id, crawl_run_id=crawl_run_id)
+        inserted, created_rows = await agent.run(db, channel_id=channel_id, crawl_run_id=crawl_run_id)
         await db.commit()
+    if created_rows:
+        async with AsyncSessionLocal() as push_db:
+            await send_push_for_feed_items(push_db, created_rows)
     return inserted
 
 

@@ -415,6 +415,10 @@ export interface ActivityFeedItem {
   detected_at: string;
 }
 
+export interface PushPublicKey {
+  public_key: string;
+}
+
 export interface AdminDraftChannel {
   id: number;
   name: string;

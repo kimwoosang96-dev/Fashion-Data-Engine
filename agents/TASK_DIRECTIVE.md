@@ -11,6 +11,7 @@ PM/개발 작업 통제를 위한 단일 기준 문서입니다.
 
 ## 진행 중 작업
 <!-- ACTIVE_TASKS_START -->
+- [ ] T-20260308-105 | PWA_PUSH_01: `/feed` PWA 웹 푸시 구독/발송 연결 및 브라우저 실검증 | owner:codex-dev | priority:P1 | status:in_progress | created:2026-03-08 | details:`pywebpush`를 추가하고 `push_subscriptions` 모델/마이그레이션, `/push/public-key`, `POST/DELETE /push/subscribe`, service worker/manifest, `/feed` 구독 UI, watch_agent의 push 발송 연동까지 구현했다. 남은 것은 실제 VAPID 키 환경변수 설정 후 브라우저에서 권한 요청과 테스트 푸시 수신을 검증하는 단계다.
 <!-- ACTIVE_TASKS_END -->
 
 ## 최근 완료 작업

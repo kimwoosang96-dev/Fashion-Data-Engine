@@ -16,6 +16,7 @@ from fashion_engine.models.crawl_run import CrawlRun, CrawlChannelLog
 from fashion_engine.models.product_catalog import ProductCatalog
 from fashion_engine.models.channel_note import ChannelNote
 from fashion_engine.models.activity_feed import ActivityFeed
+from fashion_engine.models.push_subscription import PushSubscription
 from fashion_engine.models.intel import (
     IntelEvent,
     IntelEventSource,
@@ -32,6 +33,7 @@ __all__ = [
     "ProductCatalog",
     "ChannelNote",
     "ActivityFeed",
+    "PushSubscription",
     "IntelEvent",
     "IntelEventSource",
     "IntelIngestRun",

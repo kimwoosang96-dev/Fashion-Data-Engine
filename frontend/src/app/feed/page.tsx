@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { getActivityFeed } from "@/lib/api";
+import { getActivityFeed, getPushPublicKey, subscribePush, unsubscribePush } from "@/lib/api";
 import type { ActivityFeedItem } from "@/lib/types";
 
 const FILTERS = [
@@ -15,6 +15,13 @@ const FILTERS = [
 ] as const;
 
 const PAGE_SIZE = 30;
+
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = window.atob(base64);
+  return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
+}
 
 function formatKrw(value: number | null) {
   return value == null ? null : `₩${value.toLocaleString("ko-KR")}`;
@@ -67,6 +74,10 @@ export default function FeedPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [eventType, setEventType] = useState("");
+  const [pushSupported, setPushSupported] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushMsg, setPushMsg] = useState<string | null>(null);
+  const [brandIdsInput, setBrandIdsInput] = useState("");
 
   const load = async (nextOffset: number, replace = false) => {
     const setter = replace ? setLoading : setLoadingMore;
@@ -95,6 +106,74 @@ export default function FeedPage() {
     return () => window.clearInterval(timer);
   }, [eventType]);
 
+  useEffect(() => {
+    setPushSupported(typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window);
+  }, []);
+
+  const enablePush = async () => {
+    if (!pushSupported) {
+      setPushMsg("이 브라우저는 웹 푸시를 지원하지 않습니다.");
+      return;
+    }
+    setPushBusy(true);
+    setPushMsg(null);
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const keyRes = await getPushPublicKey();
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        setPushMsg("알림 권한이 거부되었습니다.");
+        return;
+      }
+      const existing = await registration.pushManager.getSubscription();
+      if (existing) {
+        await unsubscribePush(existing.endpoint);
+        await existing.unsubscribe();
+      }
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(keyRes.public_key),
+      });
+      const json = subscription.toJSON();
+      const brandIds = brandIdsInput
+        .split(",")
+        .map((row) => Number(row.trim()))
+        .filter((row) => Number.isInteger(row) && row > 0);
+      await subscribePush({
+        endpoint: subscription.endpoint,
+        keys: {
+          p256dh: json.keys?.p256dh ?? "",
+          auth: json.keys?.auth ?? "",
+        },
+        brand_ids: brandIds,
+      });
+      setPushMsg("웹 푸시 구독이 저장되었습니다.");
+    } catch (err) {
+      setPushMsg(err instanceof Error ? err.message : "푸시 구독 실패");
+    } finally {
+      setPushBusy(false);
+    }
+  };
+
+  const disablePush = async () => {
+    if (!pushSupported) return;
+    setPushBusy(true);
+    setPushMsg(null);
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const existing = await registration.pushManager.getSubscription();
+      if (existing) {
+        await unsubscribePush(existing.endpoint);
+        await existing.unsubscribe();
+      }
+      setPushMsg("웹 푸시 구독이 해제되었습니다.");
+    } catch (err) {
+      setPushMsg(err instanceof Error ? err.message : "푸시 해제 실패");
+    } finally {
+      setPushBusy(false);
+    }
+  };
+
   const hasMore = useMemo(() => items.length >= PAGE_SIZE && items.length === offset, [items.length, offset]);
 
   return (
@@ -120,6 +199,40 @@ export default function FeedPage() {
           </button>
         ))}
       </div>
+
+      <section className="rounded-2xl border border-gray-200 bg-white p-4 space-y-3">
+        <div>
+          <h2 className="text-sm font-semibold text-gray-900">웹 푸시 알림</h2>
+          <p className="mt-1 text-xs text-gray-500">
+            브랜드 ID를 쉼표로 입력하면 해당 브랜드 이벤트만 구독합니다. 비워두면 전체 이벤트를 받습니다.
+          </p>
+        </div>
+        <div className="flex flex-col gap-2 md:flex-row">
+          <input
+            value={brandIdsInput}
+            onChange={(e) => setBrandIdsInput(e.target.value)}
+            placeholder="예: 12,34,56"
+            className="h-10 flex-1 rounded-md border border-gray-200 px-3 text-sm"
+          />
+          <button
+            type="button"
+            onClick={() => void enablePush()}
+            disabled={pushBusy}
+            className="rounded-lg bg-gray-900 px-4 py-2 text-sm text-white disabled:opacity-60"
+          >
+            {pushBusy ? "처리 중..." : "알림 받기"}
+          </button>
+          <button
+            type="button"
+            onClick={() => void disablePush()}
+            disabled={pushBusy}
+            className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm text-gray-700 disabled:opacity-60"
+          >
+            구독 해제
+          </button>
+        </div>
+        {pushMsg && <p className="text-xs text-gray-500">{pushMsg}</p>}
+      </section>
 
       {loading ? (
         <p className="text-sm text-gray-400">피드 로딩 중...</p>

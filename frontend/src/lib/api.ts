@@ -7,6 +7,7 @@ import type {
   FashionNews, CollabItem, BrandDirector, DirectorsByBrand, AdminCollabItem, AdminAuditItem, MultiChannelProduct,
   CrawlRunOut, CrawlRunDetail, ChannelNoteOut, ActivityFeedItem, AdminDraftChannel,
   IntelEvent, IntelEventsPage, IntelMapPoint, IntelTimelineOut, AdminIntelStatus,
+  PushPublicKey,
 } from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -349,6 +350,25 @@ export const getActivityFeed = (params?: {
   if (typeof params?.offset === "number") q.set("offset", String(params.offset));
   return apiFetch<ActivityFeedItem[]>(`/feed${q.toString() ? `?${q.toString()}` : ""}`);
 };
+
+export const getPushPublicKey = () =>
+  apiFetch<PushPublicKey>("/push/public-key");
+
+export const subscribePush = (payload: {
+  endpoint: string;
+  keys: { p256dh: string; auth: string };
+  brand_ids: number[];
+}) =>
+  apiFetch<{ ok: boolean; endpoint: string; brand_ids: number[] }>("/push/subscribe", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
+export const unsubscribePush = (endpoint: string) =>
+  apiFetch<{ ok: boolean }>("/push/subscribe", {
+    method: "DELETE",
+    body: JSON.stringify({ endpoint }),
+  });
 
 export const getAdminIntelStatus = (token: string) =>
   adminFetch<AdminIntelStatus>("/admin/intel-status", token);

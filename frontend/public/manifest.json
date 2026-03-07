@@ -1,0 +1,9 @@
+{
+  "name": "Fashion Data Engine",
+  "short_name": "FashionFeed",
+  "start_url": "/feed",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#111827",
+  "icons": []
+}

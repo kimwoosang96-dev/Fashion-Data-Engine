@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     alert_price_drop_threshold: float = 0.10  # 10% 이상 하락 시 알림
     intel_ingest_enabled: bool = False
     intel_default_time_range_days: int = 7
+    push_vapid_public_key: str | None = None
+    push_vapid_private_key: str | None = None
+    push_vapid_subject: str = "mailto:admin@example.com"
 
     @model_validator(mode="after")
     def validate_admin_token(self) -> "Settings":

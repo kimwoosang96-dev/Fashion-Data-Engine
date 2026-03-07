@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Nav } from "@/components/Nav";
+import { PwaClient } from "@/components/PwaClient";
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
@@ -19,6 +20,7 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <body className="bg-gray-50 text-gray-900">
+        <PwaClient />
         <div className="flex h-screen overflow-hidden">
           <Nav />
           <main className="flex-1 overflow-y-auto">

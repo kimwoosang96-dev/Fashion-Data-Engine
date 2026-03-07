@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { getBrandRanking, getProductRanking } from "@/lib/api";
 import type { BrandRankingItem, ProductRankingItem } from "@/lib/types";
@@ -90,21 +91,44 @@ export default function RankingPage() {
       ) : (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {(current as ProductRankingItem[]).map((item, index) => (
-            <article key={`${tab}-${item.product_key}-${item.channel_name}-${index}`} className="rounded-2xl border border-gray-200 bg-white p-4">
+            <article key={`${tab}-${item.product_key}-${item.channel_name}-${index}`} className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+              {item.image_url && (
+                <div className="relative h-48 w-full bg-gray-100">
+                  <Image
+                    src={item.image_url}
+                    alt={item.product_name}
+                    fill
+                    className="object-cover"
+                    sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
+                    unoptimized
+                  />
+                  <div className="absolute left-3 top-3 rounded-full bg-gray-900/80 px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-sm">
+                    {tab === "sale_hot"
+                      ? `${item.discount_rate ?? 0}% OFF`
+                      : `${item.price_drop_pct ?? 0}% DROP`}
+                  </div>
+                  <div className="absolute right-3 top-3 rounded-full bg-white/90 px-2 py-0.5 text-xs font-bold text-gray-500 backdrop-blur-sm">
+                    #{index + 1}
+                  </div>
+                </div>
+              )}
+              <div className="p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-300">Rank {index + 1}</p>
+                  {!item.image_url && <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-300">Rank {index + 1}</p>}
                   <p className="mt-2 line-clamp-2 text-base font-semibold text-gray-900">{item.product_name}</p>
                   <p className="mt-1 text-sm text-gray-500">
                     {item.brand_name ? `${item.brand_name} · ` : ""}
                     {item.channel_name}
                   </p>
                 </div>
-                <div className="rounded-full bg-gray-900 px-2.5 py-1 text-xs font-semibold text-white">
-                  {tab === "sale_hot"
-                    ? `${item.discount_rate ?? 0}% OFF`
-                    : `${item.price_drop_pct ?? 0}% DROP`}
-                </div>
+                {!item.image_url && (
+                  <div className="rounded-full bg-gray-900 px-2.5 py-1 text-xs font-semibold text-white">
+                    {tab === "sale_hot"
+                      ? `${item.discount_rate ?? 0}% OFF`
+                      : `${item.price_drop_pct ?? 0}% DROP`}
+                  </div>
+                )}
               </div>
               <div className="mt-4 flex items-end gap-2">
                 <span className="text-2xl font-bold text-gray-900">{fmt(item.price_krw)}</span>
@@ -131,6 +155,7 @@ export default function RankingPage() {
                     상품 보기
                   </a>
                 )}
+              </div>
               </div>
             </article>
           ))}

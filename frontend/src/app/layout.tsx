@@ -5,10 +5,10 @@ import { Nav } from "@/components/Nav";
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
   title: {
-    default: "패션 다나와",
-    template: "%s | 패션 다나와",
+    default: "Fashion Data Engine",
+    template: "%s | Fashion Data Engine",
   },
-  description: "패션 최저가 비교, 세일 추이, 브랜드/채널 랭킹을 보는 패션 다나와",
+  description: "패션 최저가 비교, 세일 추이, 브랜드/채널 랭킹",
 };
 
 export default function RootLayout({

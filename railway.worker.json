@@ -4,8 +4,7 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "healthcheckPath": "/health",
-    "healthcheckTimeout": 120,
+    "startCommand": "uv run python scripts/scheduler.py",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10
   }

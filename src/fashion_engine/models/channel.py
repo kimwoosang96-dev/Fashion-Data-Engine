@@ -24,6 +24,7 @@ class Channel(Base):
     country: Mapped[str | None] = mapped_column(String(50))                          # 'KR', 'US', 'JP', ...
     description: Mapped[str | None] = mapped_column(Text)
     instagram_url: Mapped[str | None] = mapped_column(String(500))
+    webhook_secret: Mapped[str | None] = mapped_column(String(255))
     poll_priority: Mapped[int] = mapped_column(Integer, default=2, index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

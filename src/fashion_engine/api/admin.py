@@ -934,6 +934,24 @@ async def patch_admin_channel_poll_priority(
     return {"ok": True, "id": channel.id, "poll_priority": channel.poll_priority}
 
 
+@router.patch("/channels/{channel_id}/webhook-secret")
+async def patch_admin_channel_webhook_secret(
+    channel_id: int,
+    payload: dict,
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    channel = (
+        await db.execute(select(Channel).where(Channel.id == channel_id))
+    ).scalar_one_or_none()
+    if not channel:
+        raise HTTPException(status_code=404, detail="channel not found")
+    secret = (payload.get("webhook_secret") or "").strip()
+    channel.webhook_secret = secret or None
+    await db.commit()
+    return {"ok": True, "id": channel.id, "has_webhook_secret": bool(channel.webhook_secret)}
+
+
 # ── 크롤 모니터 ───────────────────────────────────────────────────────────────
 
 

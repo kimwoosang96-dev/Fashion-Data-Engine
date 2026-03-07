@@ -19,6 +19,7 @@ import {
   patchAdminBrandInstagram,
   patchAdminChannelInstagram,
   patchAdminChannelPollPriority,
+  patchAdminChannelWebhookSecret,
   activateAdminChannel,
   triggerChannelCrawl,
   triggerAdminCrawl,
@@ -91,6 +92,8 @@ export default function AdminPage() {
   const [channelInsta, setChannelInsta] = useState("");
   const [channelIdForPriority, setChannelIdForPriority] = useState<number | "">("");
   const [channelPollPriority, setChannelPollPriority] = useState<1 | 2 | 3>(2);
+  const [channelIdForWebhook, setChannelIdForWebhook] = useState<number | "">("");
+  const [channelWebhookSecret, setChannelWebhookSecret] = useState("");
   const [collabForm, setCollabForm] = useState({
     brand_a_slug: "",
     brand_b_slug: "",
@@ -289,6 +292,20 @@ export default function AdminPage() {
       setMsg("채널 fast poll 우선순위 저장 완료");
     } catch (e) {
       setMsg(e instanceof Error ? e.message : "채널 우선순위 저장 실패");
+    }
+  };
+
+  const saveChannelWebhookSecret = async () => {
+    if (!token.trim() || !channelIdForWebhook) return;
+    try {
+      await patchAdminChannelWebhookSecret(
+        token.trim(),
+        Number(channelIdForWebhook),
+        channelWebhookSecret.trim() || undefined,
+      );
+      setMsg("채널 webhook secret 저장 완료");
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "채널 webhook secret 저장 실패");
     }
   };
 
@@ -969,6 +986,36 @@ export default function AdminPage() {
               <button
                 type="button"
                 onClick={() => void saveChannelPollPriority()}
+                className="px-3 h-10 rounded-md border text-sm"
+              >
+                저장
+              </button>
+            </div>
+          </section>
+
+          <section className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
+            <h2 className="text-sm font-semibold">Shopify Webhook Secret</h2>
+            <p className="text-xs text-gray-500"><code>/webhooks/shopify/&lt;slug&gt;</code> 서명 검증용 비밀값을 채널별로 저장합니다.</p>
+            <div className="grid grid-cols-1 md:grid-cols-[1fr_2fr_auto] gap-2 items-center">
+              <select
+                className="h-10 px-3 rounded-md border border-gray-200 bg-white text-sm"
+                value={channelIdForWebhook}
+                onChange={(e) => setChannelIdForWebhook(e.target.value ? Number(e.target.value) : "")}
+              >
+                <option value="">채널 선택</option>
+                {channels.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+              <Input
+                type="password"
+                placeholder="채널별 Shopify webhook secret"
+                value={channelWebhookSecret}
+                onChange={(e) => setChannelWebhookSecret(e.target.value)}
+              />
+              <button
+                type="button"
+                onClick={() => void saveChannelWebhookSecret()}
                 className="px-3 h-10 rounded-md border text-sm"
               >
                 저장

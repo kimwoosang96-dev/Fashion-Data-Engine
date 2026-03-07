@@ -9,6 +9,7 @@
 
 ## 기록
 
+- 2026-03-08 01:12:00 | agent:codex-dev | task:T-20260308-104 | action:complete | message:WEBHOOK_COMMUNITY_01 완료: Shopify webhook HMAC 검증 엔드포인트와 채널별 webhook secret 저장 경로를 추가하고, DCinside HTML 파서 기반 커뮤니티 수집 스크립트를 구현했다.
 - 2026-03-08 00:56:00 | agent:codex-dev | task:T-20260308-103 | action:complete | message:FAST_POLL_SCHEDULER_01 완료: channels.poll_priority 컬럼, crawl_products `--fast-poll/--new-only/--dry-run`, scheduler 2시간/1시간 주기, admin 우선순위 조정 UI/API를 추가하고 dry-run/build 검증을 마쳤다.
 - 2026-03-08 11:35:00 | agent:codex-dev | task:T-20260308-100 | action:complete | message:PRODUCT_PRICE_SNAPSHOT_01 완료: products 현재가 스냅샷 컬럼과 백필 Alembic 추가, 크롤 저장 및 세일/비교/랭킹 조회를 products.price_* 기준으로 전환.
 - 2026-03-08 11:35:00 | agent:codex-dev | task:T-20260308-101 | action:complete | message:ACTIVITY_FEED_01 완료: activity_feed 모델/마이그레이션 추가, `/feed` API를 activity_feed 실데이터 기반으로 전환.

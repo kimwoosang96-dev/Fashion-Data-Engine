@@ -220,6 +220,12 @@ export const patchAdminChannelPollPriority = (token: string, channelId: number, 
     token,
     { method: "PATCH", body: JSON.stringify({ poll_priority: pollPriority }) }
   );
+export const patchAdminChannelWebhookSecret = (token: string, channelId: number, webhookSecret?: string) =>
+  adminFetch<{ ok: boolean; id: number; has_webhook_secret: boolean }>(
+    `/admin/channels/${channelId}/webhook-secret`,
+    token,
+    { method: "PATCH", body: JSON.stringify({ webhook_secret: webhookSecret ?? null }) }
+  );
 export const getAdminCollabs = (token: string, limit = 200, offset = 0) =>
   adminFetch<AdminCollabItem[]>(
     `/admin/collabs?limit=${limit}&offset=${offset}`,

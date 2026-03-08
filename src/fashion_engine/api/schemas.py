@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 from pydantic import BaseModel, Field
 
@@ -564,6 +564,84 @@ class FeedIngestIn(BaseModel):
     image_url: str | None = None
     notes: str | None = None
     detected_at: datetime | None = None
+
+
+class SearchV2ItemOut(BaseModel):
+    id: int
+    product_key: str | None
+    normalized_key: str | None = None
+    product_name: str
+    brand_name: str | None
+    channel_name: str | None
+    url: str
+    image_url: str | None
+    price_krw: int | None
+    similarity: float | None = None
+
+
+class BrandSaleChannelOut(BaseModel):
+    channel_name: str
+    url: str
+    products_on_sale: int
+
+
+class BrandSaleHistoryOut(BaseModel):
+    month: str
+    product_count: int
+    avg_discount: float | None
+
+
+class BrandSaleIntelOut(BaseModel):
+    brand_slug: str
+    brand_name: str
+    is_currently_on_sale: bool
+    current_sale_products: int
+    current_max_discount_rate: int | None
+    sale_channels: list[BrandSaleChannelOut]
+    monthly_sale_history: list[BrandSaleHistoryOut]
+    last_sale_started_at: datetime | None
+    typical_sale_months: list[int]
+
+
+class CrossChannelPriceHistoryPointOut(BaseModel):
+    date: date
+    channel_name: str
+    price_krw: int
+    is_sale: bool
+
+
+class CrossChannelPriceHistoryOut(BaseModel):
+    product_key: str
+    product_name: str
+    history: list[CrossChannelPriceHistoryPointOut]
+    all_time_low: CrossChannelPriceHistoryPointOut | None
+    current_lowest: CrossChannelPriceHistoryPointOut | None
+    price_trend: Literal["falling", "stable", "rising"]
+
+
+class ProductAvailabilityChannelOut(BaseModel):
+    channel_name: str
+    channel_country: str | None
+    channel_url: str
+    product_url: str
+    price_krw: int | None
+    original_price_krw: int | None
+    discount_rate: int | None
+    stock_status: str | None
+    size_availability: list[dict] | None
+    is_sale: bool
+    image_url: str | None
+
+
+class ProductAvailabilityOut(BaseModel):
+    product_key: str
+    normalized_key: str | None
+    product_name: str
+    brand_name: str | None
+    image_url: str | None
+    in_stock_anywhere: bool
+    lowest_price: ProductAvailabilityChannelOut | None
+    channels: list[ProductAvailabilityChannelOut]
 
 
 class AdminDraftChannelOut(BaseModel):

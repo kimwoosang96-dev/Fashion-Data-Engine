@@ -851,6 +851,172 @@ async def get_price_comparison(
     }
 
 
+async def _resolve_product_identity(
+    db: AsyncSession,
+    product_key: str,
+) -> tuple[Product | None, list[Product]]:
+    anchor = (
+        await db.execute(
+            select(Product)
+            .options(selectinload(Product.brand), selectinload(Product.channel))
+            .where(
+                Product.is_active == True,  # noqa: E712
+                or_(Product.product_key == product_key, Product.normalized_key == product_key),
+            )
+            .order_by(Product.updated_at.desc(), Product.id.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if not anchor:
+        return None, []
+
+    if anchor.normalized_key:
+        stmt = select(Product).options(selectinload(Product.brand), selectinload(Product.channel)).where(
+            Product.is_active == True,  # noqa: E712
+            Product.normalized_key == anchor.normalized_key,
+        )
+    else:
+        stmt = select(Product).options(selectinload(Product.brand), selectinload(Product.channel)).where(
+            Product.is_active == True,  # noqa: E712
+            Product.product_key == anchor.product_key,
+        )
+    products = (await db.execute(stmt.order_by(Product.price_krw.asc().nullslast(), Product.id.asc()))).scalars().all()
+    return anchor, list(products)
+
+
+async def get_product_availability(
+    db: AsyncSession,
+    product_key: str,
+) -> dict | None:
+    anchor, products = await _resolve_product_identity(db, product_key)
+    if not anchor or not products:
+        return None
+
+    channels: list[dict] = []
+    for row in products:
+        channels.append(
+            {
+                "channel_name": row.channel.name if row.channel else "",
+                "channel_country": row.channel.country if row.channel else None,
+                "channel_url": row.channel.url if row.channel else "",
+                "product_url": row.url,
+                "price_krw": int(row.price_krw) if row.price_krw is not None else None,
+                "original_price_krw": int(row.original_price_krw) if row.original_price_krw is not None else None,
+                "discount_rate": row.discount_rate,
+                "stock_status": row.stock_status,
+                "size_availability": row.size_availability,
+                "is_sale": bool(row.is_sale),
+                "image_url": row.image_url,
+            }
+        )
+
+    channels.sort(
+        key=lambda item: (
+            0 if item["stock_status"] != "sold_out" else 1,
+            item["price_krw"] if item["price_krw"] is not None else 10**12,
+            item["channel_name"],
+        )
+    )
+    return {
+        "product_key": anchor.product_key or product_key,
+        "normalized_key": anchor.normalized_key,
+        "product_name": anchor.name,
+        "brand_name": anchor.brand.name if anchor.brand else None,
+        "image_url": next((item["image_url"] for item in channels if item["image_url"]), anchor.image_url),
+        "in_stock_anywhere": any(item["stock_status"] != "sold_out" for item in channels),
+        "lowest_price": channels[0] if channels else None,
+        "channels": channels,
+    }
+
+
+async def get_cross_channel_price_history(
+    db: AsyncSession,
+    product_key: str,
+    days: int = 90,
+) -> dict | None:
+    anchor, products = await _resolve_product_identity(db, product_key)
+    if not anchor or not products:
+        return None
+
+    cutoff = datetime.utcnow() - timedelta(days=days)
+    product_ids = [row.id for row in products]
+    if not product_ids:
+        return None
+
+    rows = (
+        await db.execute(
+            select(
+                func.date(PriceHistory.crawled_at).label("day"),
+                Channel.name.label("channel_name"),
+                func.min(PriceHistory.price).label("price_krw"),
+                func.max(cast(PriceHistory.is_sale, String)).label("is_sale"),
+            )
+            .join(Product, Product.id == PriceHistory.product_id)
+            .join(Channel, Channel.id == Product.channel_id)
+            .where(
+                PriceHistory.product_id.in_(product_ids),
+                PriceHistory.crawled_at >= cutoff,
+            )
+            .group_by(func.date(PriceHistory.crawled_at), Channel.name)
+            .order_by(func.date(PriceHistory.crawled_at).asc(), Channel.name.asc())
+        )
+    ).all()
+
+    history: list[dict] = []
+    all_time_low: dict | None = None
+    channel_prices: list[int] = []
+    for row in rows:
+        point = {
+            "date": datetime.fromisoformat(str(row.day)).date(),
+            "channel_name": row.channel_name,
+            "price_krw": int(row.price_krw),
+            "is_sale": str(row.is_sale).lower() in {"1", "true", "t"},
+        }
+        history.append(point)
+        channel_prices.append(point["price_krw"])
+        if all_time_low is None or point["price_krw"] < all_time_low["price_krw"]:
+            all_time_low = point
+
+    current_row = min(
+        (
+            {
+                "date": datetime.utcnow().date(),
+                "channel_name": row.channel.name if row.channel else "",
+                "price_krw": int(row.price_krw),
+                "is_sale": bool(row.is_sale),
+            }
+            for row in products
+            if row.price_krw is not None
+        ),
+        key=lambda item: item["price_krw"],
+        default=None,
+    )
+
+    recent_prices = [point["price_krw"] for point in history[-14:]]
+    newer = recent_prices[-7:]
+    older = recent_prices[:-7]
+    if newer and older:
+        new_avg = sum(newer) / len(newer)
+        old_avg = sum(older) / len(older)
+        if new_avg < old_avg * 0.97:
+            trend = "falling"
+        elif new_avg > old_avg * 1.03:
+            trend = "rising"
+        else:
+            trend = "stable"
+    else:
+        trend = "stable"
+
+    return {
+        "product_key": anchor.product_key or product_key,
+        "product_name": anchor.name,
+        "history": history,
+        "all_time_low": all_time_low,
+        "current_lowest": current_row,
+        "price_trend": trend,
+    }
+
+
 async def get_product_keys(
     db: AsyncSession,
     limit: int | None = None,

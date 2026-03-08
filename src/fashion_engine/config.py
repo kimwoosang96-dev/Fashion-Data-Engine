@@ -18,6 +18,11 @@ class Settings(BaseSettings):
     api_debug: bool = True
     admin_bearer_token: str | None = None
     gpt_actions_api_key: str | None = None
+    redis_url: str | None = None
+    mcp_api_key: str | None = None
+    internal_api_base_url: str = "http://127.0.0.1:8000"
+    internal_api_key: str | None = None
+    semantic_embedding_model: str = "paraphrase-multilingual-MiniLM-L12-v2"
 
     discord_webhook_url: str | None = None
     intel_discord_webhook_url: str | None = None

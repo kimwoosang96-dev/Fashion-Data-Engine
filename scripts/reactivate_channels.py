@@ -8,6 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from channel_probe import probe_channel  # noqa: E402
 from fashion_engine.database import AsyncSessionLocal, init_db  # noqa: E402

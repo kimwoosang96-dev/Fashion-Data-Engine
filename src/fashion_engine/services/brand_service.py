@@ -1,12 +1,13 @@
 from datetime import datetime
 
 from slugify import slugify
-from sqlalchemy import case, func, select, or_
+from sqlalchemy import case, extract, func, select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fashion_engine.models.brand import Brand
 from fashion_engine.models.channel import Channel
 from fashion_engine.models.channel_brand import ChannelBrand
+from fashion_engine.models.price_history import PriceHistory
 from fashion_engine.models.product import Product
 
 
@@ -156,3 +157,108 @@ async def link_brand_to_channel(
         existing.cate_no = cate_no
         existing.crawled_at = datetime.utcnow()
         await db.commit()
+
+
+async def get_brand_sale_intel(db: AsyncSession, brand_slug: str) -> dict | None:
+    brand = await get_brand_by_slug(db, brand_slug)
+    if not brand:
+        return None
+
+    current_stats = (
+        await db.execute(
+            select(
+                func.count(Product.id).label("sale_count"),
+                func.max(Product.discount_rate).label("max_discount"),
+                func.max(Product.sale_started_at).label("last_sale_started_at"),
+            )
+            .where(
+                Product.brand_id == brand.id,
+                Product.is_active == True,  # noqa: E712
+                Product.is_sale == True,  # noqa: E712
+            )
+        )
+    ).one()
+
+    sale_channel_rows = (
+        await db.execute(
+            select(
+                Channel.name.label("channel_name"),
+                Channel.url.label("url"),
+                func.count(Product.id).label("products_on_sale"),
+            )
+            .join(Product, Product.channel_id == Channel.id)
+            .where(
+                Product.brand_id == brand.id,
+                Product.is_active == True,  # noqa: E712
+                Product.is_sale == True,  # noqa: E712
+            )
+            .group_by(Channel.id)
+            .order_by(func.count(Product.id).desc(), Channel.name.asc())
+        )
+    ).all()
+
+    monthly_rows = (
+        await db.execute(
+            select(
+                extract("year", PriceHistory.crawled_at).label("year"),
+                extract("month", PriceHistory.crawled_at).label("month"),
+                func.count(func.distinct(PriceHistory.product_id)).label("product_count"),
+                func.avg(PriceHistory.discount_rate).label("avg_discount"),
+            )
+            .join(Product, Product.id == PriceHistory.product_id)
+            .where(
+                Product.brand_id == brand.id,
+                PriceHistory.is_sale == True,  # noqa: E712
+            )
+            .group_by(
+                extract("year", PriceHistory.crawled_at),
+                extract("month", PriceHistory.crawled_at),
+            )
+            .order_by(
+                extract("year", PriceHistory.crawled_at).desc(),
+                extract("month", PriceHistory.crawled_at).desc(),
+            )
+            .limit(12)
+        )
+    ).all()
+
+    month_totals: dict[int, int] = {}
+    monthly_sale_history: list[dict] = []
+    for row in monthly_rows:
+        month_num = int(row.month or 0)
+        year_num = int(row.year or 0)
+        month_totals[month_num] = month_totals.get(month_num, 0) + int(row.product_count or 0)
+        monthly_sale_history.append(
+            {
+                "month": f"{year_num:04d}-{month_num:02d}",
+                "product_count": int(row.product_count or 0),
+                "avg_discount": round(float(row.avg_discount), 1) if row.avg_discount is not None else None,
+            }
+        )
+
+    typical_sale_months = [
+        month
+        for month, _count in sorted(month_totals.items(), key=lambda item: (-item[1], item[0]))[:4]
+        if month > 0
+    ]
+
+    return {
+        "brand_slug": brand.slug,
+        "brand_name": brand.name,
+        "is_currently_on_sale": int(current_stats.sale_count or 0) > 0,
+        "current_sale_products": int(current_stats.sale_count or 0),
+        "current_max_discount_rate": (
+            int(current_stats.max_discount) if current_stats.max_discount is not None else None
+        ),
+        "sale_channels": [
+            {
+                "channel_name": row.channel_name,
+                "url": row.url,
+                "products_on_sale": int(row.products_on_sale or 0),
+            }
+            for row in sale_channel_rows
+        ],
+        "monthly_sale_history": monthly_sale_history,
+        "last_sale_started_at": current_stats.last_sale_started_at,
+        "typical_sale_months": typical_sale_months,
+    }

@@ -14,6 +14,7 @@ const links = [
   { href: "/brands", label: "브랜드", icon: "🏷️" },
   { href: "/brands/heatmap", label: "세일 히트맵", icon: "🟥" },
   { href: "/channels", label: "판매채널", icon: "🏪" },
+  { href: "/developers", label: "개발자", icon: "🧩" },
   { href: "/directors", label: "디렉터", icon: "🧠" },
   { href: "/watchlist", label: "관심목록", icon: "❤️" },
   { href: "/purchases", label: "구매이력", icon: "🛍️" },

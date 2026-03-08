@@ -13,6 +13,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fashion_engine.crawler.product_crawler import ProductInfo, ProductCrawler
+from fashion_engine.api.auth import require_admin
+from fashion_engine.api.schemas import WebhookSubscriptionIn, WebhookSubscriptionOut
 from fashion_engine.database import get_db
 from fashion_engine.models.activity_feed import ActivityFeed
 from fashion_engine.models.channel import Channel
@@ -22,8 +24,47 @@ from fashion_engine.services.product_service import (
     get_rate_to_krw,
     upsert_product,
 )
+from fashion_engine.services.webhook_service import (
+    create_webhook_subscription,
+    delete_webhook_subscription,
+    list_webhook_subscriptions,
+)
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
+
+
+@router.get("/subscriptions", response_model=list[WebhookSubscriptionOut])
+async def get_webhook_subscriptions(
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    return await list_webhook_subscriptions(db)
+
+
+@router.post("/subscriptions", response_model=WebhookSubscriptionOut, status_code=201)
+async def add_webhook_subscription(
+    payload: WebhookSubscriptionIn,
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    return await create_webhook_subscription(
+        db,
+        url=payload.url,
+        secret=payload.secret,
+        brand_ids=payload.brand_ids,
+        event_types=list(payload.event_types),
+    )
+
+
+@router.delete("/subscriptions/{subscription_id}", status_code=204)
+async def remove_webhook_subscription(
+    subscription_id: int,
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    deleted = await delete_webhook_subscription(db, subscription_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="subscription not found")
 
 
 def _channel_slug_candidates(channel: Channel) -> set[str]:

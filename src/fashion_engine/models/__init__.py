@@ -18,6 +18,8 @@ from fashion_engine.models.channel_crawl_stat import ChannelCrawlStat
 from fashion_engine.models.channel_note import ChannelNote
 from fashion_engine.models.activity_feed import ActivityFeed
 from fashion_engine.models.push_subscription import PushSubscription
+from fashion_engine.models.webhook_subscription import WebhookSubscription
+from fashion_engine.models.api_key import ApiKey, ApiKeyDailyUsage
 from fashion_engine.models.intel import (
     IntelEvent,
     IntelEventSource,
@@ -36,6 +38,9 @@ __all__ = [
     "ChannelNote",
     "ActivityFeed",
     "PushSubscription",
+    "WebhookSubscription",
+    "ApiKey",
+    "ApiKeyDailyUsage",
     "IntelEvent",
     "IntelEventSource",
     "IntelIngestRun",

@@ -8,8 +8,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fashion_engine.cache import get_redis
+from fashion_engine.api.auth import resolve_api_key_header
 from fashion_engine.config import settings
 from fashion_engine.database import get_db
+from fashion_engine.services.api_key_service import authenticate_api_key
 from fashion_engine.models.brand import Brand
 from fashion_engine.models.channel import Channel
 from fashion_engine.services.brand_service import get_brand_sale_intel
@@ -38,19 +40,16 @@ async def _check_rate_limit(api_key: str, max_rpm: int = 60) -> bool:
 
 
 async def require_mcp_auth(
-    authorization: str | None = Header(None),
+    raw_key: str = Depends(resolve_api_key_header),
+    db: AsyncSession = Depends(get_db),
 ) -> str:
     expected = (settings.mcp_api_key or "").strip()
-    if not expected:
-        raise HTTPException(status_code=503, detail="MCP_API_KEY not configured")
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="missing bearer token")
-    api_key = authorization.split(" ", 1)[1].strip()
-    if api_key != expected:
-        raise HTTPException(status_code=401, detail="invalid api key")
-    if not await _check_rate_limit(api_key):
-        raise HTTPException(status_code=429, detail="rate limit exceeded")
-    return api_key
+    if expected and raw_key == expected:
+        if not await _check_rate_limit(raw_key):
+            raise HTTPException(status_code=429, detail="rate limit exceeded")
+        return raw_key
+    api_key = await authenticate_api_key(db, raw_key=raw_key, scope="mcp")
+    return api_key.key_prefix
 
 
 @router.get("")

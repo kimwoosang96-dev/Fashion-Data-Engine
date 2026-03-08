@@ -7,7 +7,7 @@ from collections import defaultdict
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import case, func, select, desc, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -30,6 +30,9 @@ from fashion_engine.models.activity_feed import ActivityFeed
 from fashion_engine.models.intel import IntelEvent, IntelIngestRun
 from fashion_engine.models.channel_crawl_stat import ChannelCrawlStat
 from fashion_engine.api.schemas import (
+    ApiKeyCreateIn,
+    ApiKeyCreateOut,
+    ApiKeyOut,
     CrawlRunOut,
     CrawlRunDetail,
     CrawlChannelLogOut,
@@ -38,8 +41,10 @@ from fashion_engine.api.schemas import (
     ChannelSignalOut,
     AdminDraftChannelOut,
 )
+from fashion_engine.api.auth import require_admin
 from fashion_engine.monitoring import get_response_metrics, get_slow_queries
 from fashion_engine.services.analytics_service import get_channel_competitiveness
+from fashion_engine.services.api_key_service import create_api_key, list_api_keys_with_stats
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -58,25 +63,6 @@ SCRIPT_MAP = {
     "drops": ["scripts/crawl_drops.py"],
     "channel": ["scripts/crawl_products.py"],
 }
-
-
-def _auth_bearer(authorization: str | None) -> None:
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Authorization header required")
-    scheme, _, token = authorization.partition(" ")
-    expected = settings.admin_bearer_token
-    if expected is None:
-        # ADMIN_BEARER_TOKEN 미설정 — 로컬 개발(api_debug=True)에서만 허용
-        if not settings.api_debug:
-            raise HTTPException(status_code=503, detail="Admin token not configured")
-        return
-    if scheme.lower() != "bearer" or token != expected:
-        raise HTTPException(status_code=401, detail="Invalid admin token")
-
-
-async def require_admin(authorization: str | None = Header(None)) -> None:
-    _auth_bearer(authorization)
-
 
 def _compute_traffic_light(crawl_status: str, recent_logs: list, inactive_rate: float) -> str:
     if crawl_status == "never":
@@ -163,6 +149,36 @@ async def get_admin_stats(
             for row in rates
         ],
     }
+
+
+@router.post("/api-keys", response_model=ApiKeyCreateOut, status_code=201)
+async def create_admin_api_key(
+    payload: ApiKeyCreateIn,
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    row, raw_key = await create_api_key(
+        db,
+        name=payload.name,
+        tier=payload.tier,
+    )
+    return {
+        "id": row.id,
+        "key": raw_key,
+        "key_prefix": row.key_prefix,
+        "name": row.name,
+        "tier": row.tier,
+        "rpm_limit": row.rpm_limit,
+        "daily_limit": row.daily_limit,
+    }
+
+
+@router.get("/api-keys", response_model=list[ApiKeyOut])
+async def list_admin_api_keys(
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    return await list_api_keys_with_stats(db)
 
 
 @router.get("/intel-status")

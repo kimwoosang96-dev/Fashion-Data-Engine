@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import logging
 import sys
 from dataclasses import dataclass
 from datetime import datetime
@@ -21,6 +22,9 @@ from fashion_engine.models.crawl_run import CrawlRun  # noqa: E402
 from fashion_engine.models.product import Product  # noqa: E402
 from fashion_engine.services.push_service import send_push_for_feed_items  # noqa: E402
 from fashion_engine.services.realtime_client import broadcast_feed_item  # noqa: E402
+from fashion_engine.services.webhook_service import dispatch_webhooks_for_feed_items  # noqa: E402
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -184,6 +188,11 @@ async def run_channel_watch(channel_id: int, crawl_run_id: int) -> int:
         inserted, created_rows = await agent.run(db, channel_id=channel_id, crawl_run_id=crawl_run_id)
         await db.commit()
     if created_rows:
+        try:
+            async with AsyncSessionLocal() as webhook_db:
+                await dispatch_webhooks_for_feed_items(webhook_db, created_rows)
+        except Exception as exc:
+            logger.warning("watch webhook dispatch failed: %s", exc)
         async with AsyncSessionLocal() as push_db:
             await send_push_for_feed_items(push_db, created_rows)
         for row in created_rows:

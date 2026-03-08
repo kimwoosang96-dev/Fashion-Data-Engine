@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import logging
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,6 +10,9 @@ from sqlalchemy.orm import selectinload
 from fashion_engine.models.brand import Brand
 from fashion_engine.models.activity_feed import ActivityFeed
 from fashion_engine.services.realtime_client import broadcast_feed_item
+from fashion_engine.services.webhook_service import dispatch_webhooks_for_feed_items
+
+logger = logging.getLogger(__name__)
 
 
 async def get_activity_feed(
@@ -122,4 +126,8 @@ async def ingest_activity_feed(
             "detected_at": row.detected_at.isoformat(),
         }
     )
+    try:
+        await dispatch_webhooks_for_feed_items(db, [row])
+    except Exception as exc:
+        logger.warning("feed ingest webhook dispatch failed: %s", exc)
     return payload

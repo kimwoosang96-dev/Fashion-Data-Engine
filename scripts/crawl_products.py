@@ -59,6 +59,7 @@ from watch_agent import run_channel_watch
 from fashion_engine.services.intel_service import upsert_derived_product_event
 from fashion_engine.services.push_service import send_push_for_feed_items
 from fashion_engine.services.realtime_client import broadcast_feed_item
+from fashion_engine.services.webhook_service import dispatch_webhooks_for_feed_items
 from fashion_engine.services.alert_service import (
     AlertPayload,
     new_product_alert,
@@ -798,6 +799,12 @@ async def run_channel_post_commit_pipeline(
         except Exception as exc:
             logger.warning("channel post-commit alerts failed channel=%s: %s", channel.name, exc)
     if created_feed_rows:
+        try:
+            async with AsyncSessionLocal() as webhook_db:
+                await _apply_crawl_db_timeouts(webhook_db)
+                await dispatch_webhooks_for_feed_items(webhook_db, created_feed_rows)
+        except Exception as exc:
+            logger.warning("channel post-commit webhooks failed channel=%s: %s", channel.name, exc)
         try:
             async with AsyncSessionLocal() as push_db:
                 await send_push_for_feed_items(push_db, created_feed_rows)

@@ -555,6 +555,78 @@ async def search_products(
     return list(result.scalars().all())
 
 
+async def iter_export_products(
+    db: AsyncSession,
+    *,
+    brand_slug: str | None = None,
+    is_sale: bool | None = None,
+    batch_size: int = 500,
+):
+    last_id = 0
+    while True:
+        stmt = (
+            select(
+                Product.id,
+                Product.product_key,
+                Product.normalized_key,
+                Product.name,
+                Brand.slug.label("brand_slug"),
+                Brand.name.label("brand_name"),
+                Channel.name.label("channel_name"),
+                Channel.country.label("channel_country"),
+                Product.price_krw,
+                Product.original_price_krw,
+                Product.discount_rate,
+                Product.currency,
+                Product.is_sale,
+                Product.is_active,
+                Product.stock_status,
+                Product.size_scarcity,
+                Product.is_all_time_low,
+                Product.url,
+                Product.image_url,
+                Product.updated_at,
+            )
+            .join(Channel, Product.channel_id == Channel.id)
+            .join(Brand, Product.brand_id == Brand.id, isouter=True)
+            .where(Product.id > last_id)
+            .order_by(Product.id.asc())
+            .limit(batch_size)
+        )
+        if brand_slug:
+            stmt = stmt.where(Brand.slug == brand_slug)
+        if is_sale is not None:
+            stmt = stmt.where(Product.is_sale == is_sale)
+
+        rows = (await db.execute(stmt)).all()
+        if not rows:
+            break
+        for row in rows:
+            last_id = int(row.id)
+            yield {
+                "id": int(row.id),
+                "product_key": row.product_key,
+                "normalized_key": row.normalized_key,
+                "name": row.name,
+                "brand_slug": row.brand_slug,
+                "brand_name": row.brand_name,
+                "channel_name": row.channel_name,
+                "channel_country": row.channel_country,
+                "price_krw": int(row.price_krw) if row.price_krw is not None else None,
+                "original_price_krw": int(row.original_price_krw) if row.original_price_krw is not None else None,
+                "discount_rate": row.discount_rate,
+                "currency": row.currency,
+                "is_sale": bool(row.is_sale),
+                "is_active": bool(row.is_active),
+                "stock_status": row.stock_status,
+                "size_scarcity": row.size_scarcity,
+                "is_all_time_low": bool(row.is_all_time_low),
+                "url": row.url,
+                "image_url": row.image_url,
+                "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+            }
+
+
 async def search_suggestions(
     db: AsyncSession,
     q: str,

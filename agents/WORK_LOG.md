@@ -9,6 +9,11 @@
 
 ## 기록
 
+- 2026-03-08 23:50:00 | agent:codex-dev | task:T-20260308-154 | action:complete | message:API_DOCS_01 완료: FastAPI OpenAPI metadata를 2.0.0 기준으로 정리하고 `/api/docs` 다크 Swagger, `/swagger-dark.css`, 백엔드 `robots.txt`, frontend `/developers` 문서 페이지와 복사 가능한 MCP/cURL 예시를 추가했다.
+- 2026-03-08 23:51:00 | agent:codex-dev | task:T-20260308-155 | action:complete | message:OUTBOUND_WEBHOOK_01 완료: `webhook_subscriptions` 모델과 `/webhooks/subscriptions` CRUD API를 추가하고, `crawl_products`/`watch_agent`/`feed ingest` post-commit 단계에서 `X-Fashion-Signature` HMAC 서명과 함께 외부 POST를 발송하도록 구현했다.
+- 2026-03-08 23:52:00 | agent:codex-dev | task:T-20260308-156 | action:complete | message:GOOGLE_SHOPPING_FEED_01 완료: `/feed/google-shopping` XML 피드를 추가해 sale products 1000건을 Google Merchant Center 호환 RSS로 노출하고 robots/sitemap 표면을 정리했다.
+- 2026-03-08 23:53:00 | agent:codex-dev | task:T-20260308-157 | action:complete | message:BULK_EXPORT_API_01 완료: `/api/v2/export/products`와 `product_service.iter_export_products()`를 추가해 CSV/NDJSON cursor 스트리밍 export를 구현했다. export는 enterprise API key 필요, 키당 1시간 1회 제한을 둔다.
+- 2026-03-08 23:54:00 | agent:codex-dev | task:T-20260308-158 | action:complete | message:API_KEY_MANAGEMENT_01 완료: `api_keys`/`api_key_daily_usage` 테이블과 admin 발급·조회 API, SHA-256 hash 저장, tier별 scope/RPM/daily 제한, MCP/export/search/availability 연동을 구현했다.
 - 2026-03-08 23:39:00 | agent:codex-dev | task:T-20260308-148 | action:complete | message:BRAND_SEASONALITY_01 완료: `analytics_service.get_brand_seasonality()`와 `/api/v2/brands/{slug}/seasonality`를 추가하고 브랜드 상세 페이지에 12개월 시즌성 heatmap을 붙였다.
 - 2026-03-08 23:40:00 | agent:codex-dev | task:T-20260308-149 | action:complete | message:SIZE_SCARCITY_SCORE_01 완료: `products.size_scarcity` 컬럼과 계산 로직을 추가하고 `/api/v2/availability`, ProductCard, 제품 상세에 희소성 경고를 노출했다.
 - 2026-03-08 23:41:00 | agent:codex-dev | task:T-20260308-150 | action:complete | message:ALL_TIME_LOW_BADGE_01 완료: `products.is_all_time_low` 컬럼과 크롤 저장 시 역대 최저가 판정을 연결하고 제품 카드/상세에 `역대 최저` 배지를 추가했다.

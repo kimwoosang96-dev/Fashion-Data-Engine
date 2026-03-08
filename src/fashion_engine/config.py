@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = 8000
     api_debug: bool = True
+    public_site_url: str = "http://localhost:3000"
     admin_bearer_token: str | None = None
     gpt_actions_api_key: str | None = None
     redis_url: str | None = None

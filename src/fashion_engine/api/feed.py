@@ -1,11 +1,14 @@
+from xml.sax.saxutils import escape
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Security
+from fastapi.responses import Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fashion_engine.api.schemas import ActivityFeedItemOut, FeedIngestIn
 from fashion_engine.config import settings
 from fashion_engine.database import get_db
-from fashion_engine.services import feed_service
+from fashion_engine.services import feed_service, product_service
 
 router = APIRouter(prefix="/feed", tags=["feed"])
 
@@ -60,3 +63,37 @@ async def ingest_activity_feed(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/google-shopping", response_class=Response)
+async def google_shopping_feed(
+    db: AsyncSession = Depends(get_db),
+):
+    products = await product_service.get_sale_products(db, limit=1000)
+    items: list[str] = []
+    for product in products:
+        brand_name = product.brand.name if product.brand else ""
+        items.append(
+            f"""
+    <item>
+      <g:id>{product.id}</g:id>
+      <title>{escape(product.name)}</title>
+      <link>{escape(product.url)}</link>
+      <g:image_link>{escape(product.image_url or '')}</g:image_link>
+      <g:price>{product.original_price_krw or product.price_krw or 0} KRW</g:price>
+      <g:sale_price>{product.price_krw or 0} KRW</g:sale_price>
+      <g:availability>{"in stock" if product.is_active else "out of stock"}</g:availability>
+      <g:brand>{escape(brand_name)}</g:brand>
+      <g:condition>new</g:condition>
+    </item>""".strip()
+        )
+    feed = f"""<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:g="http://base.google.com/ns/1.0">
+  <channel>
+    <title>Fashion Data Engine — Sale Products</title>
+    <link>{escape(settings.public_site_url)}</link>
+    <description>Sale product feed for Google Merchant Center</description>
+    {''.join(items)}
+  </channel>
+</rss>"""
+    return Response(content=feed, media_type="application/xml")

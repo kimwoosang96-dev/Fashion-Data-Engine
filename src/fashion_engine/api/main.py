@@ -2,6 +2,8 @@ from contextlib import asynccontextmanager
 import time
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.openapi.docs import get_swagger_ui_html
+from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
@@ -51,10 +53,23 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Fashion Data Engine",
-    description="패션 판매채널·브랜드 데이터 플랫폼 API",
-    version="0.1.0",
+    title="Fashion Data Engine API",
+    description="""
+## 스트릿웨어 실시간 데이터 API
+
+AI 에이전트, MCP 클라이언트, 외부 서비스가 패션 데이터에 접근하는 표준 인터페이스.
+
+### 주요 엔드포인트
+- `GET /api/v2/availability/{product_key}` — 채널별 재고·가격
+- `GET /api/v2/search` — 자연어 제품 검색
+- `GET /mcp` — MCP 서버
+- `GET /feed/google-shopping` — Google Shopping XML 피드
+""",
+    version="2.0.0",
+    contact={"name": "Fashion Data Engine", "url": "https://fashion-data-engine.vercel.app"},
     lifespan=lifespan,
+    docs_url=None,
+    redoc_url=None,
 )
 
 app.add_middleware(
@@ -97,9 +112,45 @@ app.include_router(mcp_router)
 async def root():
     return {
         "service": "Fashion Data Engine",
-        "version": "0.1.0",
-        "docs": "/docs",
+        "version": "2.0.0",
+        "docs": "/api/docs",
     }
+
+
+@app.get("/swagger-dark.css", include_in_schema=False)
+async def swagger_dark_css():
+    return Response(
+        content="""
+body{background:#09090b!important;color:#f4f4f5!important}
+.swagger-ui,.swagger-ui .info .title,.swagger-ui .scheme-container,.swagger-ui section.models{color:#f4f4f5!important}
+.swagger-ui .topbar{background:#09090b!important;border-bottom:1px solid #27272a}
+.swagger-ui .opblock-tag,.swagger-ui .opblock .opblock-summary-operation-id,.swagger-ui .opblock .opblock-summary-path,.swagger-ui .tab li button.tablinks{color:#fafafa!important}
+.swagger-ui .opblock{background:#18181b!important;border-color:#3f3f46!important}
+.swagger-ui .opblock .opblock-summary{border-color:#3f3f46!important}
+.swagger-ui input,.swagger-ui select,.swagger-ui textarea{background:#111827!important;color:#f9fafb!important;border-color:#374151!important}
+.swagger-ui .responses-inner h4,.swagger-ui .response-col_status,.swagger-ui .response-col_links,.swagger-ui table thead tr td,.swagger-ui table thead tr th{color:#f4f4f5!important}
+.swagger-ui .model-box,.swagger-ui section.models,.swagger-ui .scheme-container{background:#111827!important}
+.swagger-ui .btn.execute{background:#84cc16!important;color:#111827!important;border-color:#84cc16!important}
+""".strip(),
+        media_type="text/css",
+    )
+
+
+@app.get("/api/docs", include_in_schema=False)
+async def custom_swagger():
+    return get_swagger_ui_html(
+        openapi_url=app.openapi_url,
+        title="Fashion Data Engine API",
+        swagger_css_url="/swagger-dark.css",
+    )
+
+
+@app.get("/robots.txt", include_in_schema=False)
+async def api_robots():
+    return Response(
+        content="User-agent: *\nAllow: /api/docs\nAllow: /openapi.json\n",
+        media_type="text/plain",
+    )
 
 
 @app.get("/health")

@@ -16,7 +16,7 @@ A fashion data platform that:
 6. **Scores** purchases by percentile vs. historical price data
 7. **Surfaces** upcoming drops and release dates
 
-**Current phase:** Phase 7 — 비즈니스 인텔리전스 (구현 완료, 리뷰 대기)
+**Current phase:** Phase 8 — 외부 연동 & 표준화 (구현 완료, 리뷰 대기)
 
 ---
 

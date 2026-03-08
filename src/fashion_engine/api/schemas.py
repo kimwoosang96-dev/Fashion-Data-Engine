@@ -694,6 +694,50 @@ class AdminDraftChannelOut(BaseModel):
     use_gpt_parser: bool = False
 
 
+class WebhookSubscriptionIn(BaseModel):
+    url: str
+    secret: str
+    brand_ids: list[int] | None = None
+    event_types: list[Literal["sale_start", "new_drop", "price_cut", "sold_out", "restock"]]
+
+
+class WebhookSubscriptionOut(BaseModel):
+    id: int
+    url: str
+    brand_ids: list[int] | None = None
+    event_types: list[str]
+    is_active: bool
+    created_at: datetime
+
+
+class ApiKeyCreateIn(BaseModel):
+    name: str
+    tier: Literal["free", "pro", "enterprise"]
+
+
+class ApiKeyCreateOut(BaseModel):
+    id: int
+    key: str
+    key_prefix: str
+    name: str
+    tier: str
+    rpm_limit: int
+    daily_limit: int
+
+
+class ApiKeyOut(BaseModel):
+    id: int
+    key_prefix: str
+    name: str
+    tier: str
+    rpm_limit: int
+    daily_limit: int
+    is_active: bool
+    created_at: datetime
+    last_used_at: datetime | None = None
+    monthly_requests: int
+
+
 # ── ProductCatalog 스키마 ────────────────────────────────────────────────────
 
 class CatalogOut(BaseModel):

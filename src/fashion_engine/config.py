@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     push_vapid_private_key: str | None = None
     push_vapid_subject: str = "mailto:admin@example.com"
     openai_api_key: str | None = None
+    groq_api_key: str | None = None
+    gemini_api_key: str | None = None
 
     @model_validator(mode="after")
     def validate_admin_token(self) -> "Settings":

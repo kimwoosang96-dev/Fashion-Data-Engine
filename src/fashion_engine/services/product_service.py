@@ -230,6 +230,18 @@ def build_product_upsert_row(
     currency = (info.currency or "KRW").upper()[:3]
     raw_price = Decimal(str(info.price))
 
+    size_availability = getattr(info, "size_availability", None)
+    if size_availability:
+        in_stock_count = sum(1 for s in size_availability if s.get("in_stock"))
+        if in_stock_count == 0:
+            stock_status = "sold_out"
+        elif in_stock_count <= 2:
+            stock_status = "low_stock"
+        else:
+            stock_status = "in_stock"
+    else:
+        stock_status = "in_stock" if info.is_available else "sold_out"
+
     if existing:
         prev_sale = bool(existing.is_sale)
         sale_just_started = (not prev_sale) and is_sale
@@ -276,6 +288,8 @@ def build_product_upsert_row(
                 "raw_price": raw_price,
                 "price_updated_at": row_now,
                 "sale_started_at": sale_started_at,
+                "size_availability": size_availability,
+                "stock_status": stock_status,
                 "is_active": info.is_available,
                 "is_sale": is_sale,
                 "archived_at": archived_at,
@@ -308,6 +322,8 @@ def build_product_upsert_row(
             "raw_price": raw_price,
             "price_updated_at": row_now,
             "sale_started_at": row_now if is_sale else None,
+            "size_availability": size_availability,
+            "stock_status": stock_status,
             "is_active": info.is_available,
             "is_sale": is_sale,
             "archived_at": None if info.is_available else row_now,

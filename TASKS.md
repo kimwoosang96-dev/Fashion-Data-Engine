@@ -793,7 +793,7 @@ if __name__ == "__main__":
 
 ---
 
-## T-095: 검색 자동완성 (Autocomplete)
+## T-095: 검색 자동완성 (Autocomplete) ✅ 완료
 
 **목표:** 검색창에서 타이핑 시 브랜드명·제품명 자동완성 드롭다운 표시.
 
@@ -834,7 +834,7 @@ async def search_suggestions(
 
 ---
 
-## T-096: 드롭 캘린더 페이지 (/drops/calendar)
+## T-096: 드롭 캘린더 페이지 (/drops/calendar) ✅ 완료
 
 **목표:** 예정 드롭 및 세일 일정을 캘린더 형태로 시각화. intel_events 기반.
 
@@ -874,7 +874,7 @@ async def drops_calendar(
 
 ---
 
-## T-097: 세일 히트맵 (브랜드 × 채널)
+## T-097: 세일 히트맵 (브랜드 × 채널) ✅ 완료
 
 **목표:** 어느 브랜드가 어느 채널에서 세일 중인지 한눈에 파악하는 히트맵 뷰.
 
@@ -961,7 +961,7 @@ async def notify_watchlist_users(db, product_id: int, event_type: str, price_krw
 
 ---
 
-## T-099: 관리자 대시보드 고도화
+## T-099: 관리자 대시보드 고도화 ✅ 완료
 
 **목표:** 운영 현황을 한눈에 파악할 수 있는 관리자 대시보드 추가 지표.
 
@@ -1000,7 +1000,7 @@ async def notify_watchlist_users(db, product_id: int, event_type: str, price_krw
 
 ---
 
-## T-100: 채널 커버리지 리포트 자동화
+## T-100: 채널 커버리지 리포트 자동화 ✅ 완료
 
 **목표:** 크롤 불가 채널·수집률 저조 채널을 자동으로 감지해 관리자에게 보고.
 

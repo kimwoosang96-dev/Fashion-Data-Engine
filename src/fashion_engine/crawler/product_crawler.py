@@ -175,6 +175,7 @@ class ProductInfo:
     subcategory: str | None = None
     normalized_key: str | None = None    # "brand-slug:model-code" 교차채널 매칭용
     match_confidence: float | None = None  # normalized_key 생성 신뢰도 (0.0~1.0)
+    size_availability: list[dict] | None = None  # [{"size": "M", "in_stock": true}, ...]
 
 
 @dataclass
@@ -616,6 +617,23 @@ class ProductCrawler:
                 # 가격 없는 listing (룩북·문의 스타일) — 제품 존재는 기록, price=0
                 price = 0.0
 
+            # 원가(strike-through) 추출 → compare_at_price 설정으로 세일 감지
+            compare_at_price: float | None = None
+            orig_node = card.select_one(
+                "del, s, .consumer-price, .org_price, .origin-price, "
+                ".prd_org_price, .price_del, [class*='origin_price'], "
+                "[class*='org-price'], [class*='originalPrice']"
+            )
+            if orig_node:
+                orig_nums = re.findall(r"\d[\d,]*", orig_node.get_text(" ", strip=True).replace(".", ""))
+                if orig_nums:
+                    try:
+                        orig_val = float(orig_nums[0].replace(",", ""))
+                        if orig_val > price > 0:
+                            compare_at_price = orig_val
+                    except ValueError:
+                        pass
+
             img = card.select_one("img")
             image_url = img.get("src") if img else None
             if image_url:
@@ -655,7 +673,7 @@ class ProductCrawler:
                     handle=product_no,
                     product_type=None,
                     price=price,
-                    compare_at_price=None,
+                    compare_at_price=compare_at_price,
                     currency=currency,
                     sku=None,
                     image_url=image_url,
@@ -1178,6 +1196,20 @@ class ProductCrawler:
         sku: str | None = (v0.get("sku") or "").strip() or None
         is_available = any(bool(v.get("available", False)) for v in variants)
 
+        # 사이즈별 재고 추출 (option1이 사이즈인 경우)
+        _NON_SIZE_VALUES = {"default title", "one size", "os", "onesize", "one-size", "free", "free size"}
+        size_variants = [
+            v for v in variants
+            if (v.get("option1") or "").strip().lower() not in _NON_SIZE_VALUES
+            and (v.get("option1") or "").strip()
+        ]
+        size_availability: list[dict] | None = None
+        if size_variants:
+            size_availability = [
+                {"size": v.get("option1", "").strip(), "in_stock": bool(v.get("available", False))}
+                for v in size_variants
+            ]
+
         # 첫 번째 이미지
         images = p.get("images") or []
         image_url: str | None = images[0]["src"] if images else None
@@ -1224,6 +1256,7 @@ class ProductCrawler:
             subcategory=subcategory,
             normalized_key=normalized_key,
             match_confidence=match_confidence,
+            size_availability=size_availability,
         )
 
     async def _fetch_gpt_fallback_html(self, channel_url: str) -> tuple[str, str] | None:

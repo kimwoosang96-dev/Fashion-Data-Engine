@@ -3,6 +3,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from sqlalchemy import String, Boolean, DateTime, ForeignKey, Text, Integer, Numeric, SmallInteger
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from fashion_engine.database import Base
@@ -44,6 +45,9 @@ class Product(Base):
     raw_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
     price_updated_at: Mapped[datetime | None] = mapped_column(DateTime)
     sale_started_at: Mapped[datetime | None] = mapped_column(DateTime, index=True)
+
+    size_availability: Mapped[list | None] = mapped_column(JSONB, nullable=True)  # [{"size":"M","in_stock":true},...]
+    stock_status: Mapped[str | None] = mapped_column(String(20), nullable=True)    # "in_stock"|"low_stock"|"sold_out"
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     is_new: Mapped[bool] = mapped_column(Boolean, default=False)                     # 신상품 여부

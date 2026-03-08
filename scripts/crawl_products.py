@@ -34,6 +34,7 @@ from sqlalchemy import desc, func, select, text
 from sqlalchemy.exc import DBAPIError
 
 from fashion_engine.config import settings
+from fashion_engine.cache import invalidate_prefixes
 from fashion_engine.database import init_db, AsyncSessionLocal
 from fashion_engine.models.channel import Channel
 from fashion_engine.models.channel_brand import ChannelBrand
@@ -56,6 +57,7 @@ from fashion_engine.services.catalog_service import build_catalog_incremental
 from watch_agent import run_channel_watch
 from fashion_engine.services.intel_service import upsert_derived_product_event
 from fashion_engine.services.push_service import send_push_for_feed_items
+from fashion_engine.services.realtime_client import broadcast_feed_item
 from fashion_engine.services.alert_service import (
     AlertPayload,
     new_product_alert,
@@ -86,6 +88,23 @@ _POSTGRES_CRAWL_TIMEOUT_SQL = (
     "SET LOCAL statement_timeout = '120s'",
 )
 _PRODUCT_BULK_CHUNK_SIZE = 500
+
+
+def _activity_feed_payload(row: ActivityFeed) -> dict:
+    meta = row.metadata_json if isinstance(row.metadata_json, dict) else {}
+    return {
+        "id": row.id,
+        "event_type": row.event_type,
+        "product_name": row.product_name,
+        "brand_name": None,
+        "channel_name": None,
+        "price_krw": row.price_krw,
+        "discount_rate": row.discount_rate,
+        "source_url": row.source_url,
+        "image_url": meta.get("image_url"),
+        "product_key": None,
+        "detected_at": row.detected_at.isoformat() if row.detected_at else None,
+    }
 
 
 def _parse_method_from_strategy(strategy: str | None) -> str | None:
@@ -727,6 +746,23 @@ async def run_channel_post_commit_pipeline(
                 await send_push_for_feed_items(push_db, created_feed_rows)
         except Exception as exc:
             logger.warning("channel post-commit push failed channel=%s: %s", channel.name, exc)
+        try:
+            for row in created_feed_rows:
+                await broadcast_feed_item(_activity_feed_payload(row))
+        except Exception as exc:
+            logger.warning("channel post-commit realtime failed channel=%s: %s", channel.name, exc)
+    try:
+        await invalidate_prefixes(
+            [
+                "v2:availability:",
+                "v2:brand-sale-intel:",
+                "v2:price-history:",
+                "v2:search:",
+                "products:sales:",
+            ]
+        )
+    except Exception as exc:
+        logger.warning("channel post-commit cache invalidation failed channel=%s: %s", channel.name, exc)
 
 
 async def run_channel_watch_pipeline(

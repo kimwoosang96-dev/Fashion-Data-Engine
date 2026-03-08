@@ -22,6 +22,9 @@ from fashion_engine.api.feed import router as feed_router
 from fashion_engine.api.push import router as push_router
 from fashion_engine.api.webhooks import router as webhooks_router
 from fashion_engine.api.oauth import router as oauth_router
+from fashion_engine.api.v2 import router as v2_router
+from fashion_engine.api.realtime import router as realtime_router
+from fashion_engine.api.mcp_server import router as mcp_router
 
 
 @asynccontextmanager
@@ -59,6 +62,9 @@ app.include_router(feed_router)
 app.include_router(push_router)
 app.include_router(webhooks_router)
 app.include_router(oauth_router)
+app.include_router(v2_router)
+app.include_router(realtime_router)
+app.include_router(mcp_router)
 
 
 @app.get("/")

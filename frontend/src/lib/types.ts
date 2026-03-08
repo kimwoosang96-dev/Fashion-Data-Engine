@@ -56,6 +56,84 @@ export interface PriceComparison {
   total_listings: number;
 }
 
+export interface SearchV2Item {
+  id: number;
+  product_key: string | null;
+  normalized_key: string | null;
+  product_name: string;
+  brand_name: string | null;
+  channel_name: string | null;
+  url: string;
+  image_url: string | null;
+  price_krw: number | null;
+  similarity: number | null;
+}
+
+export interface BrandSaleChannel {
+  channel_name: string;
+  url: string;
+  products_on_sale: number;
+}
+
+export interface BrandSaleHistory {
+  month: string;
+  product_count: number;
+  avg_discount: number | null;
+}
+
+export interface BrandSaleIntel {
+  brand_slug: string;
+  brand_name: string;
+  is_currently_on_sale: boolean;
+  current_sale_products: number;
+  current_max_discount_rate: number | null;
+  sale_channels: BrandSaleChannel[];
+  monthly_sale_history: BrandSaleHistory[];
+  last_sale_started_at: string | null;
+  typical_sale_months: number[];
+}
+
+export interface CrossChannelPriceHistoryPoint {
+  date: string;
+  channel_name: string;
+  price_krw: number;
+  is_sale: boolean;
+}
+
+export interface CrossChannelPriceHistory {
+  product_key: string;
+  product_name: string;
+  history: CrossChannelPriceHistoryPoint[];
+  all_time_low: CrossChannelPriceHistoryPoint | null;
+  current_lowest: CrossChannelPriceHistoryPoint | null;
+  price_trend: "falling" | "stable" | "rising";
+}
+
+export interface ProductAvailabilityChannel {
+  channel_name: string;
+  channel_country: string | null;
+  channel_url: string;
+  product_url: string;
+  price_krw: number | null;
+  original_price_krw: number | null;
+  discount_rate: number | null;
+  stock_status: string | null;
+  size_availability: Array<Record<string, unknown>> | null;
+  is_sale: boolean;
+  image_url: string | null;
+}
+
+export interface ProductAvailability {
+  product_key: string;
+  normalized_key: string | null;
+  product_name: string;
+  brand_name: string | null;
+  image_url: string | null;
+  in_stock_anywhere: boolean;
+  lowest_price: ProductAvailabilityChannel | null;
+  channels: ProductAvailabilityChannel[];
+}
+
 export interface Brand {
   id: number;
   name: string;

@@ -9,6 +9,13 @@
 
 ## 기록
 
+- 2026-03-08 22:35:00 | agent:codex-dev | task:T-20260308-134 | action:complete | message:FEED_WEBSOCKET_01 완료: `/ws/feed` WebSocket, `/internal/broadcast`, crawler/watch_agent/feed ingest 브로드캐스트 클라이언트, `/feed` 페이지 재연결 로직을 추가했다. `compileall`, `next build`, 라우트 등록 확인(`/ws/feed`, `/internal/broadcast`)까지 마쳤다.
+- 2026-03-08 22:36:00 | agent:codex-dev | task:T-20260308-135 | action:complete | message:BRAND_SALE_INTEL_API_01 완료: `/api/v2/brands/{slug}/sale-intel`를 추가해 현재 세일 수, 최대 할인율, 세일 채널 목록, 월별 세일 이력, typical sale months를 제공하도록 구현했다.
+- 2026-03-08 22:37:00 | agent:codex-dev | task:T-20260308-130 | action:log | message:SEMANTIC_SEARCH_01 코드 반영: `/api/v2/search?mode=semantic`, `search_service_v2.py`, `generate_embeddings.py`, Alembic `4b5c6d7e8f9a`를 추가했다. 남은 것은 Railway PostgreSQL vector 확장과 sentence-transformers 설치/임베딩 백필 운영 검증이다.
+- 2026-03-08 22:38:00 | agent:codex-dev | task:T-20260308-131 | action:log | message:REDIS_CACHE_LAYER_01 코드 반영: `cache.py`, `/api/v2/*`, `/products/sales` TTL 캐시, 크롤 post-commit cache prefix invalidation을 추가했다. Redis 서비스/패키지 설치와 실측 검증은 남아 active로 유지한다.
+- 2026-03-08 22:39:00 | agent:codex-dev | task:T-20260308-132 | action:log | message:CROSS_CHANNEL_PRICE_HISTORY_UI_01 부분 반영: `/api/v2/price-history/{product_key}` 백엔드와 프론트 타입/api 함수는 추가했다. compare 페이지 차트 UI는 다음 리뷰 후 이어서 붙인다.
+- 2026-03-08 22:40:00 | agent:codex-dev | task:T-20260308-133 | action:log | message:MCP_HARDENING_01 코드 반영: `/mcp` 인증, 메모리 rate limit, resources, `get_brand_sale_status` tool, `mcp.json`을 추가했다. 실제 Claude Desktop 연결 및 transport 정합성 검증은 남아 active로 유지한다.
+- 2026-03-08 22:41:00 | agent:codex-dev | task:T-20260308-122 | action:log | message:Claude 리뷰 반영: `scripts/reactivate_channels.py`에 script 디렉터리 sys.path 삽입을 추가해 Railway 실행 경로에 따라 `channel_probe` import가 깨질 수 있는 문제를 수정했다.
 - 2026-03-08 15:05:00 | agent:codex-dev | task:T-20260308-117 | action:complete | message:CHANNEL_YIELD_MONITOR_01 완료: `channel_crawl_stats` 모델과 Alembic revision `3a4b5c6d7e8f`를 추가하고, `crawl_products.py`가 채널별 yield와 parse method를 크롤 직후 기록하도록 연결했다. `scripts/auto_switch_parser.py` 및 scheduler 일요일 09:30 잡까지 반영했다.
 - 2026-03-08 15:06:00 | agent:codex-dev | task:T-20260308-118 | action:complete | message:SALE_DETECTION_FIX_01 완료: WooCommerce `regular_price > price` 세일 판정을 재확인하고, Cafe24의 추가 CSS selector 및 정가/소비자가 텍스트 파싱을 반영했다. `scripts/verify_sale_detection.py`로 플랫폼별 세일 감지 수를 점검할 수 있다.
 - 2026-03-08 15:07:00 | agent:codex-dev | task:T-20260308-119 | action:complete | message:NORMALIZED_KEY_REFRESH_01 완료: normalized key 생성 시 시즌 코드/색상/불용어를 제거하고 유사도 기반 confidence를 재계산하도록 개선했다. `product_catalog.channel_count` 집계를 추가하고 `scripts/improve_normalized_key.py`로 저신뢰 제품 재처리 경로를 구현했다.

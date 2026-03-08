@@ -8,6 +8,7 @@ import type {
   CrawlRunOut, CrawlRunDetail, ChannelNoteOut, ActivityFeedItem, AdminDraftChannel,
   IntelEvent, IntelEventsPage, IntelMapPoint, IntelTimelineOut, AdminIntelStatus,
   PushPublicKey, SearchSuggestion, DropsCalendarEntry, BrandsHeatmapData,
+  SearchV2Item, BrandSaleIntel, CrossChannelPriceHistory, ProductAvailability,
 } from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -51,6 +52,16 @@ export const getRelatedSearches = (q: string, limit = 8) =>
 
 export const getPriceComparison = (productKey: string) =>
   apiFetch<PriceComparison>(`/products/compare/${encodeURIComponent(productKey)}`);
+export const searchProductsV2 = (q: string, mode: "keyword" | "semantic" = "keyword", limit = 20) =>
+  apiFetch<SearchV2Item[]>(
+    `/api/v2/search?q=${encodeURIComponent(q)}&mode=${mode}&limit=${limit}`
+  );
+export const getProductAvailability = (productKey: string) =>
+  apiFetch<ProductAvailability>(`/api/v2/availability/${encodeURIComponent(productKey)}`);
+export const getCrossChannelPriceHistory = (productKey: string, days = 90) =>
+  apiFetch<CrossChannelPriceHistory>(
+    `/api/v2/price-history/${encodeURIComponent(productKey)}?days=${days}`
+  );
 const salesFilterQuery = (filters?: SaleFilters) => {
   const params = new URLSearchParams();
   if (filters?.gender) params.set("gender", filters.gender);
@@ -112,6 +123,8 @@ export const getBrandCollabs = (slug: string) =>
   apiFetch<CollabItem[]>(`/brands/${encodeURIComponent(slug)}/collabs`);
 export const getBrandRanking = (limit = 50) =>
   apiFetch<BrandRankingItem[]>(`/brands/ranking?limit=${limit}`);
+export const getBrandSaleIntel = (slug: string) =>
+  apiFetch<BrandSaleIntel>(`/api/v2/brands/${encodeURIComponent(slug)}/sale-intel`);
 export const getBrandsHeatmap = (tier?: string, country?: string) => {
   const q = new URLSearchParams();
   if (tier) q.set("tier", tier);

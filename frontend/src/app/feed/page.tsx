@@ -107,6 +107,48 @@ export default function FeedPage() {
   }, [eventType]);
 
   useEffect(() => {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+    const wsBase = apiUrl.replace(/^http/, "ws").replace(/\/$/, "");
+    let socket: WebSocket | null = null;
+    let pingTimer: number | null = null;
+    let retryTimer: number | null = null;
+
+    const connect = () => {
+      socket = new WebSocket(`${wsBase}/ws/feed`);
+      socket.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data) as ActivityFeedItem;
+          if (eventType && payload.event_type !== eventType) {
+            return;
+          }
+          setItems((prev) => {
+            const next = [payload, ...prev.filter((item) => item.id !== payload.id)];
+            return next.slice(0, 100);
+          });
+        } catch {
+          // ignore malformed payloads
+        }
+      };
+      socket.onopen = () => {
+        pingTimer = window.setInterval(() => {
+          socket?.send("ping");
+        }, 15000);
+      };
+      socket.onclose = () => {
+        if (pingTimer) window.clearInterval(pingTimer);
+        retryTimer = window.setTimeout(connect, 3000);
+      };
+    };
+
+    connect();
+    return () => {
+      if (pingTimer) window.clearInterval(pingTimer);
+      if (retryTimer) window.clearTimeout(retryTimer);
+      socket?.close();
+    };
+  }, [eventType]);
+
+  useEffect(() => {
     setPushSupported(typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window);
   }, []);
 

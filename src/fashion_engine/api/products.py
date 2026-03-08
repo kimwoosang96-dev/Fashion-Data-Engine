@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from fashion_engine.cache import cached_json
 from fashion_engine.database import get_db
 from fashion_engine.services import product_service
 from fashion_engine.api.schemas import (
@@ -27,21 +28,31 @@ async def get_sale_products(
     max_price: int | None = Query(None, ge=0),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
+    response: Response = None,
     db: AsyncSession = Depends(get_db),
 ):
     """현재 세일 중인 제품 목록 (할인율 높은 순)."""
-    products = await product_service.get_sale_products(
-        db,
-        brand_slug=brand,
-        tier=tier,
-        gender=gender,
-        category=category,
-        min_price=min_price,
-        max_price=max_price,
-        limit=limit,
-        offset=offset,
-    )
-    return products
+    if response is not None:
+        response.headers["Cache-Control"] = "public, max-age=120, stale-while-revalidate=30"
+
+    key = f"products:sales:{brand}:{tier}:{gender}:{category}:{min_price}:{max_price}:{limit}:{offset}"
+
+    async def fetch():
+        rows = await product_service.get_sale_products(
+            db,
+            brand_slug=brand,
+            tier=tier,
+            gender=gender,
+            category=category,
+            min_price=min_price,
+            max_price=max_price,
+            limit=limit,
+            offset=offset,
+        )
+        return [ProductOut.model_validate(row).model_dump(mode="json") for row in rows]
+
+    payload = await cached_json(key=key, ttl=120, fetch_fn=fetch)
+    return [ProductOut(**row) for row in payload]
 
 
 @router.get("/search", response_model=list[ProductOut])

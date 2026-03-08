@@ -8,6 +8,7 @@ from sqlalchemy.orm import selectinload
 
 from fashion_engine.models.brand import Brand
 from fashion_engine.models.activity_feed import ActivityFeed
+from fashion_engine.services.realtime_client import broadcast_feed_item
 
 
 async def get_activity_feed(
@@ -102,8 +103,7 @@ async def ingest_activity_feed(
     db.add(row)
     await db.commit()
     await db.refresh(row)
-
-    return {
+    payload = {
         "id": row.id,
         "event_type": row.event_type,
         "product_name": row.product_name,
@@ -116,3 +116,10 @@ async def ingest_activity_feed(
         "product_key": None,
         "detected_at": row.detected_at,
     }
+    await broadcast_feed_item(
+        {
+            **payload,
+            "detected_at": row.detected_at.isoformat(),
+        }
+    )
+    return payload

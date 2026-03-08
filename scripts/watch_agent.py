@@ -20,6 +20,7 @@ from fashion_engine.models.channel import Channel  # noqa: E402
 from fashion_engine.models.crawl_run import CrawlRun  # noqa: E402
 from fashion_engine.models.product import Product  # noqa: E402
 from fashion_engine.services.push_service import send_push_for_feed_items  # noqa: E402
+from fashion_engine.services.realtime_client import broadcast_feed_item  # noqa: E402
 
 
 @dataclass
@@ -185,6 +186,23 @@ async def run_channel_watch(channel_id: int, crawl_run_id: int) -> int:
     if created_rows:
         async with AsyncSessionLocal() as push_db:
             await send_push_for_feed_items(push_db, created_rows)
+        for row in created_rows:
+            meta = row.metadata_json if isinstance(row.metadata_json, dict) else {}
+            await broadcast_feed_item(
+                {
+                    "id": row.id,
+                    "event_type": row.event_type,
+                    "product_name": row.product_name,
+                    "brand_name": None,
+                    "channel_name": None,
+                    "price_krw": row.price_krw,
+                    "discount_rate": row.discount_rate,
+                    "source_url": row.source_url,
+                    "image_url": meta.get("image_url"),
+                    "product_key": None,
+                    "detected_at": row.detected_at.isoformat() if row.detected_at else None,
+                }
+            )
     return inserted
 
 

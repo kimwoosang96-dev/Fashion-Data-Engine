@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "fashion-data-engine": {
+      "url": "https://fashion-data-engine-api.up.railway.app/mcp",
+      "headers": {
+        "Authorization": "Bearer ${MCP_API_KEY}"
+      }
+    }
+  }
+}

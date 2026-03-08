@@ -26,11 +26,14 @@ sys.path.insert(0, str(ROOT / "src"))
 import crawl_products  # noqa: E402
 import crawl_drops  # noqa: E402
 import crawl_news  # noqa: E402
+import auto_switch_parser  # noqa: E402
 import coverage_report  # noqa: E402
 import data_audit  # noqa: E402
 import ingest_intel_events  # noqa: E402
 import manage_partitions  # noqa: E402
+import reactivate_channels  # noqa: E402
 import update_exchange_rates  # noqa: E402
+import verify_image_urls  # noqa: E402
 from fashion_engine.database import AsyncSessionLocal  # noqa: E402
 from fashion_engine.models.crawl_run import CrawlRun  # noqa: E402
 from fashion_engine.config import settings  # noqa: E402
@@ -192,6 +195,33 @@ async def run_coverage_report_job() -> None:
         LOGGER.exception("[JOB] coverage-report failed")
 
 
+async def run_auto_switch_parser_job() -> None:
+    try:
+        LOGGER.info("[JOB] auto-switch-parser started")
+        code = await auto_switch_parser.run(apply=True)
+        LOGGER.info("[JOB] auto-switch-parser completed code=%s", code)
+    except Exception:
+        LOGGER.exception("[JOB] auto-switch-parser failed")
+
+
+async def run_verify_image_urls_job() -> None:
+    try:
+        LOGGER.info("[JOB] verify-image-urls started")
+        code = await verify_image_urls.run(apply=True, limit=500, refetch_broken=True)
+        LOGGER.info("[JOB] verify-image-urls completed code=%s", code)
+    except Exception:
+        LOGGER.exception("[JOB] verify-image-urls failed")
+
+
+async def run_reactivate_channels_job() -> None:
+    try:
+        LOGGER.info("[JOB] reactivate-channels started")
+        code = await reactivate_channels.run(limit=30, dry_run=False)
+        LOGGER.info("[JOB] reactivate-channels completed code=%s", code)
+    except Exception:
+        LOGGER.exception("[JOB] reactivate-channels failed")
+
+
 async def run_intel_mirror_job() -> None:
     if not settings.intel_ingest_enabled:
         LOGGER.info("[JOB] intel-mirror skipped (INTEL_INGEST_ENABLED=false)")
@@ -302,6 +332,24 @@ def register_jobs(scheduler: AsyncIOScheduler) -> None:
         run_coverage_report_job,
         CronTrigger(day_of_week="sun", hour=9, minute=5),
         id="coverage_weekly_sun_0905",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        run_auto_switch_parser_job,
+        CronTrigger(day_of_week="sun", hour=9, minute=30),
+        id="auto_switch_parser_weekly_sun_0930",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        run_verify_image_urls_job,
+        CronTrigger(day_of_week="sat", hour=5, minute=0),
+        id="verify_image_urls_weekly_sat_0500",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        run_reactivate_channels_job,
+        CronTrigger(day_of_week="tue", hour=4, minute=0),
+        id="reactivate_channels_weekly_tue_0400",
         replace_existing=True,
     )
     scheduler.add_job(

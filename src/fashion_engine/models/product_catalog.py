@@ -37,6 +37,7 @@ class ProductCatalog(Base):
     # 트렌드 메타
     trend_score: Mapped[float | None] = mapped_column(Float, default=None)  # 0~100
     listing_count: Mapped[int] = mapped_column(Integer, default=1)           # 취급 채널 수
+    channel_count: Mapped[int] = mapped_column(Integer, default=1)           # 활성 채널 수
 
     # 가격 통계 (집계 캐시 — 정기적으로 갱신)
     min_price_krw: Mapped[int | None] = mapped_column(Integer)

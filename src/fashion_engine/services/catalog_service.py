@@ -66,6 +66,7 @@ def _catalog_sql(since: datetime | None, dialect_name: str) -> tuple[str, dict]:
                 MAX(k.gender) AS gender,
                 MAX(k.subcategory) AS subcategory,
                 COUNT(DISTINCT k.channel_id) AS listing_count,
+                COUNT(DISTINCT k.channel_id) AS channel_count,
                 MIN(k.created_at) AS first_seen_at
             FROM keyed k
             GROUP BY k.nkey
@@ -104,6 +105,7 @@ def _catalog_sql(since: datetime | None, dialect_name: str) -> tuple[str, dict]:
             gender,
             subcategory,
             listing_count,
+            channel_count,
             min_price_krw,
             max_price_krw,
             is_sale_anywhere,
@@ -117,6 +119,7 @@ def _catalog_sql(since: datetime | None, dialect_name: str) -> tuple[str, dict]:
             a.gender,
             a.subcategory,
             a.listing_count,
+            a.channel_count,
             pa.min_price_krw,
             pa.max_price_krw,
             COALESCE(pa.is_sale_anywhere, FALSE),
@@ -131,6 +134,7 @@ def _catalog_sql(since: datetime | None, dialect_name: str) -> tuple[str, dict]:
             gender = EXCLUDED.gender,
             subcategory = EXCLUDED.subcategory,
             listing_count = EXCLUDED.listing_count,
+            channel_count = EXCLUDED.channel_count,
             min_price_krw = EXCLUDED.min_price_krw,
             max_price_krw = EXCLUDED.max_price_krw,
             is_sale_anywhere = EXCLUDED.is_sale_anywhere,

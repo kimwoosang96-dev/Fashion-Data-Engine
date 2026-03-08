@@ -5,6 +5,7 @@ Shopify /products.json (공개 REST API) 기반으로 제품 목록과 가격을
 Playwright 불필요 — httpx 직접 사용.
 """
 import asyncio
+from difflib import SequenceMatcher
 import json
 import logging
 import random
@@ -124,6 +125,42 @@ _TITLE_KEYWORD_DENYLIST: frozenset[str] = frozenset({
     "품절",       # 한국어 품절 플레이스홀더
 })
 
+_SEASON_CODE_RE = re.compile(r"\b(?:aw|fw|ss|re)\d{2,4}\b|\b20\d{2}\b", re.I)
+_COLOR_WORDS = frozenset({
+    "black", "white", "navy", "grey", "gray", "red", "blue", "green",
+    "brown", "pink", "yellow", "orange", "khaki", "beige", "cream",
+    "olive", "ivory", "silver", "gold", "charcoal", "purple",
+})
+_NEW_TAG_MARKERS = ("new-arrival", "new arrival", "new_in", "new in", "just dropped")
+_CAFE24_COMPARE_HINT_RE = re.compile(r"(?:정가|소비자가)\s*:?\s*([\d,]+)원")
+SHOPIFY_CATEGORY_MAP: dict[str, str] = {
+    "footwear": "shoes",
+    "shoes": "shoes",
+    "sneakers": "shoes",
+    "tops": "top",
+    "tees": "top",
+    "t-shirts": "top",
+    "hoodies": "outer",
+    "jackets": "outer",
+    "outerwear": "outer",
+    "bottoms": "bottom",
+    "pants": "bottom",
+    "shorts": "bottom",
+    "accessories": "accessory",
+    "bags": "bag",
+    "caps": "cap",
+}
+GENDER_TAGS: dict[str, str] = {
+    "mens": "men",
+    "men's": "men",
+    "menswear": "men",
+    "womens": "women",
+    "women's": "women",
+    "womenswear": "women",
+    "unisex": "unisex",
+    "kids": "kids",
+}
+
 _PRODUCT_TYPE_DENYLIST: frozenset[str] = frozenset({
     "gift cards",
     "gift card",
@@ -176,6 +213,7 @@ class ProductInfo:
     normalized_key: str | None = None    # "brand-slug:model-code" 교차채널 매칭용
     match_confidence: float | None = None  # normalized_key 생성 신뢰도 (0.0~1.0)
     size_availability: list[dict] | None = None  # [{"size": "M", "in_stock": true}, ...]
+    is_marked_new: bool = False
 
 
 @dataclass
@@ -417,6 +455,7 @@ class ProductCrawler:
         base = channel_url.rstrip("/")
         products: list[ProductInfo] = []
         shopify_sem = _get_shopify_sem()
+        collection_hints = await self._fetch_shopify_collections(base)
 
         for page in range(1, SHOPIFY_MAX_PAGES + 1):
             url = f"{base}/products.json?limit=100&page={page}"
@@ -432,7 +471,7 @@ class ProductCrawler:
                 break
 
             for p in page_products:
-                info = self._parse_product(p, base, currency)
+                info = self._parse_product(p, base, currency, collection_hints=collection_hints)
                 if info:
                     products.append(info)
 
@@ -453,6 +492,7 @@ class ProductCrawler:
         base = channel_url.rstrip("/")
         url = f"{base}/products/new.json?limit=100&page=1"
         shopify_sem = _get_shopify_sem()
+        collection_hints = await self._fetch_shopify_collections(base)
 
         try:
             async with shopify_sem:
@@ -464,10 +504,30 @@ class ProductCrawler:
         page_products = data.get("products", [])
         products: list[ProductInfo] = []
         for p in page_products:
-            info = self._parse_product(p, base, currency)
+            info = self._parse_product(p, base, currency, collection_hints=collection_hints)
             if info:
                 products.append(info)
         return products
+
+    async def _fetch_shopify_collections(self, base_url: str) -> list[str]:
+        assert self._client is not None
+        url = f"{base_url.rstrip('/')}/collections.json?limit=250&page=1"
+        try:
+            async with _get_shopify_sem():
+                resp = await self._fetch_with_retry(url, timeout=8)
+                data = resp.json()
+        except Exception:
+            return []
+        collections = data.get("collections", [])
+        hints: list[str] = []
+        for item in collections:
+            handle = str(item.get("handle") or "").strip().lower()
+            title = str(item.get("title") or "").strip().lower()
+            if handle:
+                hints.append(handle)
+            if title:
+                hints.append(title)
+        return hints
 
     async def _discover_cafe24_brand_categories(
         self,
@@ -621,14 +681,25 @@ class ProductCrawler:
             compare_at_price: float | None = None
             orig_node = card.select_one(
                 "del, s, .consumer-price, .org_price, .origin-price, "
-                ".prd_org_price, .price_del, [class*='origin_price'], "
-                "[class*='org-price'], [class*='originalPrice']"
+                ".prd_org_price, .price_del, .price-origin, .normal-price, "
+                ".price_original, [class*='origin_price'], [class*='org-price'], "
+                "[class*='originalPrice']"
             )
             if orig_node:
                 orig_nums = re.findall(r"\d[\d,]*", orig_node.get_text(" ", strip=True).replace(".", ""))
                 if orig_nums:
                     try:
                         orig_val = float(orig_nums[0].replace(",", ""))
+                        if orig_val > price > 0:
+                            compare_at_price = orig_val
+                    except ValueError:
+                        pass
+            if compare_at_price is None:
+                hint_text = card.get_text(" ", strip=True)
+                hinted = _CAFE24_COMPARE_HINT_RE.search(hint_text)
+                if hinted:
+                    try:
+                        orig_val = float(hinted.group(1).replace(",", ""))
                         if orig_val > price > 0:
                             compare_at_price = orig_val
                     except ValueError:
@@ -685,6 +756,7 @@ class ProductCrawler:
                     subcategory=subcategory,
                     normalized_key=normalized_key,
                     match_confidence=match_confidence,
+                    is_marked_new="new" in title.lower(),
                 )
             )
         return out
@@ -1137,17 +1209,67 @@ class ProductCrawler:
         if code:
             return f"{brand_slug}:{re.sub(r'[^a-z0-9]', '', code)}", 0.7
 
-        # 4순위: title slug fallback (처음 60자)
-        title_slug = slugify(title, max_length=60, word_boundary=True)
+        # 4순위: 정제된 title slug fallback (시즌/색상 제거)
+        cleaned_title = ProductCrawler._clean_title_for_matching(title)
+        title_slug = slugify(cleaned_title or title, max_length=70, word_boundary=True)
         if title_slug:
-            return f"{brand_slug}:{title_slug}", 0.5
+            base_slug = slugify(title, max_length=70, word_boundary=True)
+            similarity = SequenceMatcher(None, title_slug, base_slug).ratio() if base_slug else 0.0
+            confidence = 0.8 if similarity >= 0.85 else 0.6 if similarity >= 0.65 else 0.5
+            return f"{brand_slug}:{title_slug}", confidence
 
         return None, None
+
+    @staticmethod
+    def _clean_title_for_matching(title: str) -> str:
+        cleaned = _SEASON_CODE_RE.sub(" ", title or "")
+        cleaned = re.sub(r"\b(?:pre-)?order\b", " ", cleaned, flags=re.I)
+        tokens = []
+        for token in re.split(r"\s+", cleaned):
+            lowered = re.sub(r"[^\w-]", "", token).lower()
+            if not lowered or lowered in _COLOR_WORDS:
+                continue
+            tokens.append(token)
+        return " ".join(tokens).strip()
+
+    @staticmethod
+    def _infer_shopify_metadata(
+        *,
+        title: str,
+        product_type: str | None,
+        tags: list[str],
+        collection_hints: list[str],
+    ) -> tuple[str | None, str | None, bool]:
+        haystack = " ".join(
+            [title, product_type or "", *tags, *collection_hints]
+        ).lower()
+
+        gender = None
+        for marker, value in GENDER_TAGS.items():
+            if marker in haystack:
+                gender = value
+                break
+
+        subcategory = None
+        for marker, value in SHOPIFY_CATEGORY_MAP.items():
+            if marker in haystack:
+                subcategory = value
+                break
+
+        is_new = (product_type or "").strip().lower() == "new" or any(
+            marker in haystack for marker in _NEW_TAG_MARKERS
+        )
+        return gender, subcategory, is_new
 
     # ── 파싱 ─────────────────────────────────────────────────────────────
 
     def _parse_product(
-        self, p: dict, base_url: str, currency: str
+        self,
+        p: dict,
+        base_url: str,
+        currency: str,
+        *,
+        collection_hints: list[str] | None = None,
     ) -> ProductInfo | None:
         title: str = (p.get("title") or "").strip()
         vendor: str = (p.get("vendor") or "").strip()
@@ -1231,6 +1353,14 @@ class ProductCrawler:
             title=title,
             tags=tags_text,
         )
+        inferred_gender, inferred_subcategory, inferred_is_new = self._infer_shopify_metadata(
+            title=title,
+            product_type=product_type,
+            tags=tags_list,
+            collection_hints=collection_hints or [],
+        )
+        gender = gender or inferred_gender
+        subcategory = subcategory or inferred_subcategory
         normalized_key, match_confidence = self._build_normalized_key(
             brand_slug=brand_slug,
             sku=sku,
@@ -1257,6 +1387,7 @@ class ProductCrawler:
             normalized_key=normalized_key,
             match_confidence=match_confidence,
             size_availability=size_availability,
+            is_marked_new=inferred_is_new,
         )
 
     async def _fetch_gpt_fallback_html(self, channel_url: str) -> tuple[str, str] | None:
@@ -1409,6 +1540,14 @@ class ProductCrawler:
                     compare_at_price = regular
             except Exception:
                 pass
+        if compare_at_price is None and regular_price_str and price_str:
+            try:
+                regular = float(regular_price_str)
+                current = float(price_str)
+                if regular > current > 0:
+                    compare_at_price = regular
+            except Exception:
+                pass
 
         images = item.get("images") or []
         image_url = images[0].get("src") if isinstance(images, list) and images else None
@@ -1460,6 +1599,7 @@ class ProductCrawler:
             subcategory=subcategory,
             normalized_key=normalized_key,
             match_confidence=match_confidence,
+            is_marked_new="new" in title.lower(),
         )
 
     @staticmethod

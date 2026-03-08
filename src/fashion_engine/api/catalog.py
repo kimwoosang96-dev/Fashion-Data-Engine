@@ -26,6 +26,7 @@ def _catalog_to_out(pc: ProductCatalog, brand: Brand | None) -> dict:
         "tags": pc.tags,
         "trend_score": pc.trend_score,
         "listing_count": pc.listing_count,
+        "channel_count": pc.channel_count,
         "min_price_krw": pc.min_price_krw,
         "max_price_krw": pc.max_price_krw,
         "is_sale_anywhere": pc.is_sale_anywhere,

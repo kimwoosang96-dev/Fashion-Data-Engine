@@ -14,6 +14,7 @@ from fashion_engine.models.drop import Drop
 from fashion_engine.models.brand_director import BrandDirector
 from fashion_engine.models.crawl_run import CrawlRun, CrawlChannelLog
 from fashion_engine.models.product_catalog import ProductCatalog
+from fashion_engine.models.channel_crawl_stat import ChannelCrawlStat
 from fashion_engine.models.channel_note import ChannelNote
 from fashion_engine.models.activity_feed import ActivityFeed
 from fashion_engine.models.push_subscription import PushSubscription
@@ -31,6 +32,7 @@ __all__ = [
     "BrandDirector",
     "CrawlRun", "CrawlChannelLog",
     "ProductCatalog",
+    "ChannelCrawlStat",
     "ChannelNote",
     "ActivityFeed",
     "PushSubscription",

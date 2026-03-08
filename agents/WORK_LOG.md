@@ -9,6 +9,12 @@
 
 ## 기록
 
+- 2026-03-08 15:05:00 | agent:codex-dev | task:T-20260308-117 | action:complete | message:CHANNEL_YIELD_MONITOR_01 완료: `channel_crawl_stats` 모델과 Alembic revision `3a4b5c6d7e8f`를 추가하고, `crawl_products.py`가 채널별 yield와 parse method를 크롤 직후 기록하도록 연결했다. `scripts/auto_switch_parser.py` 및 scheduler 일요일 09:30 잡까지 반영했다.
+- 2026-03-08 15:06:00 | agent:codex-dev | task:T-20260308-118 | action:complete | message:SALE_DETECTION_FIX_01 완료: WooCommerce `regular_price > price` 세일 판정을 재확인하고, Cafe24의 추가 CSS selector 및 정가/소비자가 텍스트 파싱을 반영했다. `scripts/verify_sale_detection.py`로 플랫폼별 세일 감지 수를 점검할 수 있다.
+- 2026-03-08 15:07:00 | agent:codex-dev | task:T-20260308-119 | action:complete | message:NORMALIZED_KEY_REFRESH_01 완료: normalized key 생성 시 시즌 코드/색상/불용어를 제거하고 유사도 기반 confidence를 재계산하도록 개선했다. `product_catalog.channel_count` 집계를 추가하고 `scripts/improve_normalized_key.py`로 저신뢰 제품 재처리 경로를 구현했다.
+- 2026-03-08 15:08:00 | agent:codex-dev | task:T-20260308-120 | action:complete | message:IMAGE_URL_VERIFY_01 완료: `products.image_verified_at` 컬럼과 `scripts/verify_image_urls.py`를 추가해 HEAD/GET 기반 이미지 검증, broken image NULL 처리, 30일 재검증, 재크롤 대상 출력 경로를 구현했다. scheduler 토요일 05:00 잡도 연결했다.
+- 2026-03-08 15:09:00 | agent:codex-dev | task:T-20260308-121 | action:complete | message:SHOPIFY_CATALOG_ENRICH_01 완료: Shopify `/collections.json` 힌트와 tag/title/product_type 분석을 이용해 `gender/subcategory/is_new` 추론을 강화했다. `scripts/reclassify_from_shopify_tags.py`로 기존 Shopify 상품 재분류 배치도 추가했다.
+- 2026-03-08 15:10:00 | agent:codex-dev | task:T-20260308-122 | action:complete | message:CHANNEL_REACTIVATION_01 완료: `channels.last_probe_at` 컬럼과 `scripts/reactivate_channels.py`를 추가해 비활성 채널 재probe 후 자동 복구 흐름을 만들고, Discord 복구 알림과 scheduler 화요일 04:00 잡을 연결했다.
 - 2026-03-08 14:20:00 | agent:codex-dev | task:T-20260308-111 | action:complete | message:SEARCH_AUTOCOMPLETE_01 완료: `/products/search/suggestions` API와 대시보드 자동완성 드롭다운을 debounce/키보드 탐색 방식으로 구현하고 프론트 빌드 검증을 마쳤다.
 - 2026-03-08 14:21:00 | agent:codex-dev | task:T-20260308-112 | action:complete | message:DROPS_CALENDAR_01 완료: `/drops/calendar` API와 `/drops/calendar` 페이지를 추가해 intel drops/new_drop 이벤트를 월별 달력과 모바일 목록으로 시각화했다.
 - 2026-03-08 14:22:00 | agent:codex-dev | task:T-20260308-113 | action:complete | message:BRAND_SALE_HEATMAP_01 완료: `/brands/heatmap` API와 히트맵 페이지를 추가하고 티어/국가 필터, hover 툴팁, 상위 30×20 제한을 반영했다.

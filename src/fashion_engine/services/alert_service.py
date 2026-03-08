@@ -217,6 +217,18 @@ async def send_coverage_report_alert(report: Any) -> bool:
     return await _send_embed({"embeds": [embed]})
 
 
+async def send_channel_reactivated_alert(*, count: int) -> bool:
+    embed = {
+        "title": "🔄 채널 자동 재활성화",
+        "description": f"비활성 채널 {count}개를 재probe 후 다시 활성화했습니다.",
+        "color": 0x57F287,
+        "fields": [
+            {"name": "재활성화 수", "value": str(count), "inline": True},
+        ],
+    }
+    return await _send_embed({"embeds": [embed]})
+
+
 async def send_test_alert() -> bool:
     """Discord 연결 테스트용 알림."""
     payload = AlertPayload(

@@ -594,6 +594,7 @@ class CatalogOut(BaseModel):
     tags: str | None
     trend_score: float | None
     listing_count: int
+    channel_count: int = 1
     min_price_krw: int | None
     max_price_krw: int | None
     is_sale_anywhere: bool | None

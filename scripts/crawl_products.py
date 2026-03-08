@@ -40,6 +40,7 @@ from fashion_engine.models.channel_brand import ChannelBrand
 from fashion_engine.models.brand import Brand
 from fashion_engine.models.product import Product
 from fashion_engine.models.crawl_run import CrawlRun, CrawlChannelLog
+from fashion_engine.models.channel_crawl_stat import ChannelCrawlStat
 from fashion_engine.models.activity_feed import ActivityFeed
 from fashion_engine.crawler.product_crawler import ProductCrawler, ChannelProductResult
 from fashion_engine.services.product_service import (
@@ -85,6 +86,21 @@ _POSTGRES_CRAWL_TIMEOUT_SQL = (
     "SET LOCAL statement_timeout = '120s'",
 )
 _PRODUCT_BULK_CHUNK_SIZE = 500
+
+
+def _parse_method_from_strategy(strategy: str | None) -> str | None:
+    if not strategy:
+        return None
+    normalized = strategy.lower()
+    if "gpt" in normalized:
+        return "gpt"
+    if "shopify" in normalized:
+        return "shopify"
+    if "cafe24" in normalized:
+        return "cafe24"
+    if "woocommerce" in normalized:
+        return "woocommerce"
+    return normalized[:30]
 
 
 async def _apply_crawl_db_timeouts(db) -> None:
@@ -911,6 +927,15 @@ async def _crawl_one_channel(
                             duration_ms=duration_ms,
                         )
                     )
+                    db.add(
+                        ChannelCrawlStat(
+                            crawl_run_id=run_id,
+                            channel_id=channel.id,
+                            products_found=save_outcome.products_count if not result.error else 0,
+                            parse_method=_parse_method_from_strategy(result.crawl_strategy),
+                            error_msg=(result.error or "")[:1000] if result.error else None,
+                        )
+                    )
                     await db.execute(
                         text(
                             "UPDATE crawl_runs SET"
@@ -944,6 +969,15 @@ async def _crawl_one_channel(
                             error_type="internal_error",
                             strategy=result.crawl_strategy,
                             duration_ms=duration_ms,
+                        )
+                    )
+                    db2.add(
+                        ChannelCrawlStat(
+                            crawl_run_id=run_id,
+                            channel_id=channel.id,
+                            products_found=0,
+                            parse_method=_parse_method_from_strategy(result.crawl_strategy),
+                            error_msg=f"Internal log error: {str(log_exc)[:500]}",
                         )
                     )
                     await db2.execute(

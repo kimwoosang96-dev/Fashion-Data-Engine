@@ -35,6 +35,7 @@ class Product(Base):
     sku: Mapped[str | None] = mapped_column(String(255))
     url: Mapped[str] = mapped_column(String(1000), unique=True, nullable=False)
     image_url: Mapped[str | None] = mapped_column(String(1000))
+    image_verified_at: Mapped[datetime | None] = mapped_column(DateTime, index=True)
     tags: Mapped[str | None] = mapped_column(Text)  # JSON 문자열 저장
     description: Mapped[str | None] = mapped_column(Text)
 

@@ -1,7 +1,7 @@
 {
   "name": "Fashion Data Engine",
   "short_name": "FashionDE",
-  "description": "스트릿웨어 실시간 가격·재고 인텔",
+  "description": "패션 브랜드 실시간 가격·재고 인텔",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f7f4ee",

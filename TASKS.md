@@ -1070,7 +1070,7 @@ schedule.every().sunday.at("09:00").do(run_coverage_report)
 
 # 과업지시서 (T-101 ~ T-105) — Phase 2: AI 쿼리 레이어
 
-> 프로젝트 리포지셔닝: "소비자 대면 가격 비교" → "AI 에이전트가 쿼리하는 스트릿웨어 데이터 인프라"
+> 프로젝트 리포지셔닝: "소비자 대면 가격 비교" → "AI 에이전트가 쿼리하는 패션 브랜드 데이터 인프라"
 > 핵심 질문: 어디서 살 수 있나? 최저가는? 사이즈 M 재고 있나?
 
 ---
@@ -1446,7 +1446,7 @@ app.mount("/mcp", mcp.get_asgi_app())
   "mcpServers": {
     "fashion-data-engine": {
       "url": "https://fashion-data-engine-production.up.railway.app/mcp",
-      "description": "스트릿웨어 실시간 재고·가격·세일 데이터"
+      "description": "패션 브랜드 실시간 재고·가격·세일 데이터"
     }
   }
 }
@@ -2111,7 +2111,7 @@ async def list_active_channels() -> str:
 
 ## T-118: 홈페이지 — AI 검색 중심 재설계
 
-**목표:** 홈페이지(`/`)를 "AI가 쿼리하는 스트릿웨어 데이터" 포지셔닝에 맞게 재설계.
+**목표:** 홈페이지(`/`)를 "AI가 쿼리하는 패션 브랜드 데이터" 포지셔닝에 맞게 재설계.
 
 **선행 조건:** T-102(자연어 검색 API) 완료
 
@@ -2121,7 +2121,7 @@ async def list_active_channels() -> str:
 
 ```tsx
 // 구성:
-// 1. 헤로 섹션: "스트릿웨어 실시간 데이터 인프라" + 자연어 검색창
+// 1. 헤로 섹션: "패션 브랜드 실시간 데이터 인프라" + 자연어 검색창
 // 2. 검색창: 플레이스홀더 타이핑 애니메이션
 //    "팔라스 박스로고티 M사이즈 재고있는 곳" → "슈프림 세일 언제해?" → ...
 // 3. 실시간 통계: 채널 N개 | 제품 N만개 | 최근 업데이트 N분 전
@@ -2244,7 +2244,7 @@ const TIER_COLORS = {
 {
   "name": "Fashion Data Engine",
   "short_name": "FashionDE",
-  "description": "스트릿웨어 실시간 가격·재고 인텔",
+  "description": "패션 브랜드 실시간 가격·재고 인텔",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#000000",
@@ -2943,7 +2943,7 @@ ORDER BY cheapest_count DESC;
 app = FastAPI(
     title="Fashion Data Engine API",
     description="""
-## 스트릿웨어 실시간 데이터 API
+## 패션 브랜드 실시간 데이터 API
 
 AI 에이전트, MCP 클라이언트, 외부 서비스가 패션 데이터에 접근하는 표준 인터페이스.
 

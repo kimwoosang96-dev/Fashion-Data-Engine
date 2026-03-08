@@ -168,13 +168,13 @@ export function HomePageClient({
           <div className="space-y-8">
             <div className="space-y-4">
               <p className="inline-flex items-center rounded-full border border-black/10 bg-white/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.28em] text-gray-600">
-                Streetwear Data Infrastructure
+                Fashion Data Infrastructure
               </p>
               <div className="space-y-3">
                 <h1 className="max-w-4xl text-4xl font-black leading-none tracking-[-0.04em] text-zinc-950 md:text-6xl">
                   AI가 바로 질의할 수 있는
                   <br />
-                  스트릿웨어 가격·재고 데이터
+                  패션 브랜드 가격·재고 데이터
                 </h1>
                 <p className="max-w-2xl text-base leading-7 text-zinc-700 md:text-lg">
                   세일 시작, 가격 인하, 드롭, 채널별 재고를 자연어로 찾고 바로 비교합니다.

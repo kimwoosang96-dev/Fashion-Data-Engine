@@ -1065,3 +1065,416 @@ schedule.every().sunday.at("09:00").do(run_coverage_report)
 선행 필요:
   T-098 (가격 알림) — T-088 PWA 푸시 실동작 후
 ```
+
+---
+
+# 과업지시서 (T-101 ~ T-105) — Phase 2: AI 쿼리 레이어
+
+> 프로젝트 리포지셔닝: "소비자 대면 가격 비교" → "AI 에이전트가 쿼리하는 스트릿웨어 데이터 인프라"
+> 핵심 질문: 어디서 살 수 있나? 최저가는? 사이즈 M 재고 있나?
+
+---
+
+## T-101: `/api/v2/availability` — 채널별 실시간 가용성 API ✨핵심
+
+**목표:** 특정 제품의 모든 채널 재고·가격·사이즈 가용성을 한 번에 반환하는 엔드포인트. AI 에이전트가 "지금 어디서 살 수 있나"를 쿼리하는 핵심 API.
+
+**선행 조건:** 없음 (products 테이블에 size_availability, stock_status 컬럼 이미 존재)
+
+**작업 내용:**
+
+### 1. 스키마 추가 (`src/fashion_engine/api/schemas.py`)
+
+```python
+class SizeAvailabilityItem(BaseModel):
+    size: str
+    in_stock: bool
+
+class AvailabilityChannelItem(BaseModel):
+    channel_id: int
+    channel_name: str
+    channel_url: str
+    country: str | None
+    price_krw: int | None
+    original_price_krw: int | None
+    discount_rate: int | None
+    is_sale: bool
+    in_stock: bool
+    stock_status: str | None          # "in_stock" | "low_stock" | "sold_out"
+    size_availability: list[SizeAvailabilityItem] | None
+    product_url: str
+    last_updated: datetime | None
+
+class AvailabilityOut(BaseModel):
+    product_key: str
+    product_name: str
+    brand_name: str | None
+    image_url: str | None
+    channels: list[AvailabilityChannelItem]   # 재고 있는 채널 우선, price_krw ASC 정렬
+    cheapest: AvailabilityChannelItem | None  # channels[0]와 동일 (편의용)
+    in_stock_count: int                       # 재고 있는 채널 수
+    total_channels: int                       # 전체 채널 수
+    last_updated: datetime | None
+```
+
+### 2. 서비스 함수 추가 (`src/fashion_engine/services/product_service.py`)
+
+```python
+async def get_product_availability(db: AsyncSession, product_key: str) -> AvailabilityOut | None:
+    """
+    normalized_key 또는 product_key로 매칭되는 모든 채널의 제품 가용성 반환.
+    - is_active=True 제품만 포함
+    - in_stock=True 채널을 price_krw ASC로 우선 정렬, 그 다음 품절 채널
+    - channel JOIN으로 channel_name, country, channel_url 포함
+    """
+```
+
+쿼리 로직:
+```python
+# normalized_key 우선 매칭, 없으면 product_key prefix 매칭
+stmt = (
+    select(Product, Channel)
+    .join(Channel, Product.channel_id == Channel.id)
+    .where(
+        Product.is_active == True,
+        or_(
+            Product.normalized_key == product_key,
+            Product.product_key == product_key,
+            Product.product_key.like(f"%:{product_key.split(':')[-1]}"),
+        )
+    )
+    .order_by(
+        # 재고 있는 채널 먼저
+        case((Product.stock_status == "sold_out", 1), else_=0),
+        Product.price_krw.asc().nulls_last(),
+    )
+)
+```
+
+### 3. API 엔드포인트 추가 (`src/fashion_engine/api/products.py`)
+
+```python
+@router.get("/api/v2/availability/{product_key:path}", response_model=AvailabilityOut)
+async def get_availability(
+    product_key: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    특정 제품의 채널별 실시간 재고·가격·사이즈 가용성.
+    product_key: "palace:box-logo-tee" 또는 normalized_key
+    """
+    result = await product_service.get_product_availability(db, product_key)
+    if not result:
+        raise HTTPException(status_code=404, detail="product not found")
+    return result
+```
+
+**참고:** 기존 `/products/compare/{product_key}` (`PriceComparisonOut`)는 유지. v2는 재고·사이즈 정보를 추가로 포함.
+
+**완료 기준:**
+```bash
+curl "https://fashion-data-engine-production.up.railway.app/api/v2/availability/palace:box-logo-tee"
+# → { product_key, channels: [{channel_name, price_krw, in_stock, size_availability, ...}], cheapest, ... }
+```
+
+---
+
+## T-102: `/api/v2/search` — AI 친화적 자연어 검색 API
+
+**목표:** 브랜드명 + 제품명 + 사이즈 + 재고 여부를 조합한 구조화 검색. AI 에이전트가 "팔라스 박스로고 M 재고 있는 곳" 같은 쿼리를 파싱해 결과 반환.
+
+**선행 조건:** T-101 완료 (AvailabilityOut 스키마 재사용)
+
+**작업 내용:**
+
+### 1. 스키마 추가 (`src/fashion_engine/api/schemas.py`)
+
+```python
+class V2SearchResult(BaseModel):
+    product_key: str
+    product_name: str
+    brand_name: str | None
+    image_url: str | None
+    cheapest_price_krw: int | None
+    cheapest_channel: str | None
+    in_stock_count: int
+    total_channels: int
+    is_sale: bool
+    max_discount_rate: int | None
+    size_availability_summary: list[str] | None  # ["XS","S","M"] in_stock 사이즈만
+
+class V2SearchOut(BaseModel):
+    query: str
+    parsed: dict                    # { brand, product, size, in_stock_only }
+    results: list[V2SearchResult]
+    total: int
+```
+
+### 2. 쿼리 파서 (`src/fashion_engine/services/product_service.py`)
+
+```python
+def _parse_search_query(q: str) -> dict:
+    """
+    자연어 쿼리에서 브랜드/제품/사이즈/재고 조건 추출.
+    예: "팔라스 박스로고 M 재고" → { brand: "palace", product: "박스로고", size: "M", in_stock_only: True }
+    """
+    size_pattern = re.compile(r"\b(XS|S|M|L|XL|XXL|[0-9]{2,3})\b", re.IGNORECASE)
+    in_stock_keywords = ["재고", "in stock", "available", "있는"]
+    # 브랜드 prefix 매칭은 brands 테이블 slug 기준
+```
+
+### 3. API 엔드포인트 (`src/fashion_engine/api/products.py`)
+
+```python
+@router.get("/api/v2/search", response_model=V2SearchOut)
+async def v2_search(
+    q: str = Query(..., min_length=1, max_length=200),
+    size: str | None = Query(None),          # 사이즈 필터 (M, L, 270 등)
+    in_stock_only: bool = Query(False),      # 재고 있는 채널만
+    brand_slug: str | None = Query(None),    # 브랜드 slug 직접 지정
+    limit: int = Query(20, le=50),
+    db: AsyncSession = Depends(get_db),
+):
+```
+
+쿼리 로직:
+- 제품명 ilike `%q%` 또는 브랜드명 ilike `%q%`
+- `size` 파라미터 있으면 `size_availability @> '[{"size": "M", "in_stock": true}]'` JSONB 쿼리
+- `in_stock_only=True` → `stock_status != 'sold_out'`
+- normalized_key 기준으로 채널별 집계 (cheapest_price, in_stock_count)
+
+**완료 기준:**
+```bash
+curl "https://.../api/v2/search?q=palace+box+logo&size=M&in_stock_only=true"
+# → { results: [{ product_name, cheapest_price_krw, in_stock_count, size_availability_summary: ["M"] }] }
+```
+
+---
+
+## T-103: `ProductOut` 스키마에 size_availability, stock_status 노출
+
+**목표:** 기존 `/products/sales`, `/products/ranking` 등 모든 제품 API 응답에 사이즈 재고 정보 추가.
+
+**선행 조건:** 없음
+
+**작업 내용:**
+
+### 1. 스키마 수정 (`src/fashion_engine/api/schemas.py`)
+
+```python
+class ProductOut(BaseModel):
+    # 기존 필드 모두 유지 +
+    size_availability: list[dict] | None = None   # [{"size":"M","in_stock":true}, ...]
+    stock_status: str | None = None               # "in_stock" | "low_stock" | "sold_out"
+```
+
+### 2. `SaleHighlightOut`에도 추가
+
+```python
+class SaleHighlightOut(BaseModel):
+    # 기존 필드 유지 +
+    stock_status: str | None = None
+    in_stock_sizes: list[str] | None = None   # size_availability에서 in_stock=True인 사이즈만 추출
+```
+
+### 3. 서비스 레이어에서 `in_stock_sizes` 추출
+
+```python
+# SaleHighlight 빌드 시
+in_stock_sizes = [
+    s["size"] for s in (product.size_availability or [])
+    if s.get("in_stock")
+] or None
+```
+
+**완료 기준:**
+```bash
+curl ".../products/sales" | jq '.[0].size_availability'
+# → [{"size":"S","in_stock":false},{"size":"M","in_stock":true},{"size":"L","in_stock":true}]
+
+curl ".../products/sales" | jq '.[0].stock_status'
+# → "in_stock"
+```
+
+---
+
+## T-104: 프론트엔드 — 사이즈 재고 뱃지 표시
+
+**목표:** 제품 카드 및 세일 페이지에 재고 있는 사이즈를 한눈에 표시.
+
+**선행 조건:** T-103 완료 (API에서 size_availability 반환)
+
+**작업 내용:**
+
+### 1. `SizeChips` 컴포넌트 생성 (`frontend/src/components/SizeChips.tsx`)
+
+```tsx
+interface SizeChipsProps {
+  sizes: { size: string; in_stock: boolean }[] | null;
+  maxShow?: number;   // 기본 5개, 초과시 "+N" 표시
+}
+
+export function SizeChips({ sizes, maxShow = 5 }: SizeChipsProps) {
+  if (!sizes?.length) return null;
+  const inStock = sizes.filter(s => s.in_stock);
+  const show = inStock.slice(0, maxShow);
+  return (
+    <div className="flex flex-wrap gap-1 mt-1">
+      {show.map(s => (
+        <span key={s.size}
+          className="text-[10px] px-1.5 py-0.5 rounded border border-green-500 text-green-700 bg-green-50">
+          {s.size}
+        </span>
+      ))}
+      {inStock.length > maxShow && (
+        <span className="text-[10px] px-1.5 py-0.5 text-gray-400">+{inStock.length - maxShow}</span>
+      )}
+    </div>
+  );
+}
+```
+
+### 2. `stock_status` 뱃지 (`StockBadge` 컴포넌트 또는 인라인)
+
+```tsx
+// stock_status에 따른 뱃지
+const STOCK_LABEL = {
+  in_stock: null,                        // 표시 안 함 (기본)
+  low_stock: { text: "재고 부족", color: "text-orange-600 bg-orange-50" },
+  sold_out:  { text: "품절", color: "text-red-500 bg-red-50 line-through" },
+};
+```
+
+### 3. `SaleHighlightCard` / `ProductCard` 컴포넌트에 통합
+
+- `SizeChips` 컴포넌트를 제품 카드 하단에 추가
+- `stock_status === "sold_out"` 이면 가격에 line-through + 회색 처리
+- `stock_status === "low_stock"` 이면 주황색 "재고 부족" 뱃지
+
+### 4. `/compare/{product_key}` 페이지 — 채널별 사이즈 재고 표시
+
+```tsx
+// 채널 목록 테이블의 각 행에 SizeChips 추가
+<td><SizeChips sizes={listing.size_availability} /></td>
+```
+
+**완료 기준:**
+- 세일 페이지에서 재고 있는 사이즈 칩 표시 확인
+- 품절 제품 회색 처리 확인
+- compare 페이지 채널별 사이즈 표시 확인
+
+---
+
+## T-105: MCP 서버 — AI 에이전트 표준 인터페이스 (기초)
+
+**목표:** Claude·ChatGPT·Cursor 등 MCP 클라이언트가 우리 데이터에 직접 접근할 수 있는 MCP 서버 구현. FastAPI 위에 SSE(Server-Sent Events) 기반 MCP 엔드포인트 추가.
+
+**선행 조건:** T-101, T-102 완료
+
+**참고:** MCP 공식 Python SDK — `pip install mcp` (PyPI: `mcp`)
+
+**작업 내용:**
+
+### 1. 의존성 추가
+
+```bash
+uv add mcp
+```
+
+### 2. MCP 서버 모듈 생성 (`src/fashion_engine/api/mcp_server.py`)
+
+```python
+"""
+MCP (Model Context Protocol) 서버.
+Claude, ChatGPT, Cursor 등 AI 에이전트가 패션 데이터에 직접 접근.
+엔드포인트: GET /mcp  (SSE 스트림)
+"""
+from mcp.server.fastapi import MCPServer
+from fashion_engine.services import product_service, brand_service
+
+mcp = MCPServer("fashion-data-engine")
+
+@mcp.tool()
+async def search_products(
+    query: str,
+    size: str | None = None,
+    in_stock_only: bool = False,
+    brand_slug: str | None = None,
+    limit: int = 10,
+) -> dict:
+    """패션 제품 검색. 브랜드명, 제품명, 사이즈 조건 지원."""
+    async with get_db_session() as db:
+        return await product_service.v2_search(db, query, size, in_stock_only, brand_slug, limit)
+
+@mcp.tool()
+async def get_availability(product_key: str) -> dict:
+    """특정 제품의 채널별 재고·가격·사이즈 가용성. 최저가 채널 포함."""
+    async with get_db_session() as db:
+        result = await product_service.get_product_availability(db, product_key)
+        return result.model_dump() if result else {"error": "not found"}
+
+@mcp.tool()
+async def get_brand_sale_status(brand_slug: str) -> dict:
+    """특정 브랜드의 현재 세일 현황. 세일 중인 제품 수, 최대 할인율, 채널 목록."""
+    async with get_db_session() as db:
+        return await brand_service.get_brand_sale_status(db, brand_slug)
+
+@mcp.tool()
+async def get_new_drops(limit: int = 10) -> list:
+    """최근 신제품 드롭 목록. 브랜드, 채널, 가격 포함."""
+    async with get_db_session() as db:
+        return await product_service.get_new_drops(db, limit)
+
+@mcp.tool()
+async def get_sale_highlights(limit: int = 20) -> list:
+    """현재 세일 중인 제품 하이라이트. 긴박감 점수 기준 정렬."""
+    async with get_db_session() as db:
+        return await product_service.get_sale_highlights_v2(db, limit)
+```
+
+### 3. FastAPI에 MCP 라우터 마운트 (`src/fashion_engine/api/main.py`)
+
+```python
+from fashion_engine.api.mcp_server import mcp
+app.mount("/mcp", mcp.get_asgi_app())
+```
+
+### 4. MCP 설정 파일 생성 (프로젝트 루트 `mcp.json`)
+
+```json
+{
+  "mcpServers": {
+    "fashion-data-engine": {
+      "url": "https://fashion-data-engine-production.up.railway.app/mcp",
+      "description": "스트릿웨어 실시간 재고·가격·세일 데이터"
+    }
+  }
+}
+```
+
+**완료 기준:**
+```bash
+# 로컬 테스트
+uv run uvicorn fashion_engine.api.main:app --reload
+curl -N http://localhost:8000/mcp  # SSE 스트림 연결 확인
+
+# Claude Desktop에서 fashion-data-engine MCP 서버 연결 후:
+# "팔라스 박스로고티 M사이즈 재고 있는 채널 알려줘" 쿼리 동작 확인
+```
+
+---
+
+## 구현 순서 요약 (T-101~T-105)
+
+```
+즉시 (독립, 병렬 가능):
+  T-101 — /api/v2/availability (핵심 API, 백엔드만)
+  T-103 — ProductOut에 size_availability 노출 (스키마 확장)
+
+T-101 완료 후:
+  T-102 — /api/v2/search (AI 자연어 검색)
+  T-104 — 프론트엔드 사이즈 뱃지 (T-103 선행)
+
+T-101, T-102 완료 후:
+  T-105 — MCP 서버
+```

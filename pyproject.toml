@@ -33,6 +33,7 @@ dependencies = [
     "typer>=0.15.0",            # CLI 프레임워크
     "tldextract>=5.1.0",        # URL 도메인 추출
     "pywebpush>=2.3.0",
+    "python-multipart>=0.0.22",
 ]
 
 [project.scripts]

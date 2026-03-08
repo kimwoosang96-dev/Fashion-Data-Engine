@@ -8,6 +8,18 @@ export async function GET(request: Request) {
   const price = searchParams.get("price") ?? "가격 확인";
   const brand = searchParams.get("brand") ?? "Streetwear Data";
 
+  // Noto Sans KR 로드 (edge runtime 한국어 렌더링)
+  let fontData: ArrayBuffer | null = null;
+  try {
+    const fontRes = await fetch(
+      "https://fonts.gstatic.com/s/notosanskr/v36/PbyxFmXiEBPT4ITbgNA5Cgm203Tq4JJWq209pU0DPdWuqxJFA4GNDCBYtw.0.woff2",
+      { next: { revalidate: 86400 } }
+    );
+    fontData = fontRes.ok ? await fontRes.arrayBuffer() : null;
+  } catch {
+    fontData = null;
+  }
+
   return new ImageResponse(
     (
       <div
@@ -20,7 +32,7 @@ export async function GET(request: Request) {
           background: "linear-gradient(135deg, #111827 0%, #1f2937 55%, #d8ff63 100%)",
           color: "white",
           padding: "64px",
-          fontFamily: "system-ui, sans-serif",
+          fontFamily: fontData ? "Noto Sans KR" : "system-ui, sans-serif",
         }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -54,6 +66,9 @@ export async function GET(request: Request) {
     {
       width: 1200,
       height: 630,
+      fonts: fontData
+        ? [{ name: "Noto Sans KR", data: fontData, weight: 700 }]
+        : [],
     }
   );
 }

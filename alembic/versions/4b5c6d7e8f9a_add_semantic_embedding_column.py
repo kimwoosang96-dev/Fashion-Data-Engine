@@ -21,14 +21,28 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     bind = op.get_bind()
     if bind.dialect.name == "postgresql":
-        op.execute("CREATE EXTENSION IF NOT EXISTS vector")
-        op.execute("ALTER TABLE products ADD COLUMN IF NOT EXISTS name_embedding vector(384)")
-        op.execute(
-            "CREATE INDEX IF NOT EXISTS ix_products_name_embedding "
-            "ON products USING ivfflat (name_embedding vector_cosine_ops)"
-        )
+        # pgvector 확장 시도 — Railway 무료 플랜은 미지원 가능
+        # 실패 시 Text 컬럼으로 대체 (의미 검색만 비활성화, 서버는 정상 기동)
+        try:
+            op.execute("CREATE EXTENSION IF NOT EXISTS vector")
+            op.execute(
+                "ALTER TABLE products ADD COLUMN IF NOT EXISTS name_embedding vector(384)"
+            )
+            op.execute(
+                "CREATE INDEX IF NOT EXISTS ix_products_name_embedding "
+                "ON products USING ivfflat (name_embedding vector_cosine_ops) "
+                "WITH (lists = 100)"
+            )
+        except Exception:
+            bind.execute(
+                sa.text(
+                    "ALTER TABLE products ADD COLUMN IF NOT EXISTS name_embedding TEXT"
+                )
+            )
     else:
-        op.add_column("products", sa.Column("name_embedding", sa.Text(), nullable=True))
+        op.add_column(
+            "products", sa.Column("name_embedding", sa.Text(), nullable=True)
+        )
 
 
 def downgrade() -> None:

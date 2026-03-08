@@ -1,6 +1,8 @@
 import { getActivityFeed, getAdminIntelStatus, getBrands, getChannels, getSaleHighlights } from "@/lib/api";
 import { HomePageClient } from "./HomePageClient";
 
+export const revalidate = 60;
+
 export default async function HomePage() {
   const adminToken = process.env.ADMIN_BEARER_TOKEN;
   const [initialSaleHighlights, initialDrops, channels, brands, stats] = await Promise.all([

@@ -3,6 +3,13 @@ import { getBrand } from "@/lib/api";
 import { BrandDetailClient } from "./BrandDetailClient";
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+export const revalidate = 300;
+
+export async function generateStaticParams() {
+  const { getBrands } = await import("@/lib/api");
+  const brands = await getBrands().catch(() => []);
+  return brands.slice(0, 100).map((brand) => ({ slug: brand.slug }));
+}
 
 export async function generateMetadata(
   { params }: { params: Promise<{ slug: string }> },
@@ -11,6 +18,10 @@ export async function generateMetadata(
   const decodedSlug = decodeURIComponent(slug);
   try {
     const brand = await getBrand(decodedSlug);
+    const ogUrl = new URL("/api/og", SITE_URL);
+    ogUrl.searchParams.set("name", `${brand.name} 세일 패턴`);
+    ogUrl.searchParams.set("price", "브랜드 인텔");
+    ogUrl.searchParams.set("brand", brand.name);
     return {
       title: `${brand.name} 브랜드 세일 | 패션 다나와`,
       description: `${brand.name} 브랜드 세일 제품과 취급 채널, 협업, 브랜드 소식을 한 번에 확인합니다.`,
@@ -18,6 +29,7 @@ export async function generateMetadata(
         title: `${brand.name} 브랜드 세일 | 패션 다나와`,
         description: `${brand.name} 브랜드 세일 제품과 브랜드 개요`,
         url: `${SITE_URL}/brands/${encodeURIComponent(decodedSlug)}`,
+        images: [{ url: ogUrl.toString() }],
       },
     };
   } catch {

@@ -1,9 +1,21 @@
 {
   "name": "Fashion Data Engine",
-  "short_name": "FashionFeed",
-  "start_url": "/feed",
+  "short_name": "FashionDE",
+  "description": "스트릿웨어 실시간 가격·재고 인텔",
+  "start_url": "/",
   "display": "standalone",
-  "background_color": "#f8fafc",
+  "background_color": "#f7f4ee",
   "theme_color": "#111827",
-  "icons": []
+  "icons": [
+    {
+      "src": "/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml"
+    }
+  ]
 }

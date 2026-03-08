@@ -9,6 +9,10 @@
 
 ## 기록
 
+- 2026-03-08 23:55:00 | agent:codex-dev | task:T-20260308-138 | action:complete | message:BRAND_SALE_INTEL_PAGE_01 완료: 브랜드 상세 페이지에 세일 인텔 카드, 월별 세일 빈도 바차트, 현재 세일 채널 목록, 브랜드 watchlist 추가 버튼을 구현했다.
+- 2026-03-08 23:56:00 | agent:codex-dev | task:T-20260308-139 | action:complete | message:MOBILE_PWA_01 완료: layout에 manifest/viewport를 연결하고 모바일 하단 네비게이션을 추가했다. manifest와 아이콘 자산도 홈 시작 URL 기준으로 정리했다.
+- 2026-03-08 23:57:00 | agent:codex-dev | task:T-20260308-140 | action:complete | message:OG_SHARE_01 완료: `/api/og` 동적 OG 이미지 라우트를 추가하고 브랜드/제품 상세 generateMetadata가 해당 이미지를 사용하도록 반영했다.
+- 2026-03-08 23:58:00 | agent:codex-dev | task:T-20260308-141 | action:complete | message:ISR_FRONTEND_01 완료: 홈(60초), 브랜드(300초), 제품(180초) revalidate와 generateStaticParams를 반영해 ISR/SSG로 전환했다. `next build` 결과에서 홈은 ISR, 브랜드·제품은 prerender 확인했다.
 - 2026-03-08 23:25:00 | agent:codex-dev | task:T-20260308-136 | action:complete | message:HOME_AI_SEARCH_01 완료: `/` 페이지를 자연어 검색 중심 홈으로 전면 재설계하고, 타이핑 플레이스홀더, semantic search 인라인 결과, 실시간 통계 카드, 세일 하이라이트, 신규 드롭 섹션, AI 에이전트 안내 배너를 반영했다.
 - 2026-03-08 23:26:00 | agent:codex-dev | task:T-20260308-137 | action:complete | message:PRODUCT_DETAIL_PAGE_01 완료: `/product/[key]` 페이지를 추가해 채널별 가격/재고 테이블, 사이즈 칩, 교차채널 가격 추이 차트, 관련 제품 추천을 구현했다. `/compare/[key]`는 redirect만 남기고 ProductCard/sitemap 링크를 모두 새 상세 경로로 전환했다.
 - 2026-03-08 23:27:00 | agent:codex-dev | task:T-20260308-132 | action:complete | message:CROSS_CHANNEL_PRICE_HISTORY_UI_01 완료: `/api/v2/price-history/{product_key}` 응답을 사용해 제품 상세 페이지에 SVG 기반 가격 추이 시각화를 붙였다.

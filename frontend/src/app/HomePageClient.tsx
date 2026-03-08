@@ -62,6 +62,7 @@ export function HomePageClient({
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const [placeholderText, setPlaceholderText] = useState("");
   const boxRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const onClickOutside = (event: MouseEvent) => {
@@ -71,6 +72,12 @@ export function HomePageClient({
     };
     document.addEventListener("mousedown", onClickOutside);
     return () => document.removeEventListener("mousedown", onClickOutside);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("focus") === "search") {
+      inputRef.current?.focus();
+    }
   }, []);
 
   useEffect(() => {
@@ -178,6 +185,7 @@ export function HomePageClient({
             <div ref={boxRef} className="rounded-[28px] border border-black/10 bg-white/90 p-4 shadow-[0_20px_60px_rgba(0,0,0,0.08)] backdrop-blur">
               <div className="flex flex-col gap-3 md:flex-row">
                 <input
+                  ref={inputRef}
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   onFocus={() => setDropdownOpen(suggestions.length > 0)}

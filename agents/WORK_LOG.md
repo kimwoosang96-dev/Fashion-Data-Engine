@@ -9,6 +9,11 @@
 
 ## 기록
 
+- 2026-03-08 23:25:00 | agent:codex-dev | task:T-20260308-136 | action:complete | message:HOME_AI_SEARCH_01 완료: `/` 페이지를 자연어 검색 중심 홈으로 전면 재설계하고, 타이핑 플레이스홀더, semantic search 인라인 결과, 실시간 통계 카드, 세일 하이라이트, 신규 드롭 섹션, AI 에이전트 안내 배너를 반영했다.
+- 2026-03-08 23:26:00 | agent:codex-dev | task:T-20260308-137 | action:complete | message:PRODUCT_DETAIL_PAGE_01 완료: `/product/[key]` 페이지를 추가해 채널별 가격/재고 테이블, 사이즈 칩, 교차채널 가격 추이 차트, 관련 제품 추천을 구현했다. `/compare/[key]`는 redirect만 남기고 ProductCard/sitemap 링크를 모두 새 상세 경로로 전환했다.
+- 2026-03-08 23:27:00 | agent:codex-dev | task:T-20260308-132 | action:complete | message:CROSS_CHANNEL_PRICE_HISTORY_UI_01 완료: `/api/v2/price-history/{product_key}` 응답을 사용해 제품 상세 페이지에 SVG 기반 가격 추이 시각화를 붙였다.
+- 2026-03-08 23:28:00 | agent:codex-dev | task:T-20260308-133 | action:log | message:MCP_HARDENING_01 보강: Redis 사용 시 INCR/EXPIRE 기반 분당 rate limit을 우선 적용하고, Redis가 없을 때만 메모리 fallback을 사용하도록 수정했다.
+- 2026-03-08 23:29:00 | agent:codex-dev | task:T-20260308-134 | action:log | message:FEED_WEBSOCKET_01 보강: `/feed` WebSocket 클라이언트 재연결 로직을 고정 3초에서 지수 백오프(1s→30s cap) 방식으로 변경했다.
 - 2026-03-08 22:35:00 | agent:codex-dev | task:T-20260308-134 | action:complete | message:FEED_WEBSOCKET_01 완료: `/ws/feed` WebSocket, `/internal/broadcast`, crawler/watch_agent/feed ingest 브로드캐스트 클라이언트, `/feed` 페이지 재연결 로직을 추가했다. `compileall`, `next build`, 라우트 등록 확인(`/ws/feed`, `/internal/broadcast`)까지 마쳤다.
 - 2026-03-08 22:36:00 | agent:codex-dev | task:T-20260308-135 | action:complete | message:BRAND_SALE_INTEL_API_01 완료: `/api/v2/brands/{slug}/sale-intel`를 추가해 현재 세일 수, 최대 할인율, 세일 채널 목록, 월별 세일 이력, typical sale months를 제공하도록 구현했다.
 - 2026-03-08 22:37:00 | agent:codex-dev | task:T-20260308-130 | action:log | message:SEMANTIC_SEARCH_01 코드 반영: `/api/v2/search?mode=semantic`, `search_service_v2.py`, `generate_embeddings.py`, Alembic `4b5c6d7e8f9a`를 추가했다. 남은 것은 Railway PostgreSQL vector 확장과 sentence-transformers 설치/임베딩 백필 운영 검증이다.

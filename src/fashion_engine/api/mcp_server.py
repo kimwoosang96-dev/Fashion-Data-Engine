@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from fashion_engine.cache import get_redis
 from fashion_engine.config import settings
 from fashion_engine.database import get_db
 from fashion_engine.models.brand import Brand
@@ -18,7 +19,15 @@ router = APIRouter(prefix="/mcp", tags=["mcp"])
 _request_counts: dict[str, list[float]] = defaultdict(list)
 
 
-def _check_rate_limit(api_key: str, max_rpm: int = 60) -> bool:
+async def _check_rate_limit(api_key: str, max_rpm: int = 60) -> bool:
+    redis = await get_redis()
+    if redis is not None:
+        key = f"mcp:rate:{api_key}"
+        current = await redis.incr(key)
+        if current == 1:
+            await redis.expire(key, 60)
+        return current <= max_rpm
+
     now = time.time()
     window = [t for t in _request_counts[api_key] if now - t < 60]
     _request_counts[api_key] = window
@@ -39,7 +48,7 @@ async def require_mcp_auth(
     api_key = authorization.split(" ", 1)[1].strip()
     if api_key != expected:
         raise HTTPException(status_code=401, detail="invalid api key")
-    if not _check_rate_limit(api_key):
+    if not await _check_rate_limit(api_key):
         raise HTTPException(status_code=429, detail="rate limit exceeded")
     return api_key
 

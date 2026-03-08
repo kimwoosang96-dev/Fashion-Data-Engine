@@ -4,10 +4,16 @@ export interface Product {
   brand_id: number | null;
   name: string;
   product_key: string | null;
+  normalized_key?: string | null;
+  match_confidence?: number | null;
   gender: string | null;
   subcategory: string | null;
   url: string;
   image_url: string | null;
+  price_krw?: number | null;
+  original_price_krw?: number | null;
+  discount_rate?: number | null;
+  sale_started_at?: string | null;
   is_sale: boolean;
   is_active: boolean;
   archived_at?: string | null;
@@ -128,6 +134,7 @@ export interface ProductAvailability {
   normalized_key: string | null;
   product_name: string;
   brand_name: string | null;
+  brand_slug: string | null;
   image_url: string | null;
   in_stock_anywhere: boolean;
   lowest_price: ProductAvailabilityChannel | null;

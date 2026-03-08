@@ -922,6 +922,7 @@ async def get_product_availability(
         "normalized_key": anchor.normalized_key,
         "product_name": anchor.name,
         "brand_name": anchor.brand.name if anchor.brand else None,
+        "brand_slug": anchor.brand.slug if anchor.brand else None,
         "image_url": next((item["image_url"] for item in channels if item["image_url"]), anchor.image_url),
         "in_stock_anywhere": any(item["stock_status"] != "sold_out" for item in channels),
         "lowest_price": channels[0] if channels else None,

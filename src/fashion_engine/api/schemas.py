@@ -638,6 +638,7 @@ class ProductAvailabilityOut(BaseModel):
     normalized_key: str | None
     product_name: str
     brand_name: str | None
+    brand_slug: str | None = None
     image_url: str | None
     in_stock_anywhere: bool
     lowest_price: ProductAvailabilityChannelOut | None

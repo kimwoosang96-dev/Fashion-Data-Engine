@@ -35,7 +35,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   }));
 
   const compareRoutes = productKeys.map((item) => ({
-    url: `${SITE_URL}/compare/${encodeURIComponent(item.product_key)}`,
+    url: `${SITE_URL}/product/${encodeURIComponent(item.product_key)}`,
     lastModified: new Date(),
     changeFrequency: "daily" as const,
     priority: 0.6,

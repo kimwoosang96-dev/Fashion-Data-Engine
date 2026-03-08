@@ -64,7 +64,7 @@ export function ProductCard({
 
   if (hasCompare) {
     return (
-      <Link href={`/compare/${encodeURIComponent(product.product_key!)}`}>
+      <Link href={`/product/${encodeURIComponent(product.product_key!)}`}>
         {inner}
       </Link>
     );

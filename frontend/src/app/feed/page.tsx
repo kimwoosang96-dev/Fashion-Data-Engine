@@ -112,6 +112,7 @@ export default function FeedPage() {
     let socket: WebSocket | null = null;
     let pingTimer: number | null = null;
     let retryTimer: number | null = null;
+    let retryDelay = 1000;
 
     const connect = () => {
       socket = new WebSocket(`${wsBase}/ws/feed`);
@@ -130,13 +131,15 @@ export default function FeedPage() {
         }
       };
       socket.onopen = () => {
+        retryDelay = 1000;
         pingTimer = window.setInterval(() => {
           socket?.send("ping");
         }, 15000);
       };
       socket.onclose = () => {
         if (pingTimer) window.clearInterval(pingTimer);
-        retryTimer = window.setTimeout(connect, 3000);
+        retryTimer = window.setTimeout(connect, retryDelay);
+        retryDelay = Math.min(retryDelay * 2, 30000);
       };
     };
 

@@ -28,6 +28,7 @@ from fashion_engine.models.crawl_run import CrawlRun, CrawlChannelLog
 from fashion_engine.models.channel_note import ChannelNote
 from fashion_engine.models.activity_feed import ActivityFeed
 from fashion_engine.models.intel import IntelEvent, IntelIngestRun
+from fashion_engine.models.channel_crawl_stat import ChannelCrawlStat
 from fashion_engine.api.schemas import (
     CrawlRunOut,
     CrawlRunDetail,
@@ -37,10 +38,19 @@ from fashion_engine.api.schemas import (
     ChannelSignalOut,
     AdminDraftChannelOut,
 )
+from fashion_engine.monitoring import get_response_metrics, get_slow_queries
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 ROOT_DIR = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(ROOT_DIR / "scripts"))
+from channel_probe import probe_channel  # noqa: E402
+
+LLM_COSTS_PER_1K = {
+    "groq": 0.0,
+    "gemini": 0.000075,
+    "openai": 0.00015,
+}
 SCRIPT_MAP = {
     "brands": ["scripts/crawl_brands.py"],
     "products": ["scripts/crawl_products.py"],
@@ -85,6 +95,20 @@ def _compute_traffic_light(crawl_status: str, recent_logs: list, inactive_rate: 
         return "yellow"
 
     return "green"
+
+
+def _health_status_from_yields(recent_yields: list[int]) -> str:
+    last_three = recent_yields[:3]
+    positives = sum(1 for value in last_three if value > 0)
+    if positives >= 2:
+        return "healthy"
+    if positives == 1:
+        return "degraded"
+    return "dead"
+
+
+def _utc_iso(dt: datetime | None) -> str | None:
+    return dt.isoformat() if dt else None
 
 
 @router.get("/stats")
@@ -490,6 +514,178 @@ async def get_channel_signals(
             }
         )
     return payload
+
+
+@router.get("/channel-health")
+async def get_channel_health(
+    limit: int = Query(500, ge=1, le=2000),
+    offset: int = Query(0, ge=0),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    channels = (
+        await db.execute(
+            select(
+                Channel.id,
+                Channel.name,
+                Channel.url,
+                Channel.platform,
+                Channel.is_active,
+                Channel.last_probe_at,
+            )
+            .order_by(Channel.name.asc())
+            .limit(limit)
+            .offset(offset)
+        )
+    ).all()
+    stat_rows = (
+        await db.execute(
+            text(
+                """
+                SELECT channel_id, products_found, parse_method, error_msg, crawled_at
+                FROM (
+                    SELECT channel_id, products_found, parse_method, error_msg, crawled_at,
+                           ROW_NUMBER() OVER (PARTITION BY channel_id ORDER BY crawled_at DESC) AS rn
+                    FROM channel_crawl_stats
+                ) sub
+                WHERE rn <= 5
+                ORDER BY channel_id ASC, crawled_at DESC
+                """
+            )
+        )
+    ).all()
+
+    stats_by_channel: dict[int, list] = defaultdict(list)
+    for row in stat_rows:
+        stats_by_channel[int(row.channel_id)].append(row)
+
+    payload = []
+    for row in channels:
+        recent = stats_by_channel.get(int(row.id), [])
+        recent_yields = [int(item.products_found or 0) for item in recent]
+        last_success_at = next(
+            (
+                item.crawled_at
+                for item in recent
+                if int(item.products_found or 0) > 0 and not item.error_msg
+            ),
+            None,
+        )
+        parse_method = next((item.parse_method for item in recent if item.parse_method), None)
+        payload.append(
+            {
+                "channel_id": int(row.id),
+                "channel_name": row.name,
+                "channel_url": row.url,
+                "platform": row.platform,
+                "is_active": bool(row.is_active),
+                "recent_yields": recent_yields,
+                "avg_yield": round(sum(recent_yields) / len(recent_yields), 2) if recent_yields else 0.0,
+                "last_success_at": _utc_iso(last_success_at),
+                "last_probe_at": _utc_iso(row.last_probe_at),
+                "parse_method": parse_method,
+                "status": _health_status_from_yields(recent_yields),
+            }
+        )
+    return payload
+
+
+@router.get("/llm-costs")
+async def get_admin_llm_costs(
+    days: int = Query(30, ge=1, le=180),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    cutoff = datetime.utcnow() - timedelta(days=days)
+    month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    daily_rows = (
+        await db.execute(
+            select(
+                func.date(ChannelCrawlStat.crawled_at).label("day"),
+                ChannelCrawlStat.llm_provider,
+                func.coalesce(func.sum(ChannelCrawlStat.llm_prompt_tokens), 0).label("prompt_tokens"),
+                func.coalesce(func.sum(ChannelCrawlStat.llm_completion_tokens), 0).label("completion_tokens"),
+                func.coalesce(func.sum(ChannelCrawlStat.llm_cost_usd), 0).label("cost_usd"),
+            )
+            .where(
+                ChannelCrawlStat.crawled_at >= cutoff,
+                ChannelCrawlStat.llm_provider.is_not(None),
+            )
+            .group_by(func.date(ChannelCrawlStat.crawled_at), ChannelCrawlStat.llm_provider)
+            .order_by(func.date(ChannelCrawlStat.crawled_at).desc(), ChannelCrawlStat.llm_provider.asc())
+        )
+    ).all()
+    channel_rows = (
+        await db.execute(
+            select(
+                Channel.id,
+                Channel.name,
+                ChannelCrawlStat.llm_provider,
+                func.coalesce(func.sum(ChannelCrawlStat.llm_prompt_tokens), 0).label("prompt_tokens"),
+                func.coalesce(func.sum(ChannelCrawlStat.llm_completion_tokens), 0).label("completion_tokens"),
+                func.coalesce(func.sum(ChannelCrawlStat.llm_cost_usd), 0).label("cost_usd"),
+                func.max(ChannelCrawlStat.crawled_at).label("last_used_at"),
+            )
+            .join(Channel, Channel.id == ChannelCrawlStat.channel_id)
+            .where(
+                ChannelCrawlStat.crawled_at >= cutoff,
+                ChannelCrawlStat.llm_provider.is_not(None),
+            )
+            .group_by(Channel.id, Channel.name, ChannelCrawlStat.llm_provider)
+            .order_by(func.coalesce(func.sum(ChannelCrawlStat.llm_cost_usd), 0).desc(), Channel.name.asc())
+            .limit(50)
+        )
+    ).all()
+    monthly_total_usd = (
+        await db.execute(
+            select(func.coalesce(func.sum(ChannelCrawlStat.llm_cost_usd), 0))
+            .where(
+                ChannelCrawlStat.crawled_at >= month_start,
+                ChannelCrawlStat.llm_provider.is_not(None),
+            )
+        )
+    ).scalar_one()
+
+    return {
+        "window_days": days,
+        "monthly_total_usd": round(float(monthly_total_usd or 0), 6),
+        "providers": LLM_COSTS_PER_1K,
+        "daily": [
+            {
+                "day": str(row.day),
+                "provider": row.llm_provider,
+                "prompt_tokens": int(row.prompt_tokens or 0),
+                "completion_tokens": int(row.completion_tokens or 0),
+                "cost_usd": round(float(row.cost_usd or 0), 6),
+            }
+            for row in daily_rows
+        ],
+        "by_channel": [
+            {
+                "channel_id": int(row.id),
+                "channel_name": row.name,
+                "provider": row.llm_provider,
+                "prompt_tokens": int(row.prompt_tokens or 0),
+                "completion_tokens": int(row.completion_tokens or 0),
+                "cost_usd": round(float(row.cost_usd or 0), 6),
+                "last_used_at": _utc_iso(row.last_used_at),
+            }
+            for row in channel_rows
+        ],
+    }
+
+
+@router.get("/performance")
+async def get_admin_performance(
+    _: None = Depends(require_admin),
+):
+    endpoints = get_response_metrics()
+    return {
+        "captured_at": datetime.utcnow().isoformat(),
+        "endpoints": endpoints,
+        "slow_queries": get_slow_queries(limit=25),
+        "alerts": [row for row in endpoints if row["p95_ms"] > 1000],
+    }
 
 
 @router.get("/collabs")
@@ -965,6 +1161,37 @@ async def activate_admin_channel(
     channel.is_active = True
     await db.commit()
     return {"ok": True, "id": channel.id, "is_active": channel.is_active}
+
+
+@router.post("/channels/{channel_id}/reactivate")
+async def reactivate_admin_channel(
+    channel_id: int,
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    channel = (
+        await db.execute(select(Channel).where(Channel.id == channel_id))
+    ).scalar_one_or_none()
+    if not channel:
+        raise HTTPException(status_code=404, detail="channel not found")
+
+    probe = await probe_channel(channel.url, channel.name)
+    channel.last_probe_at = datetime.utcnow()
+    reactivated = bool(probe.http_status and probe.http_status < 400 and probe.platform_detected)
+    if reactivated:
+        channel.is_active = True
+        if probe.platform_detected:
+            channel.platform = probe.platform_detected
+    await db.commit()
+    return {
+        "ok": True,
+        "id": channel.id,
+        "reactivated": reactivated,
+        "http_status": probe.http_status,
+        "platform_detected": probe.platform_detected,
+        "note": probe.note,
+        "is_active": channel.is_active,
+    }
 
 
 @router.patch("/channels/{channel_id}/poll-priority")

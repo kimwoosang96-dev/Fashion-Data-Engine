@@ -229,6 +229,39 @@ async def send_channel_reactivated_alert(*, count: int) -> bool:
     return await _send_embed({"embeds": [embed]})
 
 
+async def send_performance_alert(*, endpoints: list[dict]) -> bool:
+    if not endpoints:
+        return False
+    fields = [
+        {
+            "name": row["path"],
+            "value": f"p95 {row['p95_ms']}ms · avg {row['avg_ms']}ms · count {row['count']}",
+            "inline": False,
+        }
+        for row in endpoints[:8]
+    ]
+    embed = {
+        "title": "🐢 Slow API Alert",
+        "description": "p95 응답시간 1초 초과 엔드포인트가 감지되었습니다.",
+        "color": 0xF39C12,
+        "fields": fields,
+    }
+    return await _send_embed({"embeds": [embed]})
+
+
+async def send_backup_alert(*, key: str, size_bytes: int) -> bool:
+    embed = {
+        "title": "🗄️ DB Backup Uploaded",
+        "description": "주간 데이터베이스 백업이 업로드되었습니다.",
+        "color": 0x5865F2,
+        "fields": [
+            {"name": "Object Key", "value": key, "inline": False},
+            {"name": "Size", "value": f"{size_bytes:,} bytes", "inline": True},
+        ],
+    }
+    return await _send_embed({"embeds": [embed]})
+
+
 async def send_test_alert() -> bool:
     """Discord 연결 테스트용 알림."""
     payload = AlertPayload(

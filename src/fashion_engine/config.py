@@ -22,7 +22,12 @@ class Settings(BaseSettings):
     mcp_api_key: str | None = None
     internal_api_base_url: str = "http://127.0.0.1:8000"
     internal_api_key: str | None = None
+    sentry_dsn: str | None = None
     semantic_embedding_model: str = "paraphrase-multilingual-MiniLM-L12-v2"
+    s3_endpoint: str | None = None
+    s3_access_key: str | None = None
+    s3_secret_key: str | None = None
+    s3_bucket: str | None = None
 
     discord_webhook_url: str | None = None
     intel_discord_webhook_url: str | None = None

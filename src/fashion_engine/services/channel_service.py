@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -42,6 +44,7 @@ async def get_channel_highlights(
                 Channel.instagram_url,
                 Channel.channel_type,
                 Channel.country,
+                Channel.last_crawled_at,
                 func.count(Product.id).label("total_product_count"),
                 func.sum(case((Product.is_sale == True, 1), else_=0)).label("sale_product_count"),
                 func.sum(case((Product.is_new == True, 1), else_=0)).label("new_product_count"),
@@ -76,6 +79,23 @@ async def get_channel_highlights(
                 "new_product_count": new_count,
                 "is_running_sales": sale_count > 0,
                 "is_selling_new_products": new_count > 0,
+                "last_crawled_at": row.last_crawled_at,
+                "data_freshness_hours": (
+                    round(
+                        (
+                            datetime.now(timezone.utc)
+                            - (
+                                row.last_crawled_at.replace(tzinfo=timezone.utc)
+                                if row.last_crawled_at and row.last_crawled_at.tzinfo is None
+                                else row.last_crawled_at
+                            )
+                        ).total_seconds()
+                        / 3600,
+                        2,
+                    )
+                    if row.last_crawled_at
+                    else None
+                ),
             }
         )
     return result

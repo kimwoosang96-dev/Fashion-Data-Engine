@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useState } from "react";
+import Link from "next/link";
 import {
   createAdminCollab,
   createAdminDirector,
@@ -13,6 +14,8 @@ import {
   getAdminDirectors,
   getAdminStats,
   getAdminIntelStatus,
+  getAdminLlmCosts,
+  getAdminPerformance,
   getAdminDraftChannels,
   getBrands,
   getChannels,
@@ -37,6 +40,8 @@ import type {
   AdminCollabItem,
   AdminStats,
   AdminIntelStatus,
+  AdminLlmCosts,
+  AdminPerformanceSnapshot,
   Brand,
   BrandDirector,
   Channel,
@@ -62,6 +67,8 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<TabKey>("db");
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [intelStatus, setIntelStatus] = useState<AdminIntelStatus | null>(null);
+  const [llmCosts, setLlmCosts] = useState<AdminLlmCosts | null>(null);
+  const [performance, setPerformance] = useState<AdminPerformanceSnapshot | null>(null);
   const [channelSignals, setChannelSignals] = useState<ChannelSignalOut[]>([]);
   const [crawlStatus, setCrawlStatus] = useState<AdminCrawlStatus[]>([]);
   const [crawlFilter, setCrawlFilter] = useState<"all" | "ok" | "never" | "stale">("all");
@@ -112,14 +119,18 @@ export default function AdminPage() {
     setLoading(true);
     setMsg("");
     try {
-      const [s, h, intel] = await Promise.all([
+      const [s, h, intel, llm, perf] = await Promise.all([
         getAdminStats(adminToken),
         getChannelSignals(adminToken, 500, 0),
         getAdminIntelStatus(adminToken),
+        getAdminLlmCosts(adminToken, 30),
+        getAdminPerformance(adminToken),
       ]);
       setStats(s);
       setChannelSignals(h);
       setIntelStatus(intel);
+      setLlmCosts(llm);
+      setPerformance(perf);
       const [d, b, c, k, audit, crawl] = await Promise.all([
         getAdminDirectors(adminToken),
         getBrands(),
@@ -451,6 +462,14 @@ export default function AdminPage() {
       <div>
         <h1 className="text-2xl font-bold">운영관리</h1>
         <p className="text-sm text-gray-500 mt-1">DB 현황, 채널 헬스, 크롤 제어, 환율</p>
+        <div className="mt-3">
+          <Link
+            href="/admin/channel-health"
+            className="inline-flex rounded-full border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700"
+          >
+            채널 건강 대시보드 열기
+          </Link>
+        </div>
       </div>
 
       {/* 토큰 입력 (항상 표시) */}
@@ -502,6 +521,37 @@ export default function AdminPage() {
               <Stat label="채널-브랜드 링크" value={stats.counts.channel_brands} />
               <Stat label="제품" value={stats.counts.products} />
               <Stat label="가격 이력" value={stats.counts.price_history} />
+            </div>
+          )}
+
+          {(llmCosts || performance) && (
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="bg-white border border-gray-200 rounded-xl p-4">
+                <h2 className="text-sm font-semibold">LLM 비용 추적</h2>
+                <p className="mt-2 text-2xl font-bold">${llmCosts?.monthly_total_usd.toFixed(4) ?? "0.0000"}</p>
+                <p className="text-xs text-gray-500 mt-1">이번 달 추정 비용</p>
+                <div className="mt-3 space-y-1 text-xs text-gray-600">
+                  {(llmCosts?.by_channel ?? []).slice(0, 3).map((row) => (
+                    <div key={`${row.channel_id}-${row.provider}`} className="flex justify-between gap-3">
+                      <span className="truncate">{row.channel_name}</span>
+                      <span>${row.cost_usd.toFixed(4)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="bg-white border border-gray-200 rounded-xl p-4">
+                <h2 className="text-sm font-semibold">API 성능</h2>
+                <p className="mt-2 text-2xl font-bold">{performance?.alerts.length ?? 0}</p>
+                <p className="text-xs text-gray-500 mt-1">p95 1초 초과 엔드포인트</p>
+                <div className="mt-3 space-y-1 text-xs text-gray-600">
+                  {(performance?.endpoints ?? []).slice(0, 3).map((row) => (
+                    <div key={row.path} className="flex justify-between gap-3">
+                      <span className="truncate">{row.path}</span>
+                      <span>{Math.round(row.p95_ms)}ms</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
 

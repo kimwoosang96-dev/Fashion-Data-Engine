@@ -9,6 +9,7 @@ import type {
   IntelEvent, IntelEventsPage, IntelMapPoint, IntelTimelineOut, AdminIntelStatus,
   PushPublicKey, SearchSuggestion, DropsCalendarEntry, BrandsHeatmapData,
   SearchV2Item, BrandSaleIntel, CrossChannelPriceHistory, ProductAvailability,
+  AdminLlmCosts, AdminPerformanceSnapshot,
 } from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -174,9 +175,25 @@ export const getAdminStats = (token: string) =>
 
 export const getAdminChannelsHealth = (token: string, limit = 200, offset = 0) =>
   adminFetch<AdminChannelHealth[]>(
-    `/admin/channels-health?limit=${limit}&offset=${offset}`,
+    `/admin/channel-health?limit=${limit}&offset=${offset}`,
     token
   );
+export const getAdminChannelHealth = (token: string) =>
+  adminFetch<AdminChannelHealth[]>("/admin/channel-health", token);
+export const reactivateAdminChannel = (token: string, channelId: number) =>
+  adminFetch<{
+    ok: boolean;
+    id: number;
+    reactivated: boolean;
+    http_status: number | null;
+    platform_detected: string | null;
+    note: string;
+    is_active: boolean;
+  }>(`/admin/channels/${channelId}/reactivate`, token, { method: "POST" });
+export const getAdminLlmCosts = (token: string, days = 30) =>
+  adminFetch<AdminLlmCosts>(`/admin/llm-costs?days=${days}`, token);
+export const getAdminPerformance = (token: string) =>
+  adminFetch<AdminPerformanceSnapshot>("/admin/performance", token);
 
 export const triggerAdminCrawl = (
   token: string,

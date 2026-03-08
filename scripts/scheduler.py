@@ -17,6 +17,7 @@ from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+import httpx
 from sqlalchemy import select
 
 
@@ -27,6 +28,7 @@ import crawl_products  # noqa: E402
 import crawl_drops  # noqa: E402
 import crawl_news  # noqa: E402
 import auto_switch_parser  # noqa: E402
+import backup_db  # noqa: E402
 import coverage_report  # noqa: E402
 import data_audit  # noqa: E402
 import ingest_intel_events  # noqa: E402
@@ -37,7 +39,11 @@ import verify_image_urls  # noqa: E402
 from fashion_engine.database import AsyncSessionLocal  # noqa: E402
 from fashion_engine.models.crawl_run import CrawlRun  # noqa: E402
 from fashion_engine.config import settings  # noqa: E402
-from fashion_engine.services.alert_service import send_audit_alert, send_heartbeat_alert  # noqa: E402
+from fashion_engine.services.alert_service import (
+    send_audit_alert,
+    send_heartbeat_alert,
+    send_performance_alert,
+)  # noqa: E402
 
 
 def setup_logger() -> logging.Logger:
@@ -285,6 +291,33 @@ async def run_scheduler_heartbeat_job(scheduler: AsyncIOScheduler) -> None:
         LOGGER.exception("[JOB] scheduler-heartbeat failed")
 
 
+async def run_performance_alert_job() -> None:
+    token = (settings.admin_bearer_token or "").strip()
+    if not token:
+        LOGGER.info("[JOB] performance-alert skipped (ADMIN_BEARER_TOKEN missing)")
+        return
+    url = f"{settings.internal_api_base_url.rstrip('/')}/admin/performance"
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            resp = await client.get(url, headers={"Authorization": f"Bearer {token}"})
+            resp.raise_for_status()
+            payload = resp.json()
+        alerts = payload.get("alerts", [])
+        sent = await send_performance_alert(endpoints=alerts)
+        LOGGER.info("[JOB] performance-alert completed alerts=%s sent=%s", len(alerts), sent)
+    except Exception:
+        LOGGER.exception("[JOB] performance-alert failed")
+
+
+async def run_backup_job() -> None:
+    try:
+        LOGGER.info("[JOB] backup-db started")
+        code = await backup_db.run(keep_days=30)
+        LOGGER.info("[JOB] backup-db completed code=%s", code)
+    except Exception:
+        LOGGER.exception("[JOB] backup-db failed")
+
+
 def register_jobs(scheduler: AsyncIOScheduler) -> None:
     scheduler.add_job(
         run_product_crawl_job,
@@ -375,6 +408,18 @@ def register_jobs(scheduler: AsyncIOScheduler) -> None:
         CronTrigger(hour=9, minute=10),
         kwargs={"scheduler": scheduler},
         id="scheduler_heartbeat_daily_0910",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        run_performance_alert_job,
+        CronTrigger(minute=0),
+        id="performance_alert_hourly",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        run_backup_job,
+        CronTrigger(day_of_week="sun", hour=2, minute=0),
+        id="backup_db_weekly_sun_0200",
         replace_existing=True,
     )
 

@@ -1,6 +1,6 @@
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Literal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 
 class ChannelOut(BaseModel):
@@ -14,6 +14,17 @@ class ChannelOut(BaseModel):
     poll_priority: int
     use_gpt_parser: bool = False
     is_active: bool
+    last_crawled_at: datetime | None = None
+
+    @computed_field
+    @property
+    def data_freshness_hours(self) -> float | None:
+        if not self.last_crawled_at:
+            return None
+        ts = self.last_crawled_at
+        if ts.tzinfo is not None:
+            ts = ts.astimezone(timezone.utc).replace(tzinfo=None)
+        return round((datetime.utcnow() - ts).total_seconds() / 3600, 2)
 
     model_config = {"from_attributes": True}
 
@@ -193,6 +204,8 @@ class ChannelHighlightOut(BaseModel):
     new_product_count: int
     is_running_sales: bool
     is_selling_new_products: bool
+    last_crawled_at: datetime | None = None
+    data_freshness_hours: float | None = None
 
 
 class BrandHighlightOut(BaseModel):
@@ -631,6 +644,8 @@ class ProductAvailabilityChannelOut(BaseModel):
     size_availability: list[dict] | None
     is_sale: bool
     image_url: str | None
+    last_crawled_at: datetime | None = None
+    data_freshness_hours: float | None = None
 
 
 class ProductAvailabilityOut(BaseModel):

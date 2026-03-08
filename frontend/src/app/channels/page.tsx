@@ -28,6 +28,12 @@ export default function ChannelsPage() {
     });
   }, [items, query, saleOnly]);
 
+  const freshnessLabel = (hours?: number | null) => {
+    if (hours == null) return "업데이트 기록 없음";
+    if (hours < 24) return `${Math.max(1, Math.round(hours))}시간 전 업데이트`;
+    return `${Math.round(hours / 24)}일 전 업데이트`;
+  };
+
   return (
     <div className="p-6 space-y-5">
       <div>
@@ -75,6 +81,7 @@ export default function ChannelsPage() {
                       {ch.channel_name}
                     </a>
                     <p className="text-xs text-gray-400">{ch.channel_type ?? "-"}</p>
+                    <p className="text-xs text-gray-400">{freshnessLabel(ch.data_freshness_hours)}</p>
                     {ch.instagram_url && (
                       <a
                         href={ch.instagram_url}

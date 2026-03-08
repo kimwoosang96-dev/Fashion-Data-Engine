@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from fashion_engine.database import Base
@@ -19,6 +19,10 @@ class ChannelCrawlStat(Base):
     channel_id: Mapped[int] = mapped_column(ForeignKey("channels.id"), index=True, nullable=False)
     products_found: Mapped[int] = mapped_column(Integer, default=0)
     parse_method: Mapped[str | None] = mapped_column(String(30))
+    llm_prompt_tokens: Mapped[int | None] = mapped_column(Integer)
+    llm_completion_tokens: Mapped[int | None] = mapped_column(Integer)
+    llm_provider: Mapped[str | None] = mapped_column(String(20))
+    llm_cost_usd: Mapped[float | None] = mapped_column(Numeric(10, 6))
     error_msg: Mapped[str | None] = mapped_column(Text)
     crawled_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
 

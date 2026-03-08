@@ -9,6 +9,12 @@ function formatKrw(value: number | null) {
   return value == null ? "—" : `₩${value.toLocaleString("ko-KR")}`;
 }
 
+function formatFreshness(hours?: number | null) {
+  if (hours == null) return "업데이트 기록 없음";
+  if (hours < 24) return `${Math.max(1, Math.round(hours))}시간 전 업데이트`;
+  return `${Math.round(hours / 24)}일 전 업데이트`;
+}
+
 function buildChartPoints(history: CrossChannelPriceHistory["history"]) {
   if (!history.length) return [];
   const grouped = new Map<string, number>();
@@ -146,6 +152,7 @@ export function ProductPageClient({
                   <td className="px-4 py-4">
                     <div className="font-semibold text-zinc-950">{item.channel_name}</div>
                     <div className="text-xs text-zinc-400">{item.channel_country ?? "국가 미상"}</div>
+                    <div className="text-xs text-zinc-400">{formatFreshness(item.data_freshness_hours)}</div>
                   </td>
                   <td className="px-4 py-4">
                     <div className="font-semibold text-zinc-950">{formatKrw(item.price_krw)}</div>

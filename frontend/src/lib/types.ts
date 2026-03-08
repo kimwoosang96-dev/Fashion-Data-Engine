@@ -127,6 +127,8 @@ export interface ProductAvailabilityChannel {
   size_availability: Array<Record<string, unknown>> | null;
   is_sale: boolean;
   image_url: string | null;
+  last_crawled_at?: string | null;
+  data_freshness_hours?: number | null;
 }
 
 export interface ProductAvailability {
@@ -164,6 +166,8 @@ export interface Channel {
   poll_priority: number;
   use_gpt_parser: boolean;
   is_active: boolean;
+  last_crawled_at?: string | null;
+  data_freshness_hours?: number | null;
 }
 
 export interface Purchase {
@@ -271,6 +275,8 @@ export interface ChannelHighlight {
   new_product_count: number;
   is_running_sales: boolean;
   is_selling_new_products: boolean;
+  last_crawled_at?: string | null;
+  data_freshness_hours?: number | null;
 }
 
 export interface BrandHighlight {
@@ -393,14 +399,16 @@ export interface AdminStats {
 
 export interface AdminChannelHealth {
   channel_id: number;
-  name: string;
-  url: string;
-  channel_type: string | null;
-  country: string | null;
-  brand_count: number;
-  product_count: number;
-  sale_count: number;
-  health: "ok" | "needs_review";
+  channel_name: string;
+  channel_url: string;
+  platform: string | null;
+  is_active: boolean;
+  recent_yields: number[];
+  avg_yield: number;
+  last_success_at: string | null;
+  last_probe_at: string | null;
+  parse_method: string | null;
+  status: "healthy" | "degraded" | "dead";
 }
 
 export interface AdminCrawlStatus {
@@ -618,6 +626,52 @@ export interface AdminIntelStatus {
     brand_name: string;
     event_count: number;
   }>;
+}
+
+export interface AdminLlmCostDaily {
+  day: string;
+  provider: string | null;
+  prompt_tokens: number;
+  completion_tokens: number;
+  cost_usd: number;
+}
+
+export interface AdminLlmCostChannel {
+  channel_id: number;
+  channel_name: string;
+  provider: string | null;
+  prompt_tokens: number;
+  completion_tokens: number;
+  cost_usd: number;
+  last_used_at: string | null;
+}
+
+export interface AdminLlmCosts {
+  window_days: number;
+  monthly_total_usd: number;
+  providers: Record<string, number>;
+  daily: AdminLlmCostDaily[];
+  by_channel: AdminLlmCostChannel[];
+}
+
+export interface AdminPerformanceMetric {
+  path: string;
+  count: number;
+  avg_ms: number;
+  p50_ms: number;
+  p95_ms: number;
+  p99_ms: number;
+}
+
+export interface AdminPerformanceSnapshot {
+  captured_at: string;
+  endpoints: AdminPerformanceMetric[];
+  slow_queries: Array<{
+    statement: string;
+    elapsed_ms: number;
+    captured_at: string;
+  }>;
+  alerts: AdminPerformanceMetric[];
 }
 
 export interface DropsCalendarEntry {

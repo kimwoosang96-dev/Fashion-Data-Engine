@@ -11,6 +11,7 @@ import logging
 import random
 import re
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 from urllib.parse import urljoin, urlparse
 
 import httpx
@@ -223,6 +224,10 @@ class ChannelProductResult:
     error: str | None = None
     error_type: str | None = None
     crawl_strategy: str = "unknown"
+    llm_provider: str | None = None
+    llm_prompt_tokens: int | None = None
+    llm_completion_tokens: int | None = None
+    llm_total_tokens: int | None = None
 
 
 class ProductCrawler:
@@ -418,10 +423,14 @@ class ProductCrawler:
                         else:
                             should_try_gpt = bool(use_gpt_parser or platform_hint in (None, "", "unknown"))
                             if should_try_gpt:
-                                gpt_products = await self._try_gpt_parser_products(channel_url, currency)
+                                gpt_products, gpt_meta = await self._try_gpt_parser_products(channel_url, currency)
                                 if gpt_products:
                                     result.products = gpt_products
                                     result.crawl_strategy = "gpt-parser"
+                                    result.llm_provider = gpt_meta.provider
+                                    result.llm_prompt_tokens = gpt_meta.prompt_tokens
+                                    result.llm_completion_tokens = gpt_meta.completion_tokens
+                                    result.llm_total_tokens = gpt_meta.total_tokens
                                 else:
                                     result.error = (
                                         "No products found "
@@ -1418,22 +1427,27 @@ class ProductCrawler:
         self,
         channel_url: str,
         currency: str,
-    ) -> list[ProductInfo]:
+    ) -> tuple[list[ProductInfo], object]:
         try:
-            from fashion_engine.crawler.gpt_parser import parse_products_from_html
+            from fashion_engine.crawler.gpt_parser import GPTParseResult, parse_products_from_html
         except Exception as exc:
             logger.warning("GPT parser import 실패 [%s]: %s", channel_url, exc)
-            return []
+            return [], SimpleNamespace(
+                provider=None,
+                prompt_tokens=None,
+                completion_tokens=None,
+                total_tokens=None,
+            )
 
         fetched = await self._fetch_gpt_fallback_html(channel_url)
         if not fetched:
-            return []
+            return [], GPTParseResult()
         page_url, html = fetched
         try:
             parsed = await parse_products_from_html(page_url, html)
         except Exception as exc:
             logger.warning("GPT parser 실행 실패 [%s]: %s", channel_url, exc)
-            return []
+            return [], GPTParseResult()
 
         products: list[ProductInfo] = []
         seen_urls: set[str] = set()
@@ -1503,7 +1517,7 @@ class ProductCrawler:
             channel_url,
             len(products),
         )
-        return products
+        return products, parsed
 
     def _parse_woocommerce_product(
         self,

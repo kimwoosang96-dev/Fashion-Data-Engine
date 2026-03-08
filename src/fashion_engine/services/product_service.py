@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import logging
 
@@ -894,6 +894,13 @@ async def get_product_availability(
 
     channels: list[dict] = []
     for row in products:
+        last_crawled_at = row.channel.last_crawled_at if row.channel else None
+        freshness_hours = None
+        if last_crawled_at:
+            ts = last_crawled_at
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=timezone.utc)
+            freshness_hours = round((datetime.now(timezone.utc) - ts).total_seconds() / 3600, 2)
         channels.append(
             {
                 "channel_name": row.channel.name if row.channel else "",
@@ -907,6 +914,8 @@ async def get_product_availability(
                 "size_availability": row.size_availability,
                 "is_sale": bool(row.is_sale),
                 "image_url": row.image_url,
+                "last_crawled_at": last_crawled_at,
+                "data_freshness_hours": freshness_hours,
             }
         )
 

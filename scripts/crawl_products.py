@@ -30,7 +30,7 @@ import typer
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from rich.console import Console
 from rich.table import Table
-from sqlalchemy import desc, func, select, text
+from sqlalchemy import desc, func, select, text, update
 from sqlalchemy.exc import DBAPIError
 
 from fashion_engine.config import settings
@@ -66,6 +66,11 @@ from fashion_engine.services.alert_service import (
 )
 from fashion_engine.services.watchlist_service import should_alert
 
+try:
+    import sentry_sdk
+except Exception:  # pragma: no cover - optional during local bootstrap
+    sentry_sdk = None
+
 logger = logging.getLogger(__name__)
 console = Console()
 app = typer.Typer()
@@ -88,6 +93,11 @@ _POSTGRES_CRAWL_TIMEOUT_SQL = (
     "SET LOCAL statement_timeout = '120s'",
 )
 _PRODUCT_BULK_CHUNK_SIZE = 500
+LLM_COSTS_PER_1K = {
+    "groq": 0.0,
+    "gemini": 0.000075,
+    "openai": 0.00015,
+}
 
 
 def _activity_feed_payload(row: ActivityFeed) -> dict:
@@ -120,6 +130,21 @@ def _parse_method_from_strategy(strategy: str | None) -> str | None:
     if "woocommerce" in normalized:
         return "woocommerce"
     return normalized[:30]
+
+
+def _estimate_llm_cost_usd(
+    provider: str | None,
+    *,
+    prompt_tokens: int | None,
+    completion_tokens: int | None,
+) -> float | None:
+    if not provider:
+        return None
+    rate = LLM_COSTS_PER_1K.get(provider)
+    if rate is None:
+        return None
+    total_tokens = int(prompt_tokens or 0) + int(completion_tokens or 0)
+    return round((total_tokens / 1000.0) * rate, 6)
 
 
 async def _apply_crawl_db_timeouts(db) -> None:
@@ -880,6 +905,11 @@ async def _crawl_one_channel(
 
         duration_ms = int((time.time() - t_start) * 1000)
         save_outcome = ChannelSaveOutcome()
+        llm_cost_usd = _estimate_llm_cost_usd(
+            result.llm_provider,
+            prompt_tokens=result.llm_prompt_tokens,
+            completion_tokens=result.llm_completion_tokens,
+        )
 
         if result.products and not result.error:
             result.products = _dedupe_product_infos(result.products)
@@ -925,8 +955,16 @@ async def _crawl_one_channel(
                                 alerts_enabled=alerts_enabled,
                                 no_intel=no_intel,
                             )
+                        if save_outcome.products_count > 0:
+                            await db.execute(
+                                update(Channel)
+                                .where(Channel.id == channel.id)
+                                .values(last_crawled_at=datetime.utcnow())
+                            )
                         await db.commit()
             except Exception as save_exc:
+                if sentry_sdk is not None:
+                    sentry_sdk.capture_exception(save_exc)
                 db_error_type = _classify_db_error(save_exc)
                 if db_error_type == "lock_timeout":
                     console.print(f"[yellow]lock timeout:[/yellow] {channel.name}")
@@ -969,6 +1007,10 @@ async def _crawl_one_channel(
                             channel_id=channel.id,
                             products_found=save_outcome.products_count if not result.error else 0,
                             parse_method=_parse_method_from_strategy(result.crawl_strategy),
+                            llm_prompt_tokens=result.llm_prompt_tokens,
+                            llm_completion_tokens=result.llm_completion_tokens,
+                            llm_provider=result.llm_provider,
+                            llm_cost_usd=llm_cost_usd,
                             error_msg=(result.error or "")[:1000] if result.error else None,
                         )
                     )
@@ -990,6 +1032,8 @@ async def _crawl_one_channel(
                     )
                     await db.commit()
         except Exception as log_exc:
+            if sentry_sdk is not None:
+                sentry_sdk.capture_exception(log_exc)
             console.print(f"[red]CrawlChannelLog 기록 실패[/red] {channel.name}: {log_exc}")
             try:
                 async with AsyncSessionLocal() as db2:
@@ -1013,6 +1057,10 @@ async def _crawl_one_channel(
                             channel_id=channel.id,
                             products_found=0,
                             parse_method=_parse_method_from_strategy(result.crawl_strategy),
+                            llm_prompt_tokens=result.llm_prompt_tokens,
+                            llm_completion_tokens=result.llm_completion_tokens,
+                            llm_provider=result.llm_provider,
+                            llm_cost_usd=llm_cost_usd,
                             error_msg=f"Internal log error: {str(log_exc)[:500]}",
                         )
                     )
@@ -1025,6 +1073,8 @@ async def _crawl_one_channel(
                     )
                     await db2.commit()
             except Exception as log_retry_exc:
+                if sentry_sdk is not None:
+                    sentry_sdk.capture_exception(log_retry_exc)
                 console.print(
                     f"[bold red]CrawlChannelLog 재시도도 실패[/bold red] {channel.name}: {log_retry_exc}"
                 )

@@ -1,11 +1,13 @@
 from contextlib import asynccontextmanager
+import time
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
 from fashion_engine.config import settings
 from fashion_engine.database import AsyncSessionLocal
+from fashion_engine.monitoring import record_response_time
 from fashion_engine.api.channels import router as channels_router
 from fashion_engine.api.brands import router as brands_router
 from fashion_engine.api.collabs import router as collabs_router
@@ -26,9 +28,25 @@ from fashion_engine.api.v2 import router as v2_router
 from fashion_engine.api.realtime import router as realtime_router
 from fashion_engine.api.mcp_server import router as mcp_router
 
+try:
+    import sentry_sdk
+    from sentry_sdk.integrations.fastapi import FastApiIntegration
+    from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+except Exception:  # pragma: no cover - optional dependency in dev bootstrap
+    sentry_sdk = None
+    FastApiIntegration = None
+    SqlalchemyIntegration = None
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if settings.sentry_dsn and sentry_sdk is not None:
+        sentry_sdk.init(
+            dsn=settings.sentry_dsn,
+            integrations=[FastApiIntegration(), SqlalchemyIntegration()],
+            traces_sample_rate=0.1,
+            environment="production" if not settings.api_debug else "development",
+        )
     yield
 
 
@@ -45,6 +63,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def record_response_metrics(request: Request, call_next):
+    started = time.monotonic()
+    response = await call_next(request)
+    record_response_time(request.url.path, time.monotonic() - started)
+    return response
 
 app.include_router(channels_router)
 app.include_router(brands_router)

@@ -289,7 +289,7 @@ export default function FeedPage() {
         <div className="space-y-3">
           {items.map((item) => {
             const href = item.product_key
-              ? `/compare/${encodeURIComponent(item.product_key)}`
+              ? `/product/${encodeURIComponent(item.product_key)}`
               : item.source_url;
             return (
               <article key={item.id} className="rounded-2xl border border-gray-200 bg-white p-4">

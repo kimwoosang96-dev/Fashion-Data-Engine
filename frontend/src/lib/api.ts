@@ -8,8 +8,8 @@ import type {
   CrawlRunOut, CrawlRunDetail, ChannelNoteOut, ActivityFeedItem, AdminDraftChannel,
   IntelEvent, IntelEventsPage, IntelMapPoint, IntelTimelineOut, AdminIntelStatus,
   PushPublicKey, SearchSuggestion, DropsCalendarEntry, BrandsHeatmapData,
-  SearchV2Item, BrandSaleIntel, CrossChannelPriceHistory, ProductAvailability,
-  AdminLlmCosts, AdminPerformanceSnapshot,
+  SearchV2Item, BrandSaleIntel, BrandSeasonality, CrossChannelPriceHistory, ProductAvailability,
+  AdminLlmCosts, AdminPerformanceSnapshot, AdminChannelCompeteRow,
 } from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -126,6 +126,8 @@ export const getBrandRanking = (limit = 50) =>
   apiFetch<BrandRankingItem[]>(`/brands/ranking?limit=${limit}`);
 export const getBrandSaleIntel = (slug: string) =>
   apiFetch<BrandSaleIntel>(`/api/v2/brands/${encodeURIComponent(slug)}/sale-intel`);
+export const getBrandSeasonality = (slug: string) =>
+  apiFetch<BrandSeasonality>(`/api/v2/brands/${encodeURIComponent(slug)}/seasonality`);
 export const getBrandsHeatmap = (tier?: string, country?: string) => {
   const q = new URLSearchParams();
   if (tier) q.set("tier", tier);
@@ -194,6 +196,11 @@ export const getAdminLlmCosts = (token: string, days = 30) =>
   adminFetch<AdminLlmCosts>(`/admin/llm-costs?days=${days}`, token);
 export const getAdminPerformance = (token: string) =>
   adminFetch<AdminPerformanceSnapshot>("/admin/performance", token);
+export const getAdminChannelCompete = (token: string, minMatches = 5, limit = 100) =>
+  adminFetch<AdminChannelCompeteRow[]>(
+    `/admin/channel-compete?min_matches=${minMatches}&limit=${limit}`,
+    token
+  );
 
 export const triggerAdminCrawl = (
   token: string,

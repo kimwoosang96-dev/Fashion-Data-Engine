@@ -164,7 +164,7 @@ export default function RankingPage() {
               <div className="mt-4 flex items-center justify-between text-sm">
                 <span className="text-gray-400">{item.channel_country ?? "국가 미상"}</span>
                 {item.product_key ? (
-                  <Link href={`/compare/${encodeURIComponent(item.product_key)}`} className="font-medium text-blue-600 hover:underline">
+                  <Link href={`/product/${encodeURIComponent(item.product_key)}`} className="font-medium text-blue-600 hover:underline">
                     비교 보기
                   </Link>
                 ) : (

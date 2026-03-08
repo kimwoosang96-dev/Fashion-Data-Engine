@@ -58,6 +58,18 @@ export function ProductCard({
             </Badge>
           )}
         </div>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {product.is_all_time_low && (
+            <Badge className="bg-lime-200 text-lime-900 hover:bg-lime-200 text-[11px] px-1.5 py-0">
+              역대 최저
+            </Badge>
+          )}
+          {(product.size_scarcity ?? 0) >= 0.7 && (
+            <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100 text-[11px] px-1.5 py-0">
+              재고 소진 임박
+            </Badge>
+          )}
+        </div>
       </CardContent>
     </Card>
   );

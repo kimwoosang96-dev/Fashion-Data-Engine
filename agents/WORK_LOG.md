@@ -9,6 +9,12 @@
 
 ## 기록
 
+- 2026-03-08 23:39:00 | agent:codex-dev | task:T-20260308-148 | action:complete | message:BRAND_SEASONALITY_01 완료: `analytics_service.get_brand_seasonality()`와 `/api/v2/brands/{slug}/seasonality`를 추가하고 브랜드 상세 페이지에 12개월 시즌성 heatmap을 붙였다.
+- 2026-03-08 23:40:00 | agent:codex-dev | task:T-20260308-149 | action:complete | message:SIZE_SCARCITY_SCORE_01 완료: `products.size_scarcity` 컬럼과 계산 로직을 추가하고 `/api/v2/availability`, ProductCard, 제품 상세에 희소성 경고를 노출했다.
+- 2026-03-08 23:41:00 | agent:codex-dev | task:T-20260308-150 | action:complete | message:ALL_TIME_LOW_BADGE_01 완료: `products.is_all_time_low` 컬럼과 크롤 저장 시 역대 최저가 판정을 연결하고 제품 카드/상세에 `역대 최저` 배지를 추가했다.
+- 2026-03-08 23:42:00 | agent:codex-dev | task:T-20260308-151 | action:complete | message:WEEKLY_COVERAGE_REPORT_01 완료: coverage report에 요약/주간 변화량을 추가하고 `WEEKLY_REPORT_WEBHOOK` 지원 및 월요일 09:00 발송 스케줄로 조정했다.
+- 2026-03-08 23:43:00 | agent:codex-dev | task:T-20260308-152 | action:complete | message:DROP_COUNTDOWN_01 완료: Shopify drop tag에서 `expected_drop_at`을 추출해 `drops`에 저장하고 `/drops`, `/drops/calendar`에 카운트다운/예상 시각을 표시했다.
+- 2026-03-08 23:44:00 | agent:codex-dev | task:T-20260308-153 | action:complete | message:CHANNEL_COMPETITIVENESS_01 완료: `/admin/channel-compete` API와 관리자 페이지를 추가하고, 사용자 화면의 `/compare` 잔여 링크를 `/product`로 정리했다.
 - 2026-03-08 23:55:00 | agent:codex-dev | task:T-20260308-138 | action:complete | message:BRAND_SALE_INTEL_PAGE_01 완료: 브랜드 상세 페이지에 세일 인텔 카드, 월별 세일 빈도 바차트, 현재 세일 채널 목록, 브랜드 watchlist 추가 버튼을 구현했다.
 - 2026-03-08 23:56:00 | agent:codex-dev | task:T-20260308-139 | action:complete | message:MOBILE_PWA_01 완료: layout에 manifest/viewport를 연결하고 모바일 하단 네비게이션을 추가했다. manifest와 아이콘 자산도 홈 시작 URL 기준으로 정리했다.
 - 2026-03-08 23:57:00 | agent:codex-dev | task:T-20260308-140 | action:complete | message:OG_SHARE_01 완료: `/api/og` 동적 OG 이미지 라우트를 추가하고 브랜드/제품 상세 generateMetadata가 해당 이미지를 사용하도록 반영했다.

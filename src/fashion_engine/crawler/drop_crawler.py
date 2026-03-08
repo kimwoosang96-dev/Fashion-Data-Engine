@@ -11,6 +11,8 @@ is_new=True 인 것만 Discord 알림 전송.
 import asyncio
 import logging
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
+import re
 
 import httpx
 from slugify import slugify
@@ -25,6 +27,7 @@ class DropCandidate:
     source_url: str
     image_url: str | None
     price_krw: int | None
+    expected_drop_at: datetime | None = None
     status: str = "released"   # "upcoming" | "released"
     channel_name: str = ""
 
@@ -143,6 +146,7 @@ class DropCrawler:
                     price_krw = int(raw_price * rate_to_krw)
             except (ValueError, TypeError):
                 pass
+        expected_drop_at = self._extract_drop_date(p.get("tags") or [])
 
         return DropCandidate(
             product_name=title,
@@ -150,6 +154,28 @@ class DropCrawler:
             source_url=source_url,
             image_url=image_url,
             price_krw=price_krw,
+            expected_drop_at=expected_drop_at,
             status=status,
             channel_name=channel_name,
         )
+    _DROP_DATE_PATTERNS = (
+        re.compile(r"(?:drop|launch)-(\d{4}-\d{2}-\d{2})", re.I),
+        re.compile(r"coming-soon-(\d{4}-\d{2})", re.I),
+    )
+
+    @classmethod
+    def _extract_drop_date(cls, tags: list[str]) -> datetime | None:
+        for raw_tag in tags:
+            tag = str(raw_tag or "").strip().lower()
+            for pattern in cls._DROP_DATE_PATTERNS:
+                match = pattern.search(tag)
+                if not match:
+                    continue
+                value = match.group(1)
+                try:
+                    if len(value) == 7:
+                        return datetime.strptime(f"{value}-01T10:00:00", "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc)
+                    return datetime.strptime(value, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+                except ValueError:
+                    continue
+        return None

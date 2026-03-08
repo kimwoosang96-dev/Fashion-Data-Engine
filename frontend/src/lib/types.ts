@@ -14,6 +14,8 @@ export interface Product {
   original_price_krw?: number | null;
   discount_rate?: number | null;
   sale_started_at?: string | null;
+  size_scarcity?: number | null;
+  is_all_time_low?: boolean;
   is_sale: boolean;
   is_active: boolean;
   archived_at?: string | null;
@@ -99,6 +101,20 @@ export interface BrandSaleIntel {
   typical_sale_months: number[];
 }
 
+export interface BrandSeasonalityMonth {
+  sale_count: number;
+  avg_discount: number | null;
+  data_points: number;
+}
+
+export interface BrandSeasonality {
+  brand_slug: string;
+  brand_name: string;
+  monthly: Record<number, BrandSeasonalityMonth>;
+  peak_sale_months: number[];
+  data_window_days: number;
+}
+
 export interface CrossChannelPriceHistoryPoint {
   date: string;
   channel_name: string;
@@ -125,6 +141,7 @@ export interface ProductAvailabilityChannel {
   discount_rate: number | null;
   stock_status: string | null;
   size_availability: Array<Record<string, unknown>> | null;
+  size_scarcity?: number | null;
   is_sale: boolean;
   image_url: string | null;
   last_crawled_at?: string | null;
@@ -242,6 +259,7 @@ export interface Drop {
   image_url: string | null;
   price_krw: number | null;
   release_date: string | null;
+  expected_drop_at?: string | null;
   status: string;
   detected_at: string;
   notified_at: string | null;
@@ -674,11 +692,23 @@ export interface AdminPerformanceSnapshot {
   alerts: AdminPerformanceMetric[];
 }
 
+export interface AdminChannelCompeteRow {
+  channel_id: number;
+  channel_name: string;
+  country: string | null;
+  platform: string | null;
+  matched_products: number;
+  avg_price_rank: number;
+  cheapest_count: number;
+  cheapest_ratio: number;
+}
+
 export interface DropsCalendarEntry {
   brand_name: string | null;
   title: string;
   event_type: string;
   source_url: string | null;
+  expected_drop_at?: string | null;
 }
 
 export interface BrandsHeatmapData {

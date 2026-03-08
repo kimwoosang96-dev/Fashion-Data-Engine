@@ -39,6 +39,7 @@ from fashion_engine.api.schemas import (
     AdminDraftChannelOut,
 )
 from fashion_engine.monitoring import get_response_metrics, get_slow_queries
+from fashion_engine.services.analytics_service import get_channel_competitiveness
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -686,6 +687,16 @@ async def get_admin_performance(
         "slow_queries": get_slow_queries(limit=25),
         "alerts": [row for row in endpoints if row["p95_ms"] > 1000],
     }
+
+
+@router.get("/channel-compete")
+async def get_admin_channel_compete(
+    min_matches: int = Query(5, ge=1, le=100),
+    limit: int = Query(100, ge=1, le=500),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    return await get_channel_competitiveness(db, min_matches=min_matches, limit=limit)
 
 
 @router.get("/collabs")

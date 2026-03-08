@@ -119,6 +119,7 @@ async def run(limit: int, all_types: bool, no_alerts: bool) -> None:
                         brand_id=brand_id,
                         image_url=candidate.image_url,
                         price_krw=candidate.price_krw,
+                        expected_drop_at=candidate.expected_drop_at,
                         status="released",
                     )
                     if is_new:
@@ -146,6 +147,7 @@ async def run(limit: int, all_types: bool, no_alerts: bool) -> None:
                         brand_id=brand_id,
                         image_url=candidate.image_url,
                         price_krw=candidate.price_krw,
+                        expected_drop_at=candidate.expected_drop_at,
                         status="upcoming",
                     )
                     if is_new:

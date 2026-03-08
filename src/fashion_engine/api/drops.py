@@ -89,6 +89,7 @@ async def drops_calendar(
                 "title": event.title,
                 "event_type": event.event_type,
                 "source_url": event.source_url,
+                "expected_drop_at": event.event_time,
             }
         )
     for event, brand_name in feed_rows:
@@ -100,6 +101,7 @@ async def drops_calendar(
                 "title": event.product_name or "신제품",
                 "event_type": event.event_type,
                 "source_url": event.source_url,
+                "expected_drop_at": None,
             }
         )
     return dict(sorted(grouped.items()))

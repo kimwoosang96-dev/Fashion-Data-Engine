@@ -20,7 +20,7 @@ export async function generateMetadata(
       openGraph: {
         title: `${data.product_name} 최저가 비교 | 패션 다나와`,
         description: `${data.channels.length}개 채널 실시간 가격 비교`,
-        url: `${SITE_URL}/compare/${encodeURIComponent(decodedKey)}`,
+        url: `${SITE_URL}/product/${encodeURIComponent(decodedKey)}`,
         images: data.image_url ? [{ url: data.image_url }] : undefined,
       },
     };

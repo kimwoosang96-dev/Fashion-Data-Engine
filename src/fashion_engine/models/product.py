@@ -46,6 +46,8 @@ class Product(Base):
     raw_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
     price_updated_at: Mapped[datetime | None] = mapped_column(DateTime)
     sale_started_at: Mapped[datetime | None] = mapped_column(DateTime, index=True)
+    size_scarcity: Mapped[float | None] = mapped_column()
+    is_all_time_low: Mapped[bool] = mapped_column(Boolean, default=False)
 
     size_availability: Mapped[list | None] = mapped_column(JSONB, nullable=True)  # [{"size":"M","in_stock":true},...]
     stock_status: Mapped[str | None] = mapped_column(String(20), nullable=True)    # "in_stock"|"low_stock"|"sold_out"

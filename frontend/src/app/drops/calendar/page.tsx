@@ -19,6 +19,18 @@ function eventTone(type: string) {
   }
 }
 
+function formatExpected(value?: string | null) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleString("ko-KR", {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export default function DropsCalendarPage() {
   const today = new Date();
   const [cursor, setCursor] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
@@ -155,6 +167,9 @@ export default function DropsCalendarPage() {
                         {item.brand_name && <span className="text-xs text-gray-500">{item.brand_name}</span>}
                       </div>
                       <p className="mt-2 text-sm font-medium text-gray-900">{item.title}</p>
+                      {formatExpected(item.expected_drop_at) && (
+                        <p className="mt-1 text-xs text-gray-500">예상 시각 {formatExpected(item.expected_drop_at)}</p>
+                      )}
                       {item.source_url && (
                         <a href={item.source_url} target="_blank" rel="noreferrer" className="mt-2 inline-block text-xs text-blue-600 hover:underline">
                           출처 보기
@@ -181,6 +196,9 @@ export default function DropsCalendarPage() {
                         {item.brand_name && <span className="text-xs text-gray-500">{item.brand_name}</span>}
                       </div>
                       <p className="mt-2 text-sm font-medium text-gray-900">{item.title}</p>
+                      {formatExpected(item.expected_drop_at) && (
+                        <p className="mt-1 text-xs text-gray-500">예상 시각 {formatExpected(item.expected_drop_at)}</p>
+                      )}
                     </div>
                   ))}
                 </div>

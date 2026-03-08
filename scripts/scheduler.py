@@ -363,8 +363,8 @@ def register_jobs(scheduler: AsyncIOScheduler) -> None:
     )
     scheduler.add_job(
         run_coverage_report_job,
-        CronTrigger(day_of_week="sun", hour=9, minute=5),
-        id="coverage_weekly_sun_0905",
+        CronTrigger(day_of_week="mon", hour=9, minute=0),
+        id="coverage_weekly_mon_0900",
         replace_existing=True,
     )
     scheduler.add_job(

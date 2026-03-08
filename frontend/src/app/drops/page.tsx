@@ -18,6 +18,20 @@ const STATUS_LABELS: Record<string, string> = {
   sold_out: "품절",
 };
 
+function countdownLabel(expectedDropAt?: string | null) {
+  if (!expectedDropAt) return null;
+  const target = new Date(expectedDropAt);
+  const diffMs = target.getTime() - Date.now();
+  if (Number.isNaN(target.getTime())) return null;
+  if (diffMs <= 0) return "곧 오픈";
+  const hours = Math.floor(diffMs / 3_600_000);
+  const days = Math.floor(hours / 24);
+  if (days >= 1) return `D-${days}`;
+  if (hours >= 1) return `${hours}시간 남음`;
+  const minutes = Math.max(1, Math.floor(diffMs / 60_000));
+  return `${minutes}분 남음`;
+}
+
 export default function DropsPage() {
   const [tab, setTab] = useState<"upcoming" | "all">("upcoming");
   const [drops, setDrops] = useState<Drop[]>([]);
@@ -63,7 +77,7 @@ export default function DropsPage() {
             {searchResults.slice(0, 6).map((p) => (
               <li key={p.id}>
                 <Link
-                  href={p.product_key ? `/compare/${encodeURIComponent(p.product_key)}` : p.url}
+                  href={p.product_key ? `/product/${encodeURIComponent(p.product_key)}` : p.url}
                   target={p.product_key ? undefined : "_blank"}
                   className="block px-4 py-2.5 hover:bg-gray-50 text-sm"
                   onClick={() => { setSearchQuery(""); setSearchResults([]); }}
@@ -129,13 +143,16 @@ function DropCard({ drop, fmt }: { drop: Drop; fmt: (n: number) => string }) {
         {drop.release_date && (
           <p className="text-xs text-gray-400">{drop.release_date.slice(0, 10)}</p>
         )}
+        {countdownLabel(drop.expected_drop_at) && (
+          <p className="text-xs font-semibold text-blue-600">{countdownLabel(drop.expected_drop_at)}</p>
+        )}
       </div>
     </div>
   );
 
   if (drop.product_key) {
     return (
-      <Link href={`/compare/${encodeURIComponent(drop.product_key)}`}>{content}</Link>
+      <Link href={`/product/${encodeURIComponent(drop.product_key)}`}>{content}</Link>
     );
   }
   return (

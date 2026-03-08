@@ -15,6 +15,20 @@ function formatFreshness(hours?: number | null) {
   return `${Math.round(hours / 24)}일 전 업데이트`;
 }
 
+function scarcityTone(value?: number | null) {
+  if (value == null) return null;
+  if (value >= 0.85) return "bg-red-100 text-red-700";
+  if (value >= 0.7) return "bg-amber-100 text-amber-700";
+  return "bg-zinc-100 text-zinc-600";
+}
+
+function scarcityLabel(value?: number | null) {
+  if (value == null) return null;
+  if (value >= 0.85) return "사이즈 거의 품절";
+  if (value >= 0.7) return "재고 소진 임박";
+  return null;
+}
+
 function buildChartPoints(history: CrossChannelPriceHistory["history"]) {
   if (!history.length) return [];
   const grouped = new Map<string, number>();
@@ -91,6 +105,12 @@ export function ProductPageClient({
                   가격 추이 {priceHistory.price_trend}
                 </span>
               )}
+              {priceHistory?.current_lowest && priceHistory?.all_time_low &&
+                priceHistory.current_lowest.price_krw === priceHistory.all_time_low.price_krw && (
+                  <span className="rounded-full bg-lime-200 px-3 py-1.5 font-medium text-lime-900">
+                    역대 최저가
+                  </span>
+                )}
             </div>
           </div>
 
@@ -199,6 +219,13 @@ export function ProductPageClient({
                         </span>
                       )) : <span className="text-zinc-300">사이즈 정보 없음</span>}
                     </div>
+                    {scarcityLabel(item.size_scarcity) && (
+                      <div className="mt-2">
+                        <span className={`rounded-full px-2 py-1 text-[11px] font-semibold ${scarcityTone(item.size_scarcity)}`}>
+                          {scarcityLabel(item.size_scarcity)}
+                        </span>
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-4 text-right">
                     <a

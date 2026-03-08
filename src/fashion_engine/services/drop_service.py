@@ -2,7 +2,7 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, case
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fashion_engine.models.drop import Drop
@@ -17,6 +17,7 @@ async def upsert_drop(
     brand_id: int | None = None,
     image_url: str | None = None,
     price_krw: int | None = None,
+    expected_drop_at: datetime | None = None,
     status: str = "released",
 ) -> tuple[Drop, bool]:
     """
@@ -38,6 +39,10 @@ async def upsert_drop(
             drop.image_url = image_url
         if price_krw and not drop.price_krw:
             drop.price_krw = price_krw
+        if expected_drop_at and not drop.expected_drop_at:
+            drop.expected_drop_at = expected_drop_at
+        if expected_drop_at and drop.release_date is None:
+            drop.release_date = expected_drop_at.date()
         await db.commit()
         await db.refresh(drop)
         return drop, False
@@ -49,6 +54,8 @@ async def upsert_drop(
             source_url=source_url,
             image_url=image_url,
             price_krw=price_krw,
+            expected_drop_at=expected_drop_at,
+            release_date=expected_drop_at.date() if expected_drop_at else None,
             status=status,
             detected_at=datetime.utcnow(),
         )
@@ -70,7 +77,11 @@ async def get_upcoming_drops(db: AsyncSession, limit: int = 50) -> list[Drop]:
     result = await db.execute(
         select(Drop)
         .where(Drop.status == "upcoming")
-        .order_by(Drop.detected_at.desc())
+        .order_by(
+            case((Drop.expected_drop_at.is_(None), 1), else_=0),
+            Drop.expected_drop_at.asc(),
+            Drop.detected_at.desc(),
+        )
         .limit(limit)
     )
     return list(result.scalars().all())
@@ -88,7 +99,11 @@ async def list_drops(
         stmt = stmt.where(Drop.status == status)
     if brand_slug:
         stmt = stmt.join(Brand, Brand.id == Drop.brand_id).where(Brand.slug == brand_slug)
-    stmt = stmt.order_by(Drop.detected_at.desc()).limit(limit).offset(offset)
+    stmt = stmt.order_by(
+        case((Drop.expected_drop_at.is_(None), 1), else_=0),
+        Drop.expected_drop_at.asc(),
+        Drop.detected_at.desc(),
+    ).limit(limit).offset(offset)
     result = await db.execute(stmt)
     return list(result.scalars().all())
 
@@ -103,6 +118,7 @@ async def create_drop_manual(db: AsyncSession, data: dict) -> Drop:
         image_url=data.get("image_url"),
         price_krw=data.get("price_krw"),
         release_date=data.get("release_date"),
+        expected_drop_at=data.get("expected_drop_at"),
         status=data.get("status", "upcoming"),
         detected_at=datetime.utcnow(),
     )

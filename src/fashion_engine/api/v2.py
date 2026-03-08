@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from fashion_engine.api.schemas import (
     BrandSaleIntelOut,
+    BrandSeasonalityOut,
     CrossChannelPriceHistoryOut,
     ProductAvailabilityOut,
     SearchV2ItemOut,
@@ -12,6 +13,7 @@ from fashion_engine.api.schemas import (
 from fashion_engine.cache import cached_json
 from fashion_engine.database import get_db
 from fashion_engine.services import brand_service, product_service
+from fashion_engine.services.analytics_service import get_brand_seasonality
 from fashion_engine.services.search_service_v2 import keyword_search, semantic_search
 
 router = APIRouter(prefix="/api/v2", tags=["v2"])
@@ -56,6 +58,26 @@ async def brand_sale_intel(
     if not payload:
         raise HTTPException(status_code=404, detail="brand not found")
     return BrandSaleIntelOut(**payload)
+
+
+@router.get("/brands/{slug}/seasonality", response_model=BrandSeasonalityOut)
+async def brand_seasonality(
+    slug: str,
+    response: Response = None,
+    db: AsyncSession = Depends(get_db),
+):
+    if response is not None:
+        response.headers["Cache-Control"] = "public, max-age=1800, stale-while-revalidate=300"
+
+    key = f"v2:brand-seasonality:{slug}"
+    payload = await cached_json(
+        key=key,
+        ttl=1800,
+        fetch_fn=lambda: get_brand_seasonality(db, slug),
+    )
+    if not payload:
+        raise HTTPException(status_code=404, detail="brand not found")
+    return BrandSeasonalityOut(**payload)
 
 
 @router.get("/availability/{product_key:path}", response_model=ProductAvailabilityOut)

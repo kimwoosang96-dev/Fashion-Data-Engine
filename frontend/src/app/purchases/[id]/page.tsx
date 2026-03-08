@@ -96,7 +96,7 @@ export default function PurchaseScorePage() {
       {/* Price compare link */}
       {score.product_key && (
         <Link
-          href={`/compare/${encodeURIComponent(score.product_key)}`}
+          href={`/product/${encodeURIComponent(score.product_key)}`}
           className="block text-center text-sm text-blue-600 hover:underline"
         >
           채널별 가격 비교 보기 →

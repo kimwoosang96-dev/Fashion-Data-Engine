@@ -169,6 +169,8 @@ class ProductOut(BaseModel):
     currency: str | None = None
     price_updated_at: datetime | None = None
     sale_started_at: datetime | None = None
+    size_scarcity: float | None = None
+    is_all_time_low: bool = False
     is_sale: bool
     is_active: bool
     archived_at: datetime | None
@@ -370,6 +372,7 @@ class DropIn(BaseModel):
     image_url: str | None = None
     price_krw: int | None = None
     release_date: datetime | None = None
+    expected_drop_at: datetime | None = None
     status: str = "upcoming"
 
 
@@ -382,6 +385,7 @@ class DropOut(BaseModel):
     image_url: str | None
     price_krw: int | None
     release_date: datetime | None
+    expected_drop_at: datetime | None = None
     status: str
     detected_at: datetime
     notified_at: datetime | None
@@ -394,6 +398,7 @@ class DropsCalendarEntryOut(BaseModel):
     title: str
     event_type: str
     source_url: str | None = None
+    expected_drop_at: datetime | None = None
 
 
 class BrandsHeatmapBrandOut(BaseModel):
@@ -616,6 +621,20 @@ class BrandSaleIntelOut(BaseModel):
     typical_sale_months: list[int]
 
 
+class BrandSeasonalityMonthOut(BaseModel):
+    sale_count: int
+    avg_discount: float | None
+    data_points: int
+
+
+class BrandSeasonalityOut(BaseModel):
+    brand_slug: str
+    brand_name: str
+    monthly: dict[int, BrandSeasonalityMonthOut]
+    peak_sale_months: list[int]
+    data_window_days: int
+
+
 class CrossChannelPriceHistoryPointOut(BaseModel):
     date: date
     channel_name: str
@@ -642,6 +661,7 @@ class ProductAvailabilityChannelOut(BaseModel):
     discount_rate: int | None
     stock_status: str | None
     size_availability: list[dict] | None
+    size_scarcity: float | None = None
     is_sale: bool
     image_url: str | None
     last_crawled_at: datetime | None = None

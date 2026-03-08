@@ -23,6 +23,7 @@ class Drop(Base):
     image_url: Mapped[str | None] = mapped_column(String(1000))
     price_krw: Mapped[int | None] = mapped_column(Integer)
     release_date: Mapped[date | None] = mapped_column(Date)
+    expected_drop_at: Mapped[datetime | None] = mapped_column(DateTime)
     status: Mapped[str] = mapped_column(String(50), default="released")  # "upcoming" | "released" | "sold_out"
     detected_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     notified_at: Mapped[datetime | None] = mapped_column(DateTime)

@@ -469,6 +469,12 @@ export default function AdminPage() {
           >
             채널 건강 대시보드 열기
           </Link>
+          <Link
+            href="/admin/channel-compete"
+            className="ml-2 inline-flex rounded-full border border-gray-300 px-3 py-1.5 text-xs font-semibold text-gray-700"
+          >
+            채널 경쟁력 분석 열기
+          </Link>
         </div>
       </div>
 

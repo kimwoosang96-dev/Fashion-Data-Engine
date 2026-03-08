@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "src"))
@@ -16,6 +16,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from fashion_engine.database import AsyncSessionLocal, init_db  # noqa: E402
 from fashion_engine.models.channel import Channel  # noqa: E402
 from fashion_engine.models.crawl_run import CrawlChannelLog  # noqa: E402
+from fashion_engine.models.product import Product  # noqa: E402
 from fashion_engine.services.alert_service import send_coverage_report_alert  # noqa: E402
 
 
@@ -35,6 +36,8 @@ class CoverageReport:
     dead_channels: list[CoverageRow]
     degraded_channels: list[CoverageRow]
     draft_channels: list[CoverageRow]
+    summary: dict
+    week_over_week: dict
     output_path: str | None = None
 
 
@@ -53,6 +56,36 @@ async def build_report(*, days: int = 7) -> CoverageReport:
                 select(CrawlChannelLog).where(CrawlChannelLog.crawled_at >= previous_cutoff)
             )
         ).scalars().all()
+        active_channels = sum(1 for channel in channels if channel.is_active)
+        inactive_channels = len(channels) - active_channels
+        products_total = int((await db.execute(select(func.count(Product.id)))).scalar_one() or 0)
+        sale_products = int(
+            (await db.execute(select(func.count(Product.id)).where(Product.is_sale == True))).scalar_one() or 0  # noqa: E712
+        )
+        size_data_products = int(
+            (
+                await db.execute(
+                    select(func.count(Product.id)).where(Product.size_availability.is_not(None))
+                )
+            ).scalar_one()
+            or 0
+        )
+        all_time_low_products = int(
+            (
+                await db.execute(
+                    select(func.count(Product.id)).where(Product.is_all_time_low == True)  # noqa: E712
+                )
+            ).scalar_one()
+            or 0
+        )
+        previous_products_total = int(
+            (
+                await db.execute(
+                    select(func.count(Product.id)).where(Product.created_at < recent_cutoff)
+                )
+            ).scalar_one()
+            or 0
+        )
 
     recent_counts: dict[int, int] = {}
     previous_counts: dict[int, int] = {}
@@ -109,6 +142,19 @@ async def build_report(*, days: int = 7) -> CoverageReport:
         dead_channels=dead_channels,
         degraded_channels=degraded_channels,
         draft_channels=draft_channels,
+        summary={
+            "active_channels": active_channels,
+            "inactive_channels": inactive_channels,
+            "products_total": products_total,
+            "sale_products": sale_products,
+            "sale_ratio_pct": round((sale_products / products_total) * 100, 1) if products_total else 0.0,
+            "size_data_products": size_data_products,
+            "all_time_low_products": all_time_low_products,
+        },
+        week_over_week={
+            "products_total_delta": products_total - previous_products_total,
+            "active_channels_delta": 0,
+        },
     )
 
 
@@ -127,6 +173,16 @@ def write_csv_report(report: CoverageReport, output_path: Path) -> None:
             ],
         )
         writer.writeheader()
+        writer.writerow(
+            {
+                "report_type": "summary",
+                "channel_name": "active_channels",
+                "channel_url": "",
+                "recent_count": report.summary.get("active_channels", 0),
+                "previous_count": report.summary.get("inactive_channels", 0),
+                "note": f"products_total={report.summary.get('products_total', 0)} sale={report.summary.get('sale_products', 0)} all_time_low={report.summary.get('all_time_low_products', 0)}",
+            }
+        )
         for row in report.dead_channels + report.degraded_channels + report.draft_channels:
             writer.writerow(
                 {

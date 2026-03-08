@@ -11,8 +11,18 @@ import {
   getBrandNews,
   getBrandProducts,
   getBrandSaleIntel,
+  getBrandSeasonality,
 } from "@/lib/api";
-import type { Brand, BrandDirector, BrandSaleIntel, Channel, CollabItem, FashionNews, Product } from "@/lib/types";
+import type {
+  Brand,
+  BrandDirector,
+  BrandSaleIntel,
+  BrandSeasonality,
+  Channel,
+  CollabItem,
+  FashionNews,
+  Product,
+} from "@/lib/types";
 import { ProductCard } from "@/components/ProductCard";
 
 const TIER_COLORS: Record<string, string> = {
@@ -31,6 +41,7 @@ export function BrandDetailClient({ slug }: { slug: string }) {
   const [directors, setDirectors] = useState<BrandDirector[]>([]);
   const [collabs, setCollabs] = useState<CollabItem[]>([]);
   const [saleIntel, setSaleIntel] = useState<BrandSaleIntel | null>(null);
+  const [seasonality, setSeasonality] = useState<BrandSeasonality | null>(null);
   const [saleOnly, setSaleOnly] = useState(false);
   const [watchMessage, setWatchMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -39,13 +50,14 @@ export function BrandDetailClient({ slug }: { slug: string }) {
   useEffect(() => {
     const load = async () => {
       try {
-        const [brandRes, channelsRes, productsRes, directorsRes, collabsRes, intelRes] = await Promise.all([
+        const [brandRes, channelsRes, productsRes, directorsRes, collabsRes, intelRes, seasonalityRes] = await Promise.all([
           getBrand(slug),
           getBrandChannels(slug),
           getBrandProducts(slug, false, 500),
           getBrandDirectors(slug),
           getBrandCollabs(slug),
           getBrandSaleIntel(slug).catch(() => null),
+          getBrandSeasonality(slug).catch(() => null),
         ]);
         setBrand(brandRes);
         setChannels(channelsRes);
@@ -53,6 +65,7 @@ export function BrandDetailClient({ slug }: { slug: string }) {
         setDirectors(directorsRes);
         setCollabs(collabsRes);
         setSaleIntel(intelRes);
+        setSeasonality(seasonalityRes);
         const newsRes = await getBrandNews(slug, 20);
         setNews(newsRes);
       } catch (e) {
@@ -79,6 +92,10 @@ export function BrandDetailClient({ slug }: { slug: string }) {
 
   const saleCount = useMemo(() => products.filter((p) => p.is_sale).length, [products]);
   const seasonalityMax = Math.max(...(saleIntel?.monthly_sale_history.map((row) => row.product_count) ?? [1]));
+  const seasonalityHeatMax = Math.max(
+    1,
+    ...(seasonality ? Object.values(seasonality.monthly).map((row) => row.sale_count) : [1]),
+  );
 
   if (loading) return <div className="p-6 text-sm text-gray-400">로딩 중...</div>;
   if (error || !brand) return <div className="p-6 text-sm text-red-500">{error ?? "브랜드를 찾을 수 없습니다."}</div>;
@@ -112,7 +129,7 @@ export function BrandDetailClient({ slug }: { slug: string }) {
         <StatCard label="취급 채널 수" value={channels.length} />
       </div>
 
-      {saleIntel && (
+      {(saleIntel || seasonality) && (
         <section className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
           <div className="space-y-4 rounded-[24px] border border-black/10 bg-white p-5 shadow-[0_12px_36px_rgba(0,0,0,0.04)]">
             <div className="flex items-start justify-between gap-4">
@@ -134,22 +151,32 @@ export function BrandDetailClient({ slug }: { slug: string }) {
             </div>
             {watchMessage && <p className="text-xs text-zinc-500">{watchMessage}</p>}
             <div className="grid gap-3 md:grid-cols-3">
-              <IntelMetric label="현재 세일 수" value={`${saleIntel.current_sale_products}`} />
+              <IntelMetric label="현재 세일 수" value={`${saleIntel?.current_sale_products ?? 0}`} />
               <IntelMetric
                 label="최대 할인율"
-                value={saleIntel.current_max_discount_rate != null ? `${saleIntel.current_max_discount_rate}%` : "—"}
+                value={saleIntel?.current_max_discount_rate != null ? `${saleIntel.current_max_discount_rate}%` : "—"}
               />
               <IntelMetric
                 label="시즌성 피크"
-                value={saleIntel.typical_sale_months.length ? saleIntel.typical_sale_months.map((row) => `${row}월`).join(", ") : "데이터 부족"}
+                value={
+                  (seasonality?.peak_sale_months?.length
+                    ? seasonality.peak_sale_months
+                    : saleIntel?.typical_sale_months ?? []
+                  ).length
+                    ? (seasonality?.peak_sale_months?.length
+                        ? seasonality.peak_sale_months
+                        : saleIntel?.typical_sale_months ?? []
+                      ).map((row) => `${row}월`).join(", ")
+                    : "데이터 부족"
+                }
               />
             </div>
             <div className="rounded-2xl bg-zinc-50 p-4">
               <p className="text-xs uppercase tracking-[0.16em] text-zinc-400">현재 세일 채널</p>
               <div className="mt-3 space-y-2">
-                {saleIntel.sale_channels.length === 0 ? (
+                {saleIntel?.sale_channels.length === 0 ? (
                   <p className="text-sm text-zinc-400">현재 세일 중인 채널이 없습니다.</p>
-                ) : saleIntel.sale_channels.map((item) => (
+                ) : saleIntel?.sale_channels.map((item) => (
                   <a
                     key={`${item.channel_name}-${item.url}`}
                     href={item.url}
@@ -172,13 +199,11 @@ export function BrandDetailClient({ slug }: { slug: string }) {
                 <h2 className="mt-2 text-xl font-bold text-zinc-950">월별 세일 빈도</h2>
               </div>
               <p className="text-xs text-zinc-500">
-                마지막 세일 시작 {saleIntel.last_sale_started_at ? saleIntel.last_sale_started_at.slice(0, 10) : "기록 없음"}
+                마지막 세일 시작 {saleIntel?.last_sale_started_at ? saleIntel.last_sale_started_at.slice(0, 10) : "기록 없음"}
               </p>
             </div>
             <div className="mt-6 grid gap-3">
-              {saleIntel.monthly_sale_history.length === 0 ? (
-                <p className="text-sm text-zinc-400">세일 히스토리 데이터가 부족합니다.</p>
-              ) : saleIntel.monthly_sale_history.map((item) => (
+              {saleIntel?.monthly_sale_history.length ? saleIntel.monthly_sale_history.map((item) => (
                 <div key={item.month} className="grid grid-cols-[72px_1fr_96px] items-center gap-3">
                   <span className="text-sm font-medium text-zinc-700">{item.month}</span>
                   <div className="h-3 overflow-hidden rounded-full bg-zinc-100">
@@ -191,7 +216,48 @@ export function BrandDetailClient({ slug }: { slug: string }) {
                     {item.product_count}개 · {item.avg_discount != null ? `${item.avg_discount}%` : "—"}
                   </span>
                 </div>
-              ))}
+              )) : (
+                <p className="text-sm text-zinc-400">세일 히스토리 데이터가 부족합니다.</p>
+              )}
+            </div>
+            <div className="mt-6 rounded-2xl bg-zinc-50 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.16em] text-zinc-400">Season Heatmap</p>
+                  <h3 className="mt-1 text-sm font-semibold text-zinc-900">브랜드 세일 시즌성</h3>
+                </div>
+                <p className="text-xs text-zinc-500">
+                  최근 {seasonality?.data_window_days ?? 730}일 기준
+                </p>
+              </div>
+              {seasonality ? (
+                <div className="mt-4 grid grid-cols-3 gap-2 md:grid-cols-4 xl:grid-cols-6">
+                  {Array.from({ length: 12 }, (_, index) => {
+                    const month = index + 1;
+                    const row = seasonality.monthly[month] ?? { sale_count: 0, avg_discount: null, data_points: 0 };
+                    const intensity = row.sale_count / seasonalityHeatMax;
+                    const bg =
+                      row.sale_count === 0
+                        ? "bg-zinc-100 text-zinc-400"
+                        : intensity > 0.75
+                          ? "bg-lime-300 text-zinc-950"
+                          : intensity > 0.45
+                            ? "bg-lime-200 text-zinc-900"
+                            : "bg-lime-100 text-zinc-800";
+                    return (
+                      <div key={month} className={`rounded-2xl px-3 py-3 ${bg}`}>
+                        <p className="text-xs font-semibold">{month}월</p>
+                        <p className="mt-2 text-lg font-bold">{row.sale_count}</p>
+                        <p className="text-[11px] opacity-80">
+                          평균 {row.avg_discount != null ? `${row.avg_discount}%` : "—"}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="mt-3 text-sm text-zinc-400">시즌성 데이터가 없습니다.</p>
+              )}
             </div>
           </div>
         </section>

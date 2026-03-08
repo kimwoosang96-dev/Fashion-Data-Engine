@@ -126,7 +126,7 @@ export default function CompetePage() {
                   </td>
                   <td className="px-4 py-3 text-right">
                     <Link
-                      href={`/compare/${encodeURIComponent(item.product_key)}`}
+                      href={`/product/${encodeURIComponent(item.product_key)}`}
                       className="text-blue-600 hover:underline text-xs"
                     >
                       보기

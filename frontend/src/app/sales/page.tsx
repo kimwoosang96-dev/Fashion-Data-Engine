@@ -212,7 +212,7 @@ export default function SalesPage() {
               </div>
               <div className="mt-3 flex gap-3 text-xs">
                 {item.product_key ? (
-                  <Link className="text-blue-600 hover:underline" href={`/compare/${encodeURIComponent(item.product_key)}`}>
+                  <Link className="text-blue-600 hover:underline" href={`/product/${encodeURIComponent(item.product_key)}`}>
                     가격 비교 보기
                   </Link>
                 ) : null}

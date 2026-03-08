@@ -273,7 +273,7 @@ function IntelPageContent() {
             {selectedDetail.product_key && (
               <Link
                 className="block h-9 leading-9 text-center rounded-md bg-gray-900 text-white text-sm"
-                href={`/compare/${encodeURIComponent(selectedDetail.product_key)}`}
+                href={`/product/${encodeURIComponent(selectedDetail.product_key)}`}
               >
                 가격 비교로 이동
               </Link>

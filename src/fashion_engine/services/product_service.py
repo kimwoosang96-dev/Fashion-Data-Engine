@@ -204,6 +204,34 @@ async def get_prev_prices_by_product_ids(
     return {int(product_id): int(price) for product_id, price in rows}
 
 
+async def get_all_time_low_price_map(
+    db: AsyncSession,
+    product_ids: list[int],
+) -> dict[int, int]:
+    clean_ids = [pid for pid in product_ids if pid]
+    if not clean_ids:
+        return {}
+    rows = (
+        await db.execute(
+            select(
+                PriceHistory.product_id,
+                func.min(PriceHistory.price).label("all_time_low"),
+            )
+            .where(
+                PriceHistory.product_id.in_(clean_ids),
+                PriceHistory.price.is_not(None),
+                PriceHistory.price > 0,
+            )
+            .group_by(PriceHistory.product_id)
+        )
+    ).all()
+    return {
+        int(product_id): int(all_time_low)
+        for product_id, all_time_low in rows
+        if all_time_low is not None
+    }
+
+
 # ── 제품 upsert ───────────────────────────────────────────────────────────
 
 
@@ -231,6 +259,7 @@ def build_product_upsert_row(
     raw_price = Decimal(str(info.price))
 
     size_availability = getattr(info, "size_availability", None)
+    size_scarcity = compute_size_scarcity(size_availability)
     if size_availability:
         in_stock_count = sum(1 for s in size_availability if s.get("in_stock"))
         if in_stock_count == 0:
@@ -288,6 +317,8 @@ def build_product_upsert_row(
                 "raw_price": raw_price,
                 "price_updated_at": row_now,
                 "sale_started_at": sale_started_at,
+                "size_scarcity": size_scarcity,
+                "is_all_time_low": bool(existing.is_all_time_low),
                 "size_availability": size_availability,
                 "stock_status": stock_status,
                 "is_active": info.is_available,
@@ -323,6 +354,8 @@ def build_product_upsert_row(
             "raw_price": raw_price,
             "price_updated_at": row_now,
             "sale_started_at": row_now if is_sale else None,
+            "size_scarcity": size_scarcity,
+            "is_all_time_low": False,
             "size_availability": size_availability,
             "stock_status": stock_status,
             "is_active": info.is_available,
@@ -345,6 +378,16 @@ def _to_krw_int(value: float | Decimal | None, rate_to_krw: float | None) -> int
     if price_krw_int < 1_000 or price_krw_int > 50_000_000:
         return None
     return price_krw_int
+
+
+def compute_size_scarcity(size_availability: list[dict] | None) -> float | None:
+    if not size_availability:
+        return None
+    total = len(size_availability)
+    if total <= 0:
+        return None
+    in_stock = sum(1 for size in size_availability if size.get("in_stock"))
+    return round(1.0 - (in_stock / total), 4)
 
 
 def build_price_history_row(
@@ -912,6 +955,7 @@ async def get_product_availability(
                 "discount_rate": row.discount_rate,
                 "stock_status": row.stock_status,
                 "size_availability": row.size_availability,
+                "size_scarcity": row.size_scarcity,
                 "is_sale": bool(row.is_sale),
                 "image_url": row.image_url,
                 "last_crawled_at": last_crawled_at,

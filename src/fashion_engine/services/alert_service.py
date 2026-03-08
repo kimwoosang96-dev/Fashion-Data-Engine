@@ -31,14 +31,15 @@ class AlertPayload:
     prev_price_krw: int | None = None   # price_drop_alert용
 
 
-async def _send_embed(payload: dict) -> bool:
+async def _send_embed(payload: dict, *, webhook_url: str | None = None) -> bool:
     """Discord webhook POST."""
-    if not settings.discord_webhook_url:
+    target_url = webhook_url or settings.discord_webhook_url
+    if not target_url:
         logger.debug("DISCORD_WEBHOOK_URL 미설정 — 알림 스킵")
         return False
     try:
         async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.post(settings.discord_webhook_url, json=payload)
+            resp = await client.post(target_url, json=payload)
             if resp.status_code in (200, 204):
                 return True
             logger.warning(f"Discord webhook 응답 오류: {resp.status_code} {resp.text[:200]}")
@@ -175,7 +176,19 @@ async def send_heartbeat_alert(
 
 
 async def send_coverage_report_alert(report: Any) -> bool:
+    summary = getattr(report, "summary", {})
+    delta = getattr(report, "week_over_week", {})
     fields = [
+        {
+            "name": "주간 요약",
+            "value": (
+                f"채널 {summary.get('active_channels', 0)}개 활성 / {summary.get('inactive_channels', 0)}개 비활성\n"
+                f"제품 {summary.get('products_total', 0):,}개 ({delta.get('products_total_delta', 0):+d})\n"
+                f"세일 {summary.get('sale_products', 0):,}개 ({summary.get('sale_ratio_pct', 0):.1f}%)\n"
+                f"사이즈 재고 {summary.get('size_data_products', 0):,}개 / 역대 최저 {summary.get('all_time_low_products', 0):,}개"
+            ),
+            "inline": False,
+        },
         {
             "name": "❌ 수집 불가 채널",
             "value": "\n".join(
@@ -214,7 +227,10 @@ async def send_coverage_report_alert(report: Any) -> bool:
         "color": 0x5865F2,
         "fields": fields,
     }
-    return await _send_embed({"embeds": [embed]})
+    return await _send_embed(
+        {"embeds": [embed]},
+        webhook_url=settings.weekly_report_webhook or settings.discord_webhook_url,
+    )
 
 
 async def send_channel_reactivated_alert(*, count: int) -> bool:

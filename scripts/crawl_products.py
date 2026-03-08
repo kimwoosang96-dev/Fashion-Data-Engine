@@ -50,6 +50,7 @@ from fashion_engine.services.product_service import (
     find_brands_by_vendors,
     get_existing_products_by_urls,
     get_prev_prices_by_product_ids,
+    get_all_time_low_price_map,
     upsert_product,
 )
 from fashion_engine.services.channel_service import update_platform
@@ -413,6 +414,10 @@ async def _save_channel_products_sqlite(
         if alerts_enabled
         else {}
     )
+    all_time_low_by_product_id = await get_all_time_low_price_map(
+        db,
+        [row.id for row in existing_by_url.values()],
+    )
 
     for info in products:
         brand = brand_by_vendor.get(info.vendor or "")
@@ -434,6 +439,11 @@ async def _save_channel_products_sqlite(
             existing=existing_row,
         )
         current_krw = product.price_krw or round(float(info.price) * rate)
+        historical_low = all_time_low_by_product_id.get(product.id)
+        baseline_low = min([value for value in [historical_low, current_krw] if value is not None], default=None)
+        product.is_all_time_low = bool(
+            current_krw is not None and baseline_low is not None and current_krw <= baseline_low
+        )
 
         is_sale = (
             info.compare_at_price is not None
@@ -539,6 +549,10 @@ async def _save_channel_products_postgres(
         if alerts_enabled
         else {}
     )
+    all_time_low_by_product_id = await get_all_time_low_price_map(
+        db,
+        [row.id for row in existing_by_url.values()],
+    )
 
     upsert_rows: list[dict] = []
     meta_by_url: dict[str, dict] = {}
@@ -562,13 +576,19 @@ async def _save_channel_products_postgres(
             existing=existing_row,
             now=row_now,
         )
+        historical_low = all_time_low_by_product_id.get(existing_row.id) if existing_row else None
+        current_krw = row.get("price_krw") or round(float(info.price) * rate)
+        baseline_low = min([value for value in [historical_low, current_krw] if value is not None], default=None)
+        row["is_all_time_low"] = bool(
+            current_krw is not None and baseline_low is not None and current_krw <= baseline_low
+        )
         upsert_rows.append(row)
         meta_by_url[info.product_url] = {
             "info": info,
             "brand_id": brand_id,
             "brand_slug": brand_slug,
             "prev_price_krw": prev_price_krw,
-            "current_krw": row.get("price_krw") or round(float(info.price) * rate),
+            "current_krw": current_krw,
             "is_new": is_new,
             "sale_just_started": sale_just_started,
             "availability_transition": availability_transition,
@@ -603,7 +623,19 @@ async def _save_channel_products_postgres(
                     "sku": excluded.sku,
                     "tags": excluded.tags,
                     "image_url": excluded.image_url,
+                    "price_krw": excluded.price_krw,
+                    "original_price_krw": excluded.original_price_krw,
+                    "discount_rate": excluded.discount_rate,
+                    "currency": excluded.currency,
+                    "raw_price": excluded.raw_price,
+                    "price_updated_at": excluded.price_updated_at,
+                    "sale_started_at": excluded.sale_started_at,
+                    "size_scarcity": excluded.size_scarcity,
+                    "is_all_time_low": excluded.is_all_time_low,
+                    "size_availability": excluded.size_availability,
+                    "stock_status": excluded.stock_status,
                     "is_active": excluded.is_active,
+                    "is_new": excluded.is_new,
                     "is_sale": excluded.is_sale,
                     "archived_at": excluded.archived_at,
                     "updated_at": excluded.updated_at,

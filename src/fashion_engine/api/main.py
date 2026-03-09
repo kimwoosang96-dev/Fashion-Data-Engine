@@ -2,7 +2,6 @@ from contextlib import asynccontextmanager
 import time
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
@@ -10,73 +9,36 @@ from sqlalchemy import text
 from fashion_engine.config import settings
 from fashion_engine.database import AsyncSessionLocal
 from fashion_engine.monitoring import record_response_time
-from fashion_engine.api.channels import router as channels_router
-from fashion_engine.api.brands import router as brands_router
-from fashion_engine.api.collabs import router as collabs_router
-from fashion_engine.api.products import router as products_router
-from fashion_engine.api.purchases import router as purchases_router
-from fashion_engine.api.drops import router as drops_router
 from fashion_engine.api.watchlist import router as watchlist_router
-from fashion_engine.api.admin import router as admin_router
-from fashion_engine.api.news import router as news_router
-from fashion_engine.api.directors import router as directors_router
-from fashion_engine.api.catalog import router as catalog_router
-from fashion_engine.api.intel import router as intel_router
-from fashion_engine.api.feed import router as feed_router
-from fashion_engine.api.push import router as push_router
-from fashion_engine.api.webhooks import router as webhooks_router
-from fashion_engine.api.oauth import router as oauth_router
-from fashion_engine.api.v2 import router as v2_router
-from fashion_engine.api.realtime import router as realtime_router
-from fashion_engine.api.mcp_server import router as mcp_router
-
-try:
-    import sentry_sdk
-    from sentry_sdk.integrations.fastapi import FastApiIntegration
-    from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
-except Exception:  # pragma: no cover - optional dependency in dev bootstrap
-    sentry_sdk = None
-    FastApiIntegration = None
-    SqlalchemyIntegration = None
+from fashion_engine.api.search import router as search_router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    if settings.sentry_dsn and sentry_sdk is not None:
-        sentry_sdk.init(
-            dsn=settings.sentry_dsn,
-            integrations=[FastApiIntegration(), SqlalchemyIntegration()],
-            traces_sample_rate=0.1,
-            environment="production" if not settings.api_debug else "development",
-        )
     yield
 
 
 app = FastAPI(
-    title="Fashion Data Engine API",
+    title="Fashion Search API",
     description="""
-## 스트릿웨어 실시간 데이터 API
+## 패션 브랜드 LLM 병렬 검색 API
 
-AI 에이전트, MCP 클라이언트, 외부 서비스가 패션 데이터에 접근하는 표준 인터페이스.
+GPT·Gemini·Claude 동시 웹 검색으로 최저가·판매링크를 실시간으로 제공합니다.
 
 ### 주요 엔드포인트
-- `GET /api/v2/availability/{product_key}` — 채널별 재고·가격
-- `GET /api/v2/search` — 자연어 제품 검색
-- `GET /mcp` — MCP 서버
-- `GET /feed/google-shopping` — Google Shopping XML 피드
+- `POST /api/search` — GPT·Gemini·Claude 병렬 검색 + 중복 제거
+- `GET /api/watchlist` — 저장한 제품 목록
+- `POST /api/watchlist` — 제품 저장
 """,
-    version="2.0.0",
-    contact={"name": "Fashion Data Engine", "url": "https://fashion-data-engine.vercel.app"},
+    version="3.0.0",
     lifespan=lifespan,
-    docs_url=None,
-    redoc_url=None,
 )
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_allowed_origins_list,
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=["*", "X-OpenAI-Key", "X-Gemini-Key", "X-Claude-Key"],
 )
 
 
@@ -87,70 +49,18 @@ async def record_response_metrics(request: Request, call_next):
     record_response_time(request.url.path, time.monotonic() - started)
     return response
 
-app.include_router(channels_router)
-app.include_router(brands_router)
-app.include_router(collabs_router)
-app.include_router(products_router)
-app.include_router(purchases_router)
-app.include_router(drops_router)
+
+app.include_router(search_router)
 app.include_router(watchlist_router)
-app.include_router(admin_router)
-app.include_router(news_router)
-app.include_router(directors_router)
-app.include_router(catalog_router)
-app.include_router(intel_router)
-app.include_router(feed_router)
-app.include_router(push_router)
-app.include_router(webhooks_router)
-app.include_router(oauth_router)
-app.include_router(v2_router)
-app.include_router(realtime_router)
-app.include_router(mcp_router)
 
 
 @app.get("/")
 async def root():
     return {
-        "service": "Fashion Data Engine",
-        "version": "2.0.0",
-        "docs": "/api/docs",
+        "service": "Fashion Search API",
+        "version": "3.0.0",
+        "docs": "/docs",
     }
-
-
-@app.get("/swagger-dark.css", include_in_schema=False)
-async def swagger_dark_css():
-    return Response(
-        content="""
-body{background:#09090b!important;color:#f4f4f5!important}
-.swagger-ui,.swagger-ui .info .title,.swagger-ui .scheme-container,.swagger-ui section.models{color:#f4f4f5!important}
-.swagger-ui .topbar{background:#09090b!important;border-bottom:1px solid #27272a}
-.swagger-ui .opblock-tag,.swagger-ui .opblock .opblock-summary-operation-id,.swagger-ui .opblock .opblock-summary-path,.swagger-ui .tab li button.tablinks{color:#fafafa!important}
-.swagger-ui .opblock{background:#18181b!important;border-color:#3f3f46!important}
-.swagger-ui .opblock .opblock-summary{border-color:#3f3f46!important}
-.swagger-ui input,.swagger-ui select,.swagger-ui textarea{background:#111827!important;color:#f9fafb!important;border-color:#374151!important}
-.swagger-ui .responses-inner h4,.swagger-ui .response-col_status,.swagger-ui .response-col_links,.swagger-ui table thead tr td,.swagger-ui table thead tr th{color:#f4f4f5!important}
-.swagger-ui .model-box,.swagger-ui section.models,.swagger-ui .scheme-container{background:#111827!important}
-.swagger-ui .btn.execute{background:#84cc16!important;color:#111827!important;border-color:#84cc16!important}
-""".strip(),
-        media_type="text/css",
-    )
-
-
-@app.get("/api/docs", include_in_schema=False)
-async def custom_swagger():
-    return get_swagger_ui_html(
-        openapi_url=app.openapi_url,
-        title="Fashion Data Engine API",
-        swagger_css_url="/swagger-dark.css",
-    )
-
-
-@app.get("/robots.txt", include_in_schema=False)
-async def api_robots():
-    return Response(
-        content="User-agent: *\nAllow: /api/docs\nAllow: /openapi.json\n",
-        media_type="text/plain",
-    )
 
 
 @app.get("/health")
@@ -161,3 +71,11 @@ async def health():
     except Exception as exc:
         raise HTTPException(status_code=503, detail="database unavailable") from exc
     return {"status": "ok", "database": "ok"}
+
+
+@app.get("/robots.txt", include_in_schema=False)
+async def api_robots():
+    return Response(
+        content="User-agent: *\nAllow: /docs\nAllow: /openapi.json\n",
+        media_type="text/plain",
+    )

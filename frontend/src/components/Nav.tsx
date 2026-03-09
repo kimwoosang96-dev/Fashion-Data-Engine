@@ -3,31 +3,18 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const links = [
-  { href: "/", label: "대시보드", icon: "📊" },
-  { href: "/intel", label: "Intel Hub", icon: "🧭" },
-  { href: "/sales", label: "세일 제품", icon: "🔥" },
-  { href: "/feed", label: "실시간 피드", icon: "⚡" },
-  { href: "/ranking", label: "랭킹", icon: "🏁" },
-  { href: "/drops", label: "드롭", icon: "🚀" },
-  { href: "/drops/calendar", label: "드롭 캘린더", icon: "🗓️" },
-  { href: "/compete", label: "경쟁", icon: "⚔️" },
-  { href: "/brands", label: "브랜드", icon: "🏷️" },
-  { href: "/brands/heatmap", label: "세일 히트맵", icon: "🟥" },
-  { href: "/channels", label: "판매채널", icon: "🏪" },
-  { href: "/developers", label: "개발자", icon: "🧩" },
-  { href: "/directors", label: "디렉터", icon: "🧠" },
+  { href: "/", label: "검색", icon: "🔍" },
   { href: "/watchlist", label: "관심목록", icon: "❤️" },
-  { href: "/purchases", label: "구매이력", icon: "🛍️" },
-  { href: "/admin", label: "운영관리", icon: "⚙️" },
+  { href: "/settings", label: "AI 설정", icon: "⚙️" },
 ];
 
 export function Nav() {
   const pathname = usePathname();
   return (
-    <nav className="w-52 shrink-0 border-r border-gray-200 bg-white flex flex-col">
+    <nav className="w-48 shrink-0 border-r border-gray-200 bg-white flex flex-col">
       <div className="px-5 py-5 border-b border-gray-100">
         <p className="text-xs text-gray-400 font-semibold uppercase tracking-wide">Fashion</p>
-        <p className="text-base font-bold text-gray-900 leading-tight">Data Engine</p>
+        <p className="text-base font-bold text-gray-900 leading-tight">Search</p>
       </div>
       <ul className="flex-1 py-3 space-y-0.5 px-2">
         {links.map(({ href, label, icon }) => {

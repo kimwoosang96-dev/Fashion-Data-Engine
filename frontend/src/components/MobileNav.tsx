@@ -4,24 +4,18 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const links = [
-  { href: "/", label: "홈", icon: "●" },
-  { href: "/sales", label: "세일", icon: "▲" },
-  { href: "/drops", label: "드롭", icon: "■" },
-  { href: "/?focus=search", label: "검색", icon: "⌕" },
-  { href: "/feed", label: "피드", icon: "✦" },
+  { href: "/", label: "검색", icon: "🔍" },
+  { href: "/watchlist", label: "관심목록", icon: "❤️" },
+  { href: "/settings", label: "설정", icon: "⚙️" },
 ];
 
 export function MobileNav() {
   const pathname = usePathname();
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-black/10 bg-white/95 backdrop-blur md:hidden">
-      <ul className="grid grid-cols-5">
+      <ul className="grid grid-cols-3">
         {links.map((item) => {
-          const active = item.href === "/?focus=search"
-            ? pathname === "/"
-            : item.href === "/"
-              ? pathname === "/"
-              : pathname.startsWith(item.href);
+          const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
           return (
             <li key={item.label}>
               <Link

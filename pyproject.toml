@@ -1,7 +1,7 @@
 [project]
 name = "fashion-data-engine"
 version = "3.0.0"
-description = "패션 브랜드 LLM 병렬 검색 엔진"
+description = "퍼스널 쇼퍼 — 브라우저 자동화 기반 AI 검색 취합"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -11,22 +11,16 @@ dependencies = [
     # DB / ORM
     "sqlalchemy>=2.0.0",
     "alembic>=1.14.0",
-    "aiosqlite>=0.20.0",       # SQLite async (로컬 개발)
-    "asyncpg>=0.30.0",          # PostgreSQL async (프로덕션)
+    "aiosqlite>=0.20.0",
+    # 브라우저 자동화
+    "playwright>=1.49.0",
     # 데이터 처리
     "pydantic>=2.0.0",
     "pydantic-settings>=2.0.0",
-    # LLM 클라이언트
-    "openai>=1.68.2",
-    "anthropic>=0.45.0",
-    "google-generativeai>=0.8.0",
-    # HTTP
-    "httpx>=0.28.0",
-    "tenacity>=9.0.0",
     # 유틸리티
     "python-dotenv>=1.0.0",
     "python-multipart>=0.0.22",
-    "tldextract>=5.1.0",        # URL 정규화
+    "tldextract>=5.1.0",
 ]
 
 [build-system]

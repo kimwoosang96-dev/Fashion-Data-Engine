@@ -2,35 +2,42 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { loadKeys, buildAIHeaders, activeAIs, UserAIKeys } from "@/lib/userKeys";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const STORAGE_KEY = "fde_enabled_ais";
 
 interface SearchResult {
   url: string;
-  normalized_url: string;
+  normalized_url?: string;
   title: string;
   price_raw: string;
   currency: string;
   in_stock: boolean;
   source_ai: string;
+  error?: string;
 }
 
 const AI_COLORS: Record<string, string> = {
+  claude: "bg-orange-100 text-orange-800",
   gpt: "bg-emerald-100 text-emerald-800",
   gemini: "bg-blue-100 text-blue-800",
-  claude: "bg-orange-100 text-orange-800",
+};
+
+const AI_LABELS: Record<string, string> = {
+  claude: "Claude",
+  gpt: "GPT",
+  gemini: "Gemini",
 };
 
 const EXAMPLES = [
   "팔라스 박스로고 티셔츠 M 사이즈 최저가",
-  "Stone Island 아노락 재킷 한국 최저가",
-  "Nike Air Force 1 270mm 구매 링크",
+  "Stone Island 아노락 한국 최저가",
+  "Arc'teryx 베타 재킷 구매처",
   "Moncler 패딩 세일 중인 곳",
 ];
 
 export function SearchPage() {
-  const [keys, setKeys] = useState<UserAIKeys>({});
+  const [enabled, setEnabled] = useState<string[]>([]);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -39,16 +46,14 @@ export function SearchPage() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    setKeys(loadKeys());
+    const stored = localStorage.getItem(STORAGE_KEY);
+    setEnabled(stored ? JSON.parse(stored) : ["claude", "gpt", "gemini"]);
   }, []);
-
-  const active = activeAIs(keys);
-  const hasKeys = active.length > 0;
 
   async function handleSearch(q: string = query) {
     if (!q.trim()) return;
-    if (!hasKeys) {
-      setError("AI 키를 먼저 설정해주세요.");
+    if (enabled.length === 0) {
+      setError("설정에서 최소 1개의 AI를 활성화하세요.");
       return;
     }
     setLoading(true);
@@ -58,11 +63,8 @@ export function SearchPage() {
     try {
       const resp = await fetch(`${API_BASE}/api/search`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...buildAIHeaders(keys),
-        },
-        body: JSON.stringify({ query: q }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: q, enabled_ais: enabled }),
       });
 
       if (!resp.ok) {
@@ -80,13 +82,16 @@ export function SearchPage() {
     }
   }
 
+  const validResults = results.filter((r) => !r.error);
+  const errors = results.filter((r) => r.error);
+
   return (
     <div className="min-h-screen bg-[#f7f4ee]">
       {/* Hero */}
       <div className="mx-auto max-w-3xl px-4 pt-20 pb-12">
         <div className="mb-8 text-center">
           <p className="mb-3 inline-flex items-center rounded-full border border-black/10 bg-white/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.28em] text-gray-600">
-            Fashion Data Infrastructure
+            Personal AI Shopper
           </p>
           <h1 className="text-4xl font-black leading-none tracking-[-0.04em] text-zinc-950 md:text-5xl">
             AI가 직접 찾아주는
@@ -94,18 +99,20 @@ export function SearchPage() {
             패션 브랜드 최저가
           </h1>
           <p className="mt-4 text-base text-zinc-500">
-            GPT·Gemini·Claude가 동시에 웹을 검색해 중복 없이 모아드립니다.
+            내 Claude·ChatGPT·Gemini가 동시에 검색해 한 곳에 모아드립니다.
+            <br />
+            API 비용 없음 — 기존 구독 그대로 사용.
           </p>
 
           {/* Active AI badges */}
           <div className="mt-4 flex items-center justify-center gap-2">
-            {hasKeys ? (
-              active.map((ai) => (
+            {enabled.length > 0 ? (
+              enabled.map((ai) => (
                 <span
                   key={ai}
-                  className={`rounded-full px-3 py-1 text-xs font-semibold ${AI_COLORS[ai.toLowerCase()] ?? "bg-zinc-100 text-zinc-700"}`}
+                  className={`rounded-full px-3 py-1 text-xs font-semibold ${AI_COLORS[ai] ?? "bg-zinc-100 text-zinc-700"}`}
                 >
-                  {ai} ✓
+                  {AI_LABELS[ai] ?? ai} ✓
                 </span>
               ))
             ) : (
@@ -113,9 +120,12 @@ export function SearchPage() {
                 href="/settings"
                 className="rounded-full bg-zinc-900 px-4 py-1.5 text-xs font-semibold text-white hover:bg-zinc-700"
               >
-                AI 키 설정하기 →
+                AI 설정하기 →
               </Link>
             )}
+            <Link href="/settings" className="text-xs text-zinc-400 hover:text-zinc-700 underline ml-1">
+              변경
+            </Link>
           </div>
         </div>
 
@@ -132,14 +142,13 @@ export function SearchPage() {
             />
             <button
               onClick={() => handleSearch()}
-              disabled={loading || !hasKeys}
+              disabled={loading}
               className="rounded-xl bg-zinc-950 px-6 py-3 text-sm font-bold text-white disabled:opacity-40 hover:bg-zinc-800 transition"
             >
               {loading ? "검색 중…" : "검색"}
             </button>
           </div>
 
-          {/* Example queries */}
           {!searched && (
             <div className="mt-3 flex flex-wrap gap-2 px-2">
               {EXAMPLES.map((ex) => (
@@ -159,11 +168,18 @@ export function SearchPage() {
         {error && (
           <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}
-            {error.includes("키") && (
-              <Link href="/settings" className="ml-2 font-semibold underline">
-                설정하러 가기
-              </Link>
+            {error.includes("설정") && (
+              <Link href="/settings" className="ml-2 font-semibold underline">설정하러 가기</Link>
             )}
+          </div>
+        )}
+
+        {/* AI 서비스 오류 */}
+        {errors.length > 0 && searched && !loading && (
+          <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-700 space-y-1">
+            {errors.map((e, i) => (
+              <p key={i}>{e.error}</p>
+            ))}
           </div>
         )}
       </div>
@@ -173,18 +189,19 @@ export function SearchPage() {
         <div className="mx-auto max-w-3xl px-4 pb-16">
           {loading ? (
             <div className="space-y-3">
+              <p className="text-sm text-zinc-400">AI가 검색 중입니다… (최대 30초)</p>
               {[...Array(4)].map((_, i) => (
-                <div key={i} className="h-24 animate-pulse rounded-xl bg-zinc-200" />
+                <div key={i} className="h-20 animate-pulse rounded-xl bg-zinc-200" />
               ))}
             </div>
-          ) : results.length === 0 ? (
+          ) : validResults.length === 0 ? (
             <div className="py-16 text-center text-zinc-400">
               결과를 찾지 못했습니다. 다른 검색어로 시도해보세요.
             </div>
           ) : (
             <div className="space-y-3">
-              <p className="text-sm text-zinc-500">{results.length}개 판매처 발견 (중복 제거됨)</p>
-              {results.map((r, i) => (
+              <p className="text-sm text-zinc-500">{validResults.length}개 판매처 발견 (중복 제거됨)</p>
+              {validResults.map((r, i) => (
                 <ResultCard key={i} result={r} />
               ))}
             </div>
@@ -219,15 +236,13 @@ function ResultCard({ result }: { result: SearchResult }) {
 
       <div className="flex flex-shrink-0 items-center gap-2">
         {result.price_raw && (
-          <span className="text-sm font-bold text-zinc-800">
-            {result.price_raw} {result.currency}
-          </span>
+          <span className="text-sm font-bold text-zinc-800">{result.price_raw}</span>
         )}
         {!result.in_stock && (
           <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs text-red-600">품절</span>
         )}
         <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${aiColor}`}>
-          {result.source_ai}
+          {AI_LABELS[result.source_ai] ?? result.source_ai}
         </span>
         <a
           href={result.url}

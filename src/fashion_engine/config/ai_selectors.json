@@ -1,0 +1,29 @@
+{
+  "claude": {
+    "url": "https://claude.ai/new",
+    "login_check_selector": "[data-testid='composer-input'], .ProseMirror",
+    "input_selector": "[data-testid='composer-input'], .ProseMirror",
+    "send_selector": "[data-testid='send-button'], button[aria-label='Send message']",
+    "response_selector": "[data-testid='chat-message-content']:last-child, .font-claude-message:last-child",
+    "streaming_indicator": "[data-testid='streaming-indicator'], .animate-pulse",
+    "login_url": "https://claude.ai/login"
+  },
+  "gpt": {
+    "url": "https://chat.openai.com/",
+    "login_check_selector": "#prompt-textarea, [data-testid='composer-input']",
+    "input_selector": "#prompt-textarea",
+    "send_selector": "[data-testid='send-button'], button[aria-label='Send prompt']",
+    "response_selector": "[data-message-author-role='assistant']:last-child .markdown",
+    "streaming_indicator": "[data-testid='stop-button']",
+    "login_url": "https://chat.openai.com/auth/login"
+  },
+  "gemini": {
+    "url": "https://gemini.google.com/app",
+    "login_check_selector": ".ql-editor, [aria-label='Enter a prompt here']",
+    "input_selector": ".ql-editor, [aria-label='Enter a prompt here']",
+    "send_selector": "button[aria-label='Send message'], .send-button",
+    "response_selector": ".response-content:last-child, model-response:last-child .markdown",
+    "streaming_indicator": ".loading-indicator, .stop-button",
+    "login_url": "https://accounts.google.com"
+  }
+}

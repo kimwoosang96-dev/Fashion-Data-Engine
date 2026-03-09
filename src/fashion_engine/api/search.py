@@ -1,20 +1,21 @@
 """
-POST /api/search — LLM 병렬 검색 라우터
+검색 라우터
 
-사용자 API 키를 헤더(X-OpenAI-Key, X-Gemini-Key, X-Claude-Key)로 받아
-GPT·Gemini·Claude를 동시에 호출하고 결과를 취합해서 반환한다.
+POST /api/search   — 브라우저 자동화로 AI 서비스에 병렬 쿼리
+GET  /api/login-status — 각 AI 서비스 로그인 상태 확인
 """
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from fashion_engine.services.llm_search_service import search_all
+from fashion_engine.services.browser_shopper import query_all, check_login
 
 router = APIRouter(prefix="/api", tags=["search"])
 
 
 class SearchRequest(BaseModel):
     query: str
-    """자연어 쿼리 또는 제품 URL"""
+    enabled_ais: list[str] = ["claude", "gpt", "gemini"]
+    profile_dir: str | None = None
 
 
 class SearchResponse(BaseModel):
@@ -24,48 +25,42 @@ class SearchResponse(BaseModel):
 
 
 @router.post("/search", response_model=SearchResponse)
-async def search(req: SearchRequest, request: Request):
+async def search(req: SearchRequest):
     """
-    GPT·Gemini·Claude 병렬 웹 검색 후 결과 취합·중복 제거.
+    브라우저 자동화로 Claude·GPT·Gemini에 병렬 쿼리.
 
-    헤더에 사용하는 AI 키를 포함:
-    - `X-OpenAI-Key`: OpenAI API 키
-    - `X-Gemini-Key`: Google Gemini API 키
-    - `X-Claude-Key`: Anthropic Claude API 키
-
-    최소 1개 키가 필요합니다.
+    - `enabled_ais`: 사용할 AI 목록 (기본: 셋 다)
+    - `profile_dir`: Chrome 프로필 경로 (기본: 자동 감지)
+    - API 키 불필요, 기존 구독 사용
     """
-    openai_key = request.headers.get("X-OpenAI-Key") or None
-    gemini_key = request.headers.get("X-Gemini-Key") or None
-    claude_key = request.headers.get("X-Claude-Key") or None
-
-    if not any([openai_key, gemini_key, claude_key]):
-        raise HTTPException(
-            status_code=400,
-            detail="최소 1개의 AI API 키가 필요합니다. "
-                   "헤더에 X-OpenAI-Key, X-Gemini-Key, X-Claude-Key 중 하나를 포함하세요.",
-        )
-
     if not req.query.strip():
         raise HTTPException(status_code=400, detail="검색어를 입력하세요.")
+    if not req.enabled_ais:
+        raise HTTPException(status_code=400, detail="최소 1개의 AI를 활성화하세요.")
 
-    sources_used = []
-    if openai_key:
-        sources_used.append("gpt")
-    if gemini_key:
-        sources_used.append("gemini")
-    if claude_key:
-        sources_used.append("claude")
-
-    results = await search_all(
+    results = await query_all(
         query=req.query,
-        openai_key=openai_key,
-        gemini_key=gemini_key,
-        claude_key=claude_key,
+        enabled=req.enabled_ais,
+        profile_dir=req.profile_dir,
     )
 
     return SearchResponse(
         query=req.query,
         results=results,
-        sources_used=sources_used,
+        sources_used=req.enabled_ais,
     )
+
+
+@router.get("/login-status")
+async def login_status(profile_dir: str | None = None):
+    """각 AI 서비스의 로그인 상태를 확인한다."""
+    services = ["claude", "gpt", "gemini"]
+    import asyncio
+    statuses = await asyncio.gather(
+        *[check_login(s, profile_dir) for s in services],
+        return_exceptions=True,
+    )
+    return {
+        s: (st if not isinstance(st, Exception) else {"service": s, "logged_in": False, "error": str(st)})
+        for s, st in zip(services, statuses)
+    }

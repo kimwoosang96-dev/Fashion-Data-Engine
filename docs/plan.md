@@ -44,65 +44,73 @@
 
 ---
 
-### 2.2 전체 채널 목록
+### 2.2 전체 채널 목록 (Codex 조사 완료 — 2026-03-14)
 
-#### Cafe24 기반 (기존 코드 재활용 가능)
+#### Cafe24 기반 — cate_no 확인 완료 (즉시 크롤 가능)
 
-| 채널 | URL | 주요 바잉 성격 | 확인된 브랜드 |
-|------|-----|--------------|-------------|
-| **ETC Seoul** | etcseoul.com | 일본·유럽 아웃도어/미니멀 | Auralee, Gramicci, Salomon, Nanamica, Arc'teryx, EG, 100+ |
-| **옵스큐라** | obscura-store.com | 아웃도어·아방가르드 | Stein, Montbell, And Wander, Guidi, Tekla, Helinox |
-| **더엑스샵** | thexshop.co.kr | 스트릿·아웃도어 | Carhartt WIP, Stüssy, Gramicci, Arc'teryx, Salomon, Snow Peak |
-| **에크루** | ecru.co.kr | 컨템포러리 | Acne Studios, MSGM, A.Presse |
-| **아이디룩** | idlook.co.kr | 유럽 컨템포러리 여성 | Sandro, Maje, A.P.C., Marimekko |
-| **슬로우스테디클럽** | slowsteadyclub.com | 일본 미니멀·라이프스타일 | Auralee, New Balance, Ciota, Graphpaper, mfpen |
-| **아이앰샵** | iamshop-online.com | 일본 워크웨어·컨템포러리 | Auralee, Engineered Garments, Danton, Teatora, MM6 |
-| **라이커샵** | rhykershop.co.kr | 유럽·일본 니치 | Gimaguas, Diemme, ROA, Carne Bollente, Northworks |
-| **하이츠스토어** | heights-store.com | 스트릿·컨템포러리 | Stüssy, Have A Good Time |
-| **8DIVISION** | 8division.com | 스트릿·슈즈 | 확인 필요 |
-| **Unipair** | unipair.com | 슈즈 편집 | 확인 필요 |
-| **GOOUTSTORE** | gooutstore.cafe24.com | 아웃도어·캠핑 | 확인 필요 |
-| **Alfred** | thegreatalfred.com | 컨템포러리 | 확인 필요 |
-| **Meclads** | meclads.com | 컨템포러리 | 확인 필요 |
-| **Openershop** | openershop.co.kr | 컨템포러리 | 확인 필요 |
-| **empty** | empty.seoul.kr | 컨템포러리 | 확인 필요 |
-| **a.dresser** | adressershop.com | 컨템포러리 | 확인 필요 |
-| **MODE MAN** | mode-man.com | 남성 컨템포러리 | 확인 필요 |
-| **SCULP STORE** | sculpstore.com | 컨템포러리 | 확인 필요 |
-| **BIZZARE** | bizzare.co.kr | 컨템포러리 | 확인 필요 |
-| **grds** | grds.com | 컨템포러리 | 확인 필요 |
-| **Rino Store** | rinostore.co.kr | 컨템포러리 | 확인 필요 |
-| **COEVO** | coevo.com | 컨템포러리 | 확인 필요 |
-| **ADEKUVER** | adekuver.com | 컨템포러리 | 확인 필요 |
-| **PARLOUR** | parlour.kr | 컨템포러리 | 확인 필요 |
-| **블루스맨** | bluesman.co.kr | 빈티지·아메리칸 | 확인 필요 |
-| **EFFORTLESS** | effortless-store.com | 컨템포러리 | 확인 필요 |
-| **NOCLAIM** | noclaim.co.kr | 스트릿 | 확인 필요 |
-| **Casestudy** | casestudystore.co.kr | 컨템포러리 | 확인 필요 |
-| **APPLIXY** | applixy.com | 컨템포러리 | 확인 필요 |
-| **TUNE.KR** | tune.kr | 컨템포러리 | 확인 필요 |
+| 채널 | URL | 전체 cate_no | 세일 cate_no | 주요 수입 브랜드 |
+|------|-----|------------|------------|----------------|
+| **더엑스샵** | thexshop.co.kr | 24 | 26 | Carhartt WIP(375), Stüssy(571), Gramicci(745), Arc'teryx(1544), Salomon(1062), Snow Peak(1515) |
+| **슬로우스테디클럽** | slowsteadyclub.com | 671 | 723 | Auralee(259), New Balance(275), Ciota(1763), Graphpaper(172), mfpen(406) |
+| **아이앰샵** | iamshop-online.com | 5801 | 6746 | Auralee(842), Teatora(947), Columbia(7268), Remi Relief(7274), Repro.Found(5346), Taion(967) |
+| **Meclads** | meclads.com | 70 | - | Adidas(202), Ancellm(188), Aton Tokyo(119), Batoner(53), Casey Casey(140), Ciota(147), F/CE(88), Goldwin(156), Guidi(99) |
+| **a.dresser** | adressershop.com | 59 | - | Niceness(52), Auberge(76), Herill(48), Heugn(47), Le Yucca's(54), Maatee&Sons(49), Outil(73), Phigvel(50) |
+| **SCULP STORE** | sculpstore.com | 255 | - | Arc'teryx(811), 424(315), Afield Out(388), Anachronorm(793), BAL(166), Clarks(306), DESCENTE ALLTERRAIN(1512) |
+| **BIZZARE** | bizzare.co.kr | 162 | - | Dairiku(370), JieDa(367), Faccies(371), Aliveform(405), ASKYURSELF(457), Levi's(417), Praying(465) |
+| **Rino Store** | rinostore.co.kr | 405 | 511 | Anatomica(401), Andersen-Andersen(94), Batoner(369), Camiel Fortgens(393), Ciota(523), EG(544), Filson(546), Gramicci(98) |
+| **ADEKUVER** | adekuver.com | 59 | 1 | 1017 ALYX(78), A-COLD-WALL(384), Ann Demeulemeester(83), Hyke(277), Jean Paul Gaultier(1866), Julius(1285) |
+| **EFFORTLESS** | effortless-store.com | - | 134 | EG(334), EG Workaday(243), orSlow(394), mfpen(177), kolor(246), John Mason Smith(54) |
+| **NOCLAIM** | noclaim.co.kr | 52 | 544 | New Balance(1733), Needles(868), Nanamica(867), Danton(840), Ciota(1158), Brain Dead(1929) |
+| **Casestudy** | casestudystore.co.kr | 125 | - | Auralee(216), Carhartt WIP(145), C.P. Company(211), Aries(55), Casablanca(56), Brain Dead(432) |
+| **하이츠스토어** | heights-store.com | 1986 | - | Stüssy(206), Arc'teryx(1760), Asics(3753), Carne Bollente(2635), Camper Lab(2638) |
+| **8DIVISION** | 8division.com | - | 533 | Gimaguas(3227), KAMIYA(3447), Gramicci(273), Arc'teryx(2646) |
+| **블루스맨** | bluesman.co.kr | 25 | 75 | Gramicci, Ordinary Fits, Paraboot, Resolute, Battenwear, orSlow, Post O'Alls |
 
-> "확인 필요" = Phase C에서 직접 방문해 브랜드 구성 및 cate_no 파악 필요
+#### Cafe24 기반 — 전체 cate_no만 확인 (브랜드별 추가 탐색 필요)
+
+| 채널 | URL | 전체 cate_no | 세일 cate_no | 바잉 성격 |
+|------|-----|------------|------------|----------|
+| **ETC Seoul** | etcseoul.com | 24 | 1519 | 아웃도어·미니멀 (Arc'teryx 1088, Salomon 917, Mont-Bell 1967 확인) |
+| **옵스큐라** | obscura-store.com | 28 | 401 | 아웃도어·아방가르드 |
+| **에크루** | ecru.co.kr | 1795 | 1817 | 컨템포러리 (A.Presse 1531, Neighborhood 1375 확인) |
+| **아이디룩** | idlook.co.kr | 32 | - | 유럽 컨템포러리 여성 (Sandro, Maje, A.P.C.) |
+| **라이커샵** | rhykershop.co.kr | 493 | 495 | 유럽·일본 니치 (Gimaguas 565, Diemme 500 확인) |
+| **MODE MAN** | mode-man.com | 50 | 965 | 아메카지·데님 (Nigel Cabourn, Buzz Rickson's, orSlow, Red Wing) |
+| **Unipair** | unipair.com | 64 | 150 | 슈즈 편집 (Joe's Garage, Green Door Newman) |
+| **GOOUTSTORE** | gooutstore.cafe24.com | - | - | 아웃도어·캠핑 (Fashion 26, Outdoor 27) |
+| **Alfred** | thegreatalfred.com | 44 | 51 | 컨템포러리 |
+| **Openershop** | openershop.co.kr | 828 | 1119 | 해외 디자이너 브랜드 편집샵 |
+| **empty** | empty.seoul.kr | - | 868 | 컨템포러리 (Mad Frenzy 750, Florentina Leitner 783 확인) |
+| **PARLOUR** | parlour.kr | 99 | - | 남성 구두 (Alden, Crockett & Jones, J.M. Weston, Sanders) |
 
 ---
 
 #### Shopify 기반
 
-| 채널 | URL | 주요 바잉 성격 | 확인된 브랜드 |
-|------|-----|--------------|-------------|
-| **애딕티드 서울** | addictedseoul.com | 하이엔드 컨템포러리 | Our Legacy, Acne Studios, Marni, Craig Green, J.W.Anderson, Wales Bonner, 100+ |
-
-크롤링: `GET /products.json?limit=250&page=N` (기존 방식 그대로)
+| 채널 | URL | 상태 | 주요 브랜드 |
+|------|-----|------|-----------|
+| **애딕티드 서울** | addictedseoul.com | `/products.json` 200 ✅ | Our Legacy, Acne Studios, Marni, Craig Green, J.W.Anderson, Wales Bonner, 100+ |
 
 ---
 
-#### 커스텀 플랫폼 (Phase 2)
+#### 커스텀 플랫폼
 
-| 채널 | URL | 플랫폼 | 주요 브랜드 | 도입 시기 |
-|------|-----|--------|-----------|---------|
-| **카시나** | kasina.co.kr | Next.js 커스텀 | Nike 공인, Stüssy 국내 공식, NB | Phase 2 |
-| **비이커** | ssfshop.com/beaker | 삼성 SSF | A.P.C., Lemaire, Maison Kitsuné, Carhartt WIP | Phase 2 |
-| **분더샵** | boontheshop.com | WordPress (결제 없음) | Lemaire, Acne, Marni, Loewe 500+ | Phase 2 |
+| 채널 | URL | 플랫폼 | 크롤 방식 | 주요 브랜드 | 도입 시기 |
+|------|-----|--------|----------|-----------|---------|
+| **COEVO** | coevo.com | 자체몰 (PHP) | `goods_list.php?brandCd=149` | Stone Island, C.P. Company, Acronym | Phase 2 |
+| **카시나** | kasina.co.kr | Next.js 커스텀 | HTML 파싱 | Nike 공인, Stüssy 국내 공식, NB | Phase 2 |
+| **비이커** | ssfshop.com/beaker | 삼성 SSF | HTML 파싱 | A.P.C., Lemaire, Maison Kitsuné, Carhartt WIP | Phase 2 |
+| **분더샵** | boontheshop.com | WordPress | HTML 파싱 | Lemaire, Acne, Marni, Loewe 500+ | Phase 2 |
+
+---
+
+#### 제외 확정
+
+| 채널 | URL | 제외 사유 |
+|------|-----|---------|
+| **grds** | grds.com | 자체 슈즈 라인 전용 — 수입 편집샵 아님 |
+| **APPLIXY** | applixy.com | 세컨핸드 플랫폼 — 편집샵 구조 아님 |
+| **TUNE.KR** | tune.kr | Shopify지만 `/products.json` 403 — API 막힘 |
 
 ---
 
